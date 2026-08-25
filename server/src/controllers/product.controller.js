@@ -431,12 +431,23 @@ const buildPublicProductFilter = async (query = {}) => {
   };
 
   if (query.category) {
-    const category = await Category.findOne({
-      slug: query.category,
-      isActive: true,
-    }).select("_id");
+    const categorySlugs = String(query.category)
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
 
-    filter.category = category?._id || null;
+    if (categorySlugs.length) {
+      const categories = await Category.find({
+        slug: { $in: categorySlugs },
+        isActive: true,
+      }).select("_id");
+
+      const categoryIds = categories.map((category) => category._id);
+
+      filter.category = categoryIds.length
+        ? { $in: categoryIds }
+        : null;
+    }
   }
 
   if (query.search?.trim()) {
@@ -460,16 +471,91 @@ const buildPublicProductFilter = async (query = {}) => {
   if (query.placeholder === "true") filter.isPlaceholder = true;
   if (query.placeholder === "false") filter.isPlaceholder = false;
 
+  if (query.availability) {
+    const availability = String(query.availability)
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    const wantsInStock = availability.includes("in");
+    const wantsOutOfStock = availability.includes("out");
+
+    if (wantsInStock && !wantsOutOfStock) {
+      filter.stock = { $gt: 0 };
+    }
+
+    if (wantsOutOfStock && !wantsInStock) {
+      filter.stock = { $lte: 0 };
+    }
+  }
+
   const priceFilter = {};
 
-  if (query.minPrice) priceFilter.$gte = Number(query.minPrice);
-  if (query.maxPrice) priceFilter.$lte = Number(query.maxPrice);
+  if (query.minPrice !== undefined && query.minPrice !== "") {
+    const minPrice = Number(query.minPrice);
+
+    if (Number.isFinite(minPrice)) {
+      priceFilter.$gte = Math.max(minPrice, 0);
+    }
+  }
+
+  if (query.maxPrice !== undefined && query.maxPrice !== "") {
+    const maxPrice = Number(query.maxPrice);
+
+    if (Number.isFinite(maxPrice)) {
+      priceFilter.$lte = Math.max(maxPrice, 0);
+    }
+  }
 
   if (Object.keys(priceFilter).length) {
     filter.price = priceFilter;
   }
 
   return filter;
+};
+
+const buildPublicProductSort = (sortValue) => {
+  switch (sortValue) {
+    case "best_selling":
+      return {
+        isBestSeller: -1,
+        isFeatured: -1,
+        createdAt: -1,
+      };
+
+    case "newest":
+      return { createdAt: -1 };
+
+    case "oldest":
+      return { createdAt: 1 };
+
+    case "price_low":
+      return {
+        price: 1,
+        name: 1,
+      };
+
+    case "price_high":
+      return {
+        price: -1,
+        name: 1,
+      };
+
+    case "name_az":
+      return { name: 1 };
+
+    case "name_za":
+      return { name: -1 };
+
+    case "featured":
+    default:
+      return {
+        isFeatured: -1,
+        isBestSeller: -1,
+        isNewArrival: -1,
+        createdAt: -1,
+      };
+  }
 };
 
 const buildAdminProductFilter = async (query = {}) => {
@@ -527,11 +613,12 @@ const getProducts = async (req, res) => {
 
     const { page, limit, skip } = getPagination(req.query);
     const filter = await buildPublicProductFilter(req.query);
+    const sort = buildPublicProductSort(req.query.sort);
 
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("category", "name slug")
-        .sort({ isFeatured: -1, isNewArrival: -1, createdAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(limit)
         .lean(),

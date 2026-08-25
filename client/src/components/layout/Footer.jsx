@@ -1,18 +1,109 @@
 import { Link } from "react-router-dom";
+import { ArrowUpRight } from "lucide-react";
 
-const categoryLinks = [
-  { label: "Men", path: "/category/men" },
-  { label: "Women", path: "/category/women" },
-  { label: "Unisex", path: "/category/unisex" },
-  { label: "Musk", path: "/category/musk" },
+const supportLinks = [
+  {
+    label: "Contact",
+    to: "/contact",
+  },
+  {
+    label: "Shipping & Delivery",
+    to: "/shipping-delivery",
+  },
+  {
+    label: "Returns & Exchanges",
+    to: "/returns-exchanges",
+  },
 ];
 
+const legalLinks = [
+  {
+    label: "Privacy Policy",
+    to: "/privacy-policy",
+  },
+  {
+    label: "Terms & Conditions",
+    to: "/terms-conditions",
+  },
+];
+
+function FooterLink({
+  to,
+  children,
+}) {
+  return (
+    <Link
+      to={to}
+      className="
+        group inline-flex
+        items-center gap-1.5
+        text-sm
+        text-darb-beige/65
+        transition
+        duration-300
+        hover:text-darb-gold
+      "
+    >
+      <span>{children}</span>
+
+      <ArrowUpRight
+        size={13}
+        strokeWidth={1.7}
+        className="
+          opacity-0
+          transition
+          duration-300
+          group-hover:-translate-y-0.5
+          group-hover:translate-x-0.5
+          group-hover:opacity-100
+        "
+      />
+    </Link>
+  );
+}
+
 function Footer() {
+  const year =
+    new Date().getFullYear();
+
   return (
     <footer className="bg-darb-green text-darb-beige">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="grid gap-12 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
-          {/* Brand */}
+      {/* =========================
+          MAIN FOOTER
+      ========================== */}
+
+      <div
+        className="
+          mx-auto
+          max-w-7xl
+          px-5
+          pb-12
+          pt-14
+
+          sm:px-6
+          sm:pb-14
+          sm:pt-16
+
+          lg:px-8
+          lg:pb-16
+          lg:pt-20
+        "
+      >
+        <div
+          className="
+            grid
+            gap-12
+
+            md:grid-cols-2
+
+            lg:grid-cols-[1.7fr_0.8fr_0.8fr]
+            lg:gap-16
+          "
+        >
+          {/* =========================
+              BRAND
+          ========================== */}
+
           <div>
             <Link
               to="/"
@@ -22,90 +113,148 @@ function Footer() {
               <img
                 src="/images/logo/beige.webp"
                 alt="Darb"
-                loading="lazy"
-                className="h-20 w-auto object-contain sm:h-24"
+                className="
+                  h-16
+                  w-auto
+                  object-contain
+
+                  sm:h-[72px]
+                "
               />
             </Link>
 
-            <p className="mt-5 max-w-md text-sm leading-7 text-darb-beige/70">
-              More than perfume — a journey, a memory, and a scent
-              that walks with you.
+            <p
+              className="
+                mt-6
+                max-w-[420px]
+                font-display
+                text-2xl
+                leading-[1.35]
+                text-darb-beige
+
+                sm:text-[1.7rem]
+              "
+            >
+              More than perfume —
+              a journey, a memory
+              in every step.
             </p>
 
-            <p className="mt-5 text-xs uppercase tracking-[0.24em] text-darb-gold">
-              A scent for every path.
+            <p
+              className="
+                mt-4
+                max-w-[390px]
+                text-sm
+                leading-7
+                text-darb-beige/55
+              "
+            >
+              Scents created to
+              walk beside the
+              moments that become
+              part of your story.
             </p>
           </div>
 
-          {/* Categories */}
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-darb-gold">
-              Explore
-            </h3>
+          {/* =========================
+              CUSTOMER CARE
+          ========================== */}
 
-            <div className="mt-5 flex flex-col gap-3">
-              <Link
-                to="/shop"
-                className="w-fit text-sm text-darb-beige/70 transition hover:text-darb-gold"
-              >
-                Shop All
-              </Link>
+          <div className="lg:pt-3">
+            <p
+              className="
+                text-[10px]
+                font-semibold
+                uppercase
+                tracking-[0.3em]
+                text-darb-gold
+              "
+            >
+              Customer Care
+            </p>
 
-              {categoryLinks.map((category) => (
-                <Link
-                  key={category.path}
-                  to={category.path}
-                  className="w-fit text-sm text-darb-beige/70 transition hover:text-darb-gold"
-                >
-                  {category.label}
-                </Link>
-              ))}
-            </div>
+            <nav className="mt-5 flex flex-col items-start gap-3.5">
+              {supportLinks.map(
+                (link) => (
+                  <FooterLink
+                    key={link.to}
+                    to={link.to}
+                  >
+                    {link.label}
+                  </FooterLink>
+                )
+              )}
+            </nav>
           </div>
 
-          {/* Account */}
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-darb-gold">
+          {/* =========================
+              LEGAL
+          ========================== */}
+
+          <div className="lg:pt-3">
+            <p
+              className="
+                text-[10px]
+                font-semibold
+                uppercase
+                tracking-[0.3em]
+                text-darb-gold
+              "
+            >
               Darb
-            </h3>
+            </p>
 
-            <div className="mt-5 flex flex-col gap-3">
-              <Link
-                to="/cart"
-                className="w-fit text-sm text-darb-beige/70 transition hover:text-darb-gold"
-              >
-                Cart
-              </Link>
-
-              <Link
-                to="/account/orders"
-                className="w-fit text-sm text-darb-beige/70 transition hover:text-darb-gold"
-              >
-                My Orders
-              </Link>
-
-              <Link
-                to="/login"
-                className="w-fit text-sm text-darb-beige/70 transition hover:text-darb-gold"
-              >
-                Account
-              </Link>
-            </div>
+            <nav className="mt-5 flex flex-col items-start gap-3.5">
+              {legalLinks.map(
+                (link) => (
+                  <FooterLink
+                    key={link.to}
+                    to={link.to}
+                  >
+                    {link.label}
+                  </FooterLink>
+                )
+              )}
+            </nav>
           </div>
         </div>
       </div>
 
+      {/* =========================
+          BOTTOM BAR
+      ========================== */}
+
       <div className="border-t border-darb-beige/10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-center text-xs text-darb-beige/50 sm:flex-row sm:px-6 lg:px-8">
+        <div
+          className="
+            mx-auto
+            flex
+            max-w-7xl
+            flex-col
+            gap-3
+            px-5
+            py-5
+            text-[10px]
+            uppercase
+            tracking-[0.12em]
+            text-darb-beige/40
+
+            sm:px-6
+
+            md:flex-row
+            md:items-center
+            md:justify-between
+
+            lg:px-8
+          "
+        >
           <p>
-            © {new Date().getFullYear()} Darb. All rights reserved.
+            © {year} Darb Perfumes.
+            All rights reserved.
           </p>
 
           <p>
-            Built by{" "}
-            <span className="font-semibold text-darb-gold">
-              Web District
-            </span>
+            A scent for every path
           </p>
         </div>
       </div>

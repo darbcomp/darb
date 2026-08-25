@@ -1,22 +1,20 @@
 const express = require("express");
 
 const {
-  previewOrder,
-  createOrder,
-  getMyOrders,
-  getMyOrderById,
-  getAdminOrders,
-  getAdminOrderById,
-  updateAdminOrderStatus,
-} = require("../controllers/order.controller");
+  getPublicReviews,
 
-const {
-  trackOrder,
-} = require("../controllers/trackOrder.controller");
+  getReviewEligibility,
+  createCustomerReview,
+  getMyReview,
+
+  getAdminReviews,
+  createAdminReview,
+  updateAdminReview,
+  deleteAdminReview,
+} = require("../controllers/review.controller");
 
 const {
   protect,
-  optionalAuth,
 } = require("../middleware/auth.middleware");
 
 const {
@@ -29,37 +27,31 @@ const router = express.Router();
    Public
 ========================= */
 
-router.post(
-  "/track",
-  trackOrder
-);
-
-router.post(
-  "/preview",
-  optionalAuth,
-  previewOrder
-);
-
-router.post(
+router.get(
   "/",
-  optionalAuth,
-  createOrder
+  getPublicReviews
 );
 
 /* =========================
-   Customer Account
+   Customer
 ========================= */
+
+router.get(
+  "/eligibility",
+  protect,
+  getReviewEligibility
+);
 
 router.get(
   "/mine",
   protect,
-  getMyOrders
+  getMyReview
 );
 
-router.get(
-  "/mine/:id",
+router.post(
+  "/",
   protect,
-  getMyOrderById
+  createCustomerReview
 );
 
 /* =========================
@@ -70,21 +62,28 @@ router.get(
   "/admin",
   protect,
   requireAdmin,
-  getAdminOrders
+  getAdminReviews
 );
 
-router.get(
-  "/admin/:id",
+router.post(
+  "/admin",
   protect,
   requireAdmin,
-  getAdminOrderById
+  createAdminReview
 );
 
 router.patch(
-  "/admin/:id/status",
+  "/admin/:id",
   protect,
   requireAdmin,
-  updateAdminOrderStatus
+  updateAdminReview
+);
+
+router.delete(
+  "/admin/:id",
+  protect,
+  requireAdmin,
+  deleteAdminReview
 );
 
 module.exports = router;

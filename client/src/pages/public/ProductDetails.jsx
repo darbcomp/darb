@@ -1,13 +1,47 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bell, Minus, Plus, ShoppingBag } from "lucide-react";
+import {
+  useMemo,
+  useState,
+} from "react";
 
-import { getProductBySlug } from "../../api/productApi";
-import { createWaitlistRequest } from "../../api/waitlistApi";
-import { useAuth } from "../../context/AuthContext";
-import { useCart } from "../../context/CartContext";
-import { formatCurrency } from "../../utils/formatCurrency";
+import {
+  Link,
+  useParams,
+} from "react-router-dom";
+
+import {
+  useMutation,
+  useQuery,
+} from "@tanstack/react-query";
+
+import {
+  ArrowLeft,
+  Bell,
+  Check,
+  Minus,
+  Plus,
+  ShoppingBag,
+} from "lucide-react";
+
+import {
+  getProductBySlug,
+  getProducts,
+} from "../../api/productApi";
+
+import {
+  createWaitlistRequest,
+} from "../../api/waitlistApi";
+
+import {
+  useAuth,
+} from "../../context/AuthContext";
+
+import { useCart } from "../../context/useCart";
+
+import ProductCard from "../../components/product/ProductCard";
+
+import {
+  formatCurrency,
+} from "../../utils/formatCurrency";
 
 const initialWaitlistForm = {
   name: "",
@@ -17,35 +51,157 @@ const initialWaitlistForm = {
 };
 
 function ProductDetails() {
-  const { slug } = useParams();
-  const { user } = useAuth();
-  const { addToCart } = useCart();
+  const {
+    slug,
+  } = useParams();
 
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [quantity, setQuantity] = useState(1);
-  const [cartMessage, setCartMessage] = useState("");
-  const [waitlistForm, setWaitlistForm] = useState(initialWaitlistForm);
-  const [waitlistMessage, setWaitlistMessage] = useState("");
-  const [waitlistError, setWaitlistError] = useState("");
+  const {
+    user,
+  } = useAuth();
 
-  const productQuery = useQuery({
-    queryKey: ["product", slug],
-    queryFn: () => getProductBySlug(slug),
-    retry: 1,
-  });
+  const {
+    addToCart,
+  } = useCart();
 
-  const product = productQuery.data?.data;
+  const [
+    selectedImageIndex,
+    setSelectedImageIndex,
+  ] = useState(0);
 
-  const images = useMemo(() => {
-    if (!product?.images?.length) return [];
+  const [
+    quantity,
+    setQuantity,
+  ] = useState(1);
 
-    return [...product.images]
-      .sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain)))
-      .slice(0, 3);
-  }, [product]);
+  const [
+    cartMessage,
+    setCartMessage,
+  ] = useState("");
 
+  const [
+    waitlistForm,
+    setWaitlistForm,
+  ] = useState(
+    initialWaitlistForm
+  );
 
-  const selectedImage = images[selectedImageIndex] || images[0];
+  const [
+    waitlistMessage,
+    setWaitlistMessage,
+  ] = useState("");
+
+  const [
+    waitlistError,
+    setWaitlistError,
+  ] = useState("");
+
+  /* =========================
+     PRODUCT
+  ========================== */
+
+  const productQuery =
+    useQuery({
+      queryKey: [
+        "product",
+        slug,
+      ],
+
+      queryFn: () =>
+        getProductBySlug(
+          slug
+        ),
+
+      retry: 1,
+    });
+
+  const product =
+    productQuery.data?.data;
+
+  /* =========================
+     IMAGES
+  ========================== */
+
+  const images = useMemo(
+    () => {
+      if (
+        !product?.images
+          ?.length
+      ) {
+        return [];
+      }
+
+      return [
+        ...product.images,
+      ]
+        .sort(
+          (
+            a,
+            b
+          ) =>
+            Number(
+              Boolean(
+                b.isMain
+              )
+            ) -
+            Number(
+              Boolean(
+                a.isMain
+              )
+            )
+        )
+        .slice(0, 3);
+    },
+    [product]
+  );
+
+  const safeImageIndex =
+    Math.min(
+      selectedImageIndex,
+      Math.max(
+        images.length - 1,
+        0
+      )
+    );
+
+  const selectedImage =
+    images[
+      safeImageIndex
+    ] ||
+    images[0];
+
+  /* =========================
+     PRODUCT DATA
+  ========================== */
+
+  const categoryName =
+    product?.category
+      ?.name ||
+    product
+      ?.categorySnapshot
+      ?.name ||
+    "Darb";
+
+  const categorySlug =
+    product?.category
+      ?.slug ||
+    product
+      ?.categorySnapshot
+      ?.slug ||
+    "";
+
+  const sizeLabel =
+    product?.sizeLabel ||
+    (product?.sizeMl
+      ? `${product.sizeMl} ML`
+      : "50 ML");
+
+  const concentration =
+    product?.concentration ||
+    "Eau de Parfum";
+
+  const scentFamily =
+    product?.scentFamily ||
+    "";
 
   const canPurchase =
     product &&
@@ -54,519 +210,1211 @@ function ProductDetails() {
     product.isActive &&
     !product.isPlaceholder;
 
-  const unavailableReason = useMemo(() => {
-    if (!product) return "";
+  const lowStock =
+    canPurchase &&
+    product.stock <=
+      (product.lowStockThreshold ||
+        3);
 
-    if (product.isPlaceholder) {
-      return "This scent is still being prepared with its final Darb details.";
-    }
-
-    if (!product.isActive) {
-      return "This scent is currently unavailable.";
-    }
-
-    if (!product.price || product.price <= 0) {
-      return "The final price for this scent has not been confirmed yet.";
-    }
-
-    if (!product.stock || product.stock <= 0) {
-      return "This scent is currently out of stock.";
-    }
-
-    return "";
-  }, [product]);
-
-  const waitlistMutation = useMutation({
-    mutationFn: createWaitlistRequest,
-    onSuccess: (response) => {
-      setWaitlistError("");
-      setWaitlistMessage(
-        response?.message ||
-          "You have been added to the waitlist. We will contact you when this scent is available."
-      );
-
-      setWaitlistForm((current) => ({
-        ...current,
-        note: "",
-      }));
-    },
-    onError: (error) => {
-      setWaitlistMessage("");
-      setWaitlistError(
-        error.friendlyMessage || "Failed to join waitlist. Please try again."
-      );
-    },
-  });
-
-  const handleQuantityChange = (type) => {
-    setCartMessage("");
-
-    setQuantity((current) => {
-      if (type === "decrease") {
-        return Math.max(current - 1, 1);
+  const unavailableReason =
+    useMemo(() => {
+      if (!product) {
+        return "";
       }
 
-      const maxStock = product?.stock > 0 ? product.stock : 1;
-      return Math.min(current + 1, maxStock);
+      if (
+        product.isPlaceholder
+      ) {
+        return "This scent is still being prepared with its final Darb details.";
+      }
+
+      if (
+        !product.isActive
+      ) {
+        return "This scent is currently unavailable.";
+      }
+
+      if (
+        !product.price ||
+        product.price <= 0
+      ) {
+        return "The final price for this scent has not been confirmed yet.";
+      }
+
+      if (
+        !product.stock ||
+        product.stock <= 0
+      ) {
+        return "This scent is currently out of stock.";
+      }
+
+      return "";
+    }, [product]);
+
+  /* =========================
+     RELATED PRODUCTS
+  ========================== */
+
+  const relatedProductsQuery =
+    useQuery({
+      queryKey: [
+        "products",
+        "related",
+        categorySlug,
+        product?._id,
+      ],
+
+      queryFn: () =>
+        getProducts({
+          category:
+            categorySlug,
+          limit: 5,
+          sort: "featured",
+        }),
+
+      enabled:
+        Boolean(
+          categorySlug &&
+            product?._id
+        ),
+
+      retry: 1,
     });
-  };
 
-  const handleAddToCart = () => {
-    if (!canPurchase) return;
+  const relatedProducts =
+    (
+      relatedProductsQuery
+        .data?.data ||
+      []
+    )
+      .filter(
+        (item) =>
+          item._id !==
+          product?._id
+      )
+      .slice(0, 4);
 
-    addToCart(product, quantity);
-    setCartMessage("Added to cart successfully.");
-  };
+  /* =========================
+     WAITLIST
+  ========================== */
 
-  const handleWaitlistChange = (event) => {
-    const { name, value } = event.target;
+  const waitlistMutation =
+    useMutation({
+      mutationFn:
+        createWaitlistRequest,
 
-    setWaitlistForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
+      onSuccess: (
+        response
+      ) => {
+        setWaitlistError(
+          ""
+        );
 
-  const prefillWaitlistFromAccount = () => {
-    if (!user) return;
+        setWaitlistMessage(
+          response?.message ||
+            "You have been added to the waitlist. We will contact you when this scent is available."
+        );
 
-    setWaitlistForm((current) => ({
-      ...current,
-      name: current.name || user.name || "",
-      phone: current.phone || user.phone || "",
-      email: current.email || user.email || "",
-    }));
-  };
+        setWaitlistForm(
+          (current) => ({
+            ...current,
+            note: "",
+          })
+        );
+      },
 
-  const handleWaitlistSubmit = (event) => {
-    event.preventDefault();
+      onError: (
+        error
+      ) => {
+        setWaitlistMessage(
+          ""
+        );
 
-    if (!product) return;
-
-    if (!waitlistForm.name.trim()) {
-      setWaitlistError("Name is required.");
-      setWaitlistMessage("");
-      return;
-    }
-
-    if (!waitlistForm.phone.trim() && !waitlistForm.email.trim()) {
-      setWaitlistError("Phone or email is required.");
-      setWaitlistMessage("");
-      return;
-    }
-
-    setWaitlistError("");
-    setWaitlistMessage("");
-
-    waitlistMutation.mutate({
-      product: product._id,
-      productId: product._id,
-      slug: product.slug,
-      productSlug: product.slug,
-      productName: product.name,
-      name: waitlistForm.name.trim(),
-      phone: waitlistForm.phone.trim(),
-      email: waitlistForm.email.trim(),
-      source: "product_page",
-      note: waitlistForm.note.trim(),
+        setWaitlistError(
+          error.friendlyMessage ||
+            "Failed to join waitlist. Please try again."
+        );
+      },
     });
-  };
 
-  if (productQuery.isLoading) {
+  /* =========================
+     QUANTITY
+  ========================== */
+
+  const handleQuantityChange =
+    (type) => {
+      setCartMessage("");
+
+      setQuantity(
+        (current) => {
+          if (
+            type ===
+            "decrease"
+          ) {
+            return Math.max(
+              current - 1,
+              1
+            );
+          }
+
+          const maxStock =
+            product?.stock >
+            0
+              ? product.stock
+              : 1;
+
+          return Math.min(
+            current + 1,
+            maxStock
+          );
+        }
+      );
+    };
+
+  /* =========================
+     CART
+  ========================== */
+
+  const handleAddToCart =
+    () => {
+      if (!canPurchase) {
+        return;
+      }
+
+      addToCart(
+        product,
+        quantity
+      );
+
+      setCartMessage(
+        `${quantity} ${
+          quantity === 1
+            ? "bottle"
+            : "bottles"
+        } added to your cart.`
+      );
+    };
+
+  /* =========================
+     WAITLIST FORM
+  ========================== */
+
+  const handleWaitlistChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setWaitlistForm(
+        (current) => ({
+          ...current,
+          [name]: value,
+        })
+      );
+    };
+
+  const prefillWaitlistFromAccount =
+    () => {
+      if (!user) return;
+
+      setWaitlistForm(
+        (current) => ({
+          ...current,
+
+          name:
+            current.name ||
+            user.name ||
+            "",
+
+          phone:
+            current.phone ||
+            user.phone ||
+            "",
+
+          email:
+            current.email ||
+            user.email ||
+            "",
+        })
+      );
+    };
+
+  const handleWaitlistSubmit =
+    (event) => {
+      event.preventDefault();
+
+      if (!product) {
+        return;
+      }
+
+      if (
+        !waitlistForm.name.trim()
+      ) {
+        setWaitlistError(
+          "Name is required."
+        );
+
+        setWaitlistMessage(
+          ""
+        );
+
+        return;
+      }
+
+      if (
+        !waitlistForm.phone.trim() &&
+        !waitlistForm.email.trim()
+      ) {
+        setWaitlistError(
+          "Phone or email is required."
+        );
+
+        setWaitlistMessage(
+          ""
+        );
+
+        return;
+      }
+
+      setWaitlistError(
+        ""
+      );
+
+      setWaitlistMessage(
+        ""
+      );
+
+      waitlistMutation.mutate({
+        product:
+          product._id,
+
+        productId:
+          product._id,
+
+        slug:
+          product.slug,
+
+        productSlug:
+          product.slug,
+
+        productName:
+          product.name,
+
+        name:
+          waitlistForm.name.trim(),
+
+        phone:
+          waitlistForm.phone.trim(),
+
+        email:
+          waitlistForm.email.trim(),
+
+        source:
+          "product_page",
+
+        note:
+          waitlistForm.note.trim(),
+      });
+    };
+
+  /* =========================
+     LOADING
+  ========================== */
+
+  if (
+    productQuery.isLoading
+  ) {
     return (
-      <section className="mx-auto max-w-7xl px-4 py-14">
-        <div className="rounded-[2rem] bg-white p-8 shadow-soft">
-          <p className="text-darb-muted">Loading product...</p>
+      <main className="min-h-[70vh] bg-darb-cream">
+        <div className="mx-auto max-w-7xl px-5 py-10 sm:px-6 lg:px-8 lg:py-14">
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="aspect-square animate-pulse rounded-[2rem] bg-white" />
+
+            <div className="space-y-5 pt-4">
+              <div className="h-4 w-28 animate-pulse rounded-full bg-darb-gold/20" />
+
+              <div className="h-14 w-2/3 animate-pulse rounded-xl bg-white" />
+
+              <div className="h-6 w-40 animate-pulse rounded-xl bg-white" />
+
+              <div className="h-28 animate-pulse rounded-[1.5rem] bg-white" />
+
+              <div className="h-16 animate-pulse rounded-full bg-darb-green/10" />
+            </div>
+          </div>
         </div>
-      </section>
+      </main>
     );
   }
 
-  if (productQuery.isError || !product) {
+  /* =========================
+     NOT FOUND
+  ========================== */
+
+  if (
+    productQuery.isError ||
+    !product
+  ) {
     return (
-      <section className="mx-auto max-w-7xl px-4 py-14">
-        <div className="rounded-[2rem] bg-darb-green p-8 text-darb-beige shadow-soft">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-            Product
-          </p>
+      <main className="min-h-[70vh] bg-darb-cream">
+        <section className="mx-auto max-w-7xl px-5 py-16 sm:px-6 lg:px-8">
+          <div className="rounded-[2rem] bg-darb-green px-6 py-14 text-center text-darb-beige shadow-soft sm:px-10">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
+              Darb
+            </p>
 
-          <h1 className="mt-2 font-display text-5xl">Scent not found</h1>
+            <h1 className="mt-3 font-display text-4xl sm:text-5xl">
+              Scent not
+              found.
+            </h1>
 
-          <p className="mt-4 max-w-2xl leading-7 text-darb-beige/75">
-            {productQuery.error?.friendlyMessage ||
-              "This Darb product is unavailable right now."}
-          </p>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-darb-beige/65">
+              {productQuery
+                .error
+                ?.friendlyMessage ||
+                "This fragrance is unavailable right now."}
+            </p>
 
-          <Link
-            to="/shop"
-            className="mt-8 inline-flex rounded-full bg-darb-gold px-7 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-beige"
-          >
-            Back to Shop
-          </Link>
-        </div>
-      </section>
+            <Link
+              to="/shop"
+              className="mt-8 inline-flex rounded-full bg-darb-gold px-7 py-3.5 text-sm font-semibold text-darb-green transition hover:bg-darb-beige"
+            >
+              Back to Shop
+            </Link>
+          </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-14">
-      <div className="mb-8">
-        <Link
-          to="/shop"
-          className="text-sm font-semibold text-darb-green transition hover:text-darb-gold"
-        >
-          ← Back to Shop
-        </Link>
+    <main className="min-h-[70vh] bg-darb-cream">
+      {/* =========================
+          BREADCRUMB
+      ========================== */}
+
+      <div className="border-b border-darb-gold/15">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-5 py-4 text-xs text-darb-muted sm:px-6 lg:px-8">
+          <Link
+            to="/shop"
+            className="inline-flex items-center gap-2 transition hover:text-darb-green"
+          >
+            <ArrowLeft
+              size={14}
+            />
+
+            Shop
+          </Link>
+
+          <span>/</span>
+
+          {categorySlug ? (
+            <Link
+              to={`/category/${categorySlug}`}
+              className="transition hover:text-darb-green"
+            >
+              {categoryName}
+            </Link>
+          ) : (
+            <span>
+              {categoryName}
+            </span>
+          )}
+
+          <span>/</span>
+
+          <span className="truncate text-darb-green">
+            {product.name}
+          </span>
+        </div>
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr]">
-        <div>
-          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[2rem] bg-darb-green shadow-soft">
-            {selectedImage?.url ? (
-              <img
-                src={selectedImage.url}
-                alt={selectedImage.alt || product.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="text-center">
-                <p className="font-display text-6xl text-darb-gold">Darb</p>
-                <p className="mt-3 text-xs uppercase tracking-[0.35em] text-darb-beige/70">
-                  Visual soon
-                </p>
-              </div>
-            )}
+      {/* =========================
+          MAIN PRODUCT
+      ========================== */}
 
-            {images.length > 0 && (
-              <span className="absolute bottom-4 right-4 rounded-full bg-darb-black/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">
-                {selectedImageIndex + 1} / {images.length}
-              </span>
-            )}
-          </div>
+      <section className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+        <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+          {/* =========================
+              GALLERY
+          ========================== */}
 
-          {images.length > 1 && (
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              {images.map((image, index) => (
-                <button
-                  key={image.publicId || image.url || index}
-                  type="button"
-                  onClick={() => setSelectedImageIndex(index)}
-                  aria-label={`View product image ${index + 1}`}
-                  className={`relative aspect-square overflow-hidden rounded-2xl border-2 transition ${
-                    selectedImageIndex === index
-                      ? "border-darb-green"
-                      : "border-transparent hover:border-darb-gold/60"
-                  }`}
-                >
+          <div>
+            <div className="relative overflow-hidden rounded-[1.75rem] bg-white shadow-soft sm:rounded-[2rem]">
+              <div className="aspect-square">
+                {selectedImage?.url ? (
                   <img
-                    src={image.url}
-                    alt={image.alt || `${product.name} image ${index + 1}`}
+                    src={
+                      selectedImage.url
+                    }
+                    alt={
+                      selectedImage.alt ||
+                      product.name
+                    }
                     className="h-full w-full object-cover"
                   />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-darb-green">
+                    <div className="text-center">
+                      <p className="font-display text-6xl text-darb-gold">
+                        Darb
+                      </p>
 
-                  {image.isMain && (
-                    <span className="absolute left-2 top-2 rounded-full bg-darb-gold px-2 py-1 text-[10px] font-semibold text-darb-green">
-                      Main
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-darb-green/10 px-3 py-1 text-xs font-semibold text-darb-green">
-              {product.category?.name || product.categorySnapshot?.name || "Darb"}
-            </span>
-
-            {product.isFeatured && (
-              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
-                Featured
-              </span>
-            )}
-
-            {product.isBestSeller && (
-              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
-                Best Seller
-              </span>
-            )}
-
-            {product.isNewArrival && (
-              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
-                New Arrival
-              </span>
-            )}
-          </div>
-
-          <h1 className="mt-5 font-display text-5xl text-darb-green">
-            {product.name}
-          </h1>
-
-          <p className="mt-4 text-lg leading-8 text-darb-muted">
-            {product.shortDescription ||
-              "A Darb scent waiting to become part of your journey."}
-          </p>
-
-          <div className="mt-6 flex flex-wrap items-end gap-3">
-            {product.price > 0 ? (
-              <p className="font-display text-4xl text-darb-green">
-                {formatCurrency(product.price)}
-              </p>
-            ) : (
-              <p className="font-display text-3xl text-darb-green">
-                Price coming soon
-              </p>
-            )}
-
-            {product.compareAtPrice > product.price && product.price > 0 && (
-              <p className="pb-1 text-lg text-darb-muted line-through">
-                {formatCurrency(product.compareAtPrice)}
-              </p>
-            )}
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <InfoCard
-              label="Size"
-              value={
-                product.sizeLabel ||
-                (product.sizeMl ? `${product.sizeMl} ML` : "50 ML")
-              }
-            />
-
-            <InfoCard
-              label="Concentration"
-              value={product.concentration || "Coming soon"}
-            />
-
-            <InfoCard
-              label="Family"
-              value={product.scentFamily || "Coming soon"}
-            />
-
-            <InfoCard
-              label="Availability"
-              value={
-                product.stock > 0
-                  ? `${product.stock} available`
-                  : "Out of stock"
-              }
-            />
-          </div>
-
-          {canPurchase ? (
-            <div className="mt-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center rounded-full border border-darb-gold/30">
-                  <button
-                    type="button"
-                    onClick={() => handleQuantityChange("decrease")}
-                    className="flex h-11 w-11 items-center justify-center text-darb-green transition hover:text-darb-gold"
-                    aria-label="Decrease quantity"
-                  >
-                    <Minus size={17} />
-                  </button>
-
-                  <span className="min-w-10 text-center font-semibold text-darb-green">
-                    {quantity}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuantityChange("increase")}
-                    className="flex h-11 w-11 items-center justify-center text-darb-green transition hover:text-darb-gold"
-                    aria-label="Increase quantity"
-                  >
-                    <Plus size={17} />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
-                >
-                  <ShoppingBag size={18} />
-                  Add to Cart
-                </button>
+                      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-beige/60">
+                        Visual coming
+                        soon
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {cartMessage && (
-                <p className="mt-4 rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-                  {cartMessage}
+              {/* Badges */}
+
+              <div className="absolute left-4 top-4 flex flex-col items-start gap-2 sm:left-5 sm:top-5">
+                {product.isNewArrival && (
+                  <span className="rounded-full bg-darb-cream px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-darb-green shadow">
+                    New
+                  </span>
+                )}
+
+                {product.isBestSeller && (
+                  <span className="rounded-full bg-darb-green px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-darb-beige shadow">
+                    Best Seller
+                  </span>
+                )}
+              </div>
+
+              {images.length >
+                1 && (
+                <span className="absolute bottom-4 right-4 rounded-full bg-darb-black/65 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur">
+                  {safeImageIndex +
+                    1}{" "}
+                  /{" "}
+                  {
+                    images.length
+                  }
+                </span>
+              )}
+            </div>
+
+            {/* Thumbnails */}
+
+            {images.length >
+              1 && (
+              <div className="mt-3 grid grid-cols-3 gap-3 sm:mt-4">
+                {images.map(
+                  (
+                    image,
+                    index
+                  ) => (
+                    <button
+                      key={
+                        image.publicId ||
+                        image.url ||
+                        index
+                      }
+                      type="button"
+                      onClick={() =>
+                        setSelectedImageIndex(
+                          index
+                        )
+                      }
+                      aria-label={`View ${product.name} image ${
+                        index + 1
+                      }`}
+                      className={`relative aspect-square overflow-hidden rounded-[1.2rem] border transition sm:rounded-[1.5rem] ${
+                        safeImageIndex ===
+                        index
+                          ? "border-darb-green"
+                          : "border-darb-gold/15 hover:border-darb-gold"
+                      }`}
+                    >
+                      <img
+                        src={
+                          image.url
+                        }
+                        alt={
+                          image.alt ||
+                          `${product.name} ${
+                            index +
+                            1
+                          }`
+                        }
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* =========================
+              PRODUCT INFORMATION
+          ========================== */}
+
+          <div className="lg:sticky lg:top-[125px] lg:self-start">
+            {/* Category */}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {categorySlug ? (
+                <Link
+                  to={`/category/${categorySlug}`}
+                  className="text-[10px] font-semibold uppercase tracking-[0.24em] text-darb-gold transition hover:text-darb-green"
+                >
+                  {categoryName}
+                </Link>
+              ) : (
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-darb-gold">
+                  {categoryName}
                 </p>
               )}
+
+              <span className="text-darb-gold/60">
+                •
+              </span>
+
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-darb-muted">
+                {concentration}
+              </span>
             </div>
-          ) : (
-            <div className="mt-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
-                  <Bell size={19} />
-                </div>
 
-                <div>
-                  <h2 className="font-display text-3xl text-darb-green">
-                    Join the waitlist
-                  </h2>
+            {/* Name */}
 
-                  <p className="mt-2 leading-7 text-darb-muted">
-                    {unavailableReason ||
-                      "This scent is not available right now. Leave your details and Darb can contact you once it is ready."}
-                  </p>
-                </div>
-              </div>
+            <h1 className="mt-4 font-display text-5xl leading-[1.02] text-darb-green sm:text-6xl">
+              {product.name}
+            </h1>
 
-              {user && (
-                <button
-                  type="button"
-                  onClick={prefillWaitlistFromAccount}
-                  className="mt-5 rounded-full border border-darb-gold/40 px-5 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/15"
-                >
-                  Use my account details
-                </button>
+            {/* Description */}
+
+            <p className="mt-5 max-w-xl text-sm leading-7 text-darb-muted sm:text-base">
+              {product.shortDescription ||
+                "A Darb fragrance made to become part of the journey and remain in the memory."}
+            </p>
+
+            {/* Price */}
+
+            <div className="mt-7 flex flex-wrap items-end gap-3">
+              {product.price >
+              0 ? (
+                <p className="font-display text-4xl text-darb-green">
+                  {formatCurrency(
+                    product.price
+                  )}
+                </p>
+              ) : (
+                <p className="font-display text-3xl text-darb-green">
+                  Price coming
+                  soon
+                </p>
               )}
 
-              <form onSubmit={handleWaitlistSubmit} className="mt-5 space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <WaitlistField
-                    label="Name *"
-                    name="name"
-                    value={waitlistForm.name}
-                    onChange={handleWaitlistChange}
-                    placeholder="Your name"
+              {product.compareAtPrice >
+                product.price &&
+                product.price >
+                  0 && (
+                  <p className="pb-1 text-base text-darb-muted line-through">
+                    {formatCurrency(
+                      product.compareAtPrice
+                    )}
+                  </p>
+                )}
+            </div>
+
+            {/* =========================
+                PRODUCT ESSENTIALS
+            ========================== */}
+
+            <div className="mt-7 grid grid-cols-2 border-y border-darb-gold/20">
+              <ProductFact
+                label="Size"
+                value={
+                  sizeLabel
+                }
+              />
+
+              <ProductFact
+                label="Concentration"
+                value={
+                  concentration
+                }
+                borderLeft
+              />
+
+              {scentFamily && (
+                <ProductFact
+                  label="Scent Family"
+                  value={
+                    scentFamily
+                  }
+                  borderTop
+                />
+              )}
+
+              <ProductFact
+                label="Availability"
+                value={
+                  canPurchase
+                    ? lowStock
+                      ? `Only ${product.stock} left`
+                      : "In stock"
+                    : "Out of stock"
+                }
+                borderLeft={
+                  Boolean(
+                    scentFamily
+                  )
+                }
+                borderTop
+              />
+            </div>
+
+            {/* =========================
+                BUY BOX
+            ========================== */}
+
+            {canPurchase ? (
+              <div className="mt-8">
+                {/* Stock */}
+
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                    <Check
+                      size={12}
+                      strokeWidth={
+                        2.3
+                      }
+                    />
+                  </span>
+
+                  <p
+                    className={`text-xs font-semibold ${
+                      lowStock
+                        ? "text-darb-gold"
+                        : "text-darb-green"
+                    }`}
+                  >
+                    {lowStock
+                      ? `Low stock — ${product.stock} remaining`
+                      : "Ready to order"}
+                  </p>
+                </div>
+
+                {/* Quantity */}
+
+                <div className="mt-5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-muted">
+                    Quantity
+                  </p>
+
+                  <div className="mt-3 inline-flex items-center rounded-full border border-darb-gold/30 bg-white">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleQuantityChange(
+                          "decrease"
+                        )
+                      }
+                      disabled={
+                        quantity <=
+                        1
+                      }
+                      className="flex h-12 w-12 items-center justify-center text-darb-green transition hover:text-darb-gold disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus
+                        size={
+                          17
+                        }
+                      />
+                    </button>
+
+                    <span className="min-w-12 text-center text-sm font-semibold text-darb-green">
+                      {
+                        quantity
+                      }
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleQuantityChange(
+                          "increase"
+                        )
+                      }
+                      disabled={
+                        quantity >=
+                        product.stock
+                      }
+                      className="flex h-12 w-12 items-center justify-center text-darb-green transition hover:text-darb-gold disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="Increase quantity"
+                    >
+                      <Plus
+                        size={
+                          17
+                        }
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add Cart */}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleAddToCart
+                  }
+                  className="mt-5 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full bg-darb-green px-8 text-sm font-bold uppercase tracking-[0.14em] text-darb-beige transition hover:bg-darb-black"
+                >
+                  <ShoppingBag
+                    size={18}
                   />
 
-                  <WaitlistField
-                    label="Phone"
-                    name="phone"
-                    value={waitlistForm.phone}
-                    onChange={handleWaitlistChange}
-                    placeholder="01xxxxxxxxx"
-                  />
+                  Add to Cart
+                </button>
 
-                  <div className="md:col-span-2">
-                    <WaitlistField
-                      label="Email"
-                      name="email"
-                      value={waitlistForm.email}
-                      onChange={handleWaitlistChange}
-                      placeholder="example@email.com"
-                      type="email"
+                {cartMessage && (
+                  <div className="mt-4 flex items-start gap-3 rounded-[1.2rem] border border-darb-green/15 bg-darb-green/5 px-4 py-3.5">
+                    <Check
+                      size={17}
+                      className="mt-0.5 shrink-0 text-darb-green"
+                    />
+
+                    <p className="text-sm font-semibold text-darb-green">
+                      {
+                        cartMessage
+                      }
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* =========================
+                  WAITLIST
+              ========================== */
+
+              <div className="mt-8 rounded-[1.75rem] border border-darb-gold/20 bg-white p-5 shadow-soft sm:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                    <Bell
+                      size={18}
                     />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <label>
-                      <span className="mb-2 block text-sm font-semibold text-darb-green">
-                        Note
-                      </span>
-                      <textarea
-                        name="note"
-                        value={waitlistForm.note}
-                        onChange={handleWaitlistChange}
-                        rows={3}
-                        className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="Optional note"
-                      />
-                    </label>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">
+                      Availability
+                    </p>
+
+                    <h2 className="mt-1 font-display text-3xl text-darb-green">
+                      Join the
+                      waitlist
+                    </h2>
                   </div>
                 </div>
 
-                {waitlistError && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {waitlistError}
-                  </div>
-                )}
-
-                {waitlistMessage && (
-                  <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                    {waitlistMessage}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={waitlistMutation.isPending}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Bell size={18} />
-                  {waitlistMutation.isPending
-                    ? "Joining Waitlist..."
-                    : "Join Waitlist"}
-                </button>
-
-                <p className="text-xs leading-5 text-darb-muted">
-                  Add at least a phone number or an email so the store can reach
-                  you.
+                <p className="mt-4 text-sm leading-7 text-darb-muted">
+                  {unavailableReason ||
+                    "Leave your details and Darb can contact you when this fragrance becomes available."}
                 </p>
-              </form>
-            </div>
-          )}
+
+                {user && (
+                  <button
+                    type="button"
+                    onClick={
+                      prefillWaitlistFromAccount
+                    }
+                    className="mt-5 rounded-full border border-darb-gold/35 px-5 py-2.5 text-xs font-semibold text-darb-green transition hover:bg-darb-gold/10"
+                  >
+                    Use my account
+                    details
+                  </button>
+                )}
+
+                <form
+                  onSubmit={
+                    handleWaitlistSubmit
+                  }
+                  className="mt-6 space-y-4"
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <WaitlistField
+                      label="Name *"
+                      name="name"
+                      value={
+                        waitlistForm.name
+                      }
+                      onChange={
+                        handleWaitlistChange
+                      }
+                      placeholder="Your name"
+                    />
+
+                    <WaitlistField
+                      label="Phone"
+                      name="phone"
+                      value={
+                        waitlistForm.phone
+                      }
+                      onChange={
+                        handleWaitlistChange
+                      }
+                      placeholder="01xxxxxxxxx"
+                    />
+
+                    <div className="sm:col-span-2">
+                      <WaitlistField
+                        label="Email"
+                        name="email"
+                        value={
+                          waitlistForm.email
+                        }
+                        onChange={
+                          handleWaitlistChange
+                        }
+                        placeholder="example@email.com"
+                        type="email"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label>
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.13em] text-darb-green">
+                          Note
+                        </span>
+
+                        <textarea
+                          name="note"
+                          value={
+                            waitlistForm.note
+                          }
+                          onChange={
+                            handleWaitlistChange
+                          }
+                          rows={3}
+                          className="w-full rounded-[1.2rem] border border-darb-gold/30 bg-darb-cream px-4 py-3 text-sm outline-none transition focus:border-darb-green"
+                          placeholder="Optional note"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {waitlistError && (
+                    <div className="rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {
+                        waitlistError
+                      }
+                    </div>
+                  )}
+
+                  {waitlistMessage && (
+                    <div className="rounded-[1.2rem] border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                      {
+                        waitlistMessage
+                      }
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={
+                      waitlistMutation.isPending
+                    }
+                    className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-darb-green px-7 text-sm font-bold uppercase tracking-[0.13em] text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Bell
+                      size={17}
+                    />
+
+                    {waitlistMutation.isPending
+                      ? "Joining..."
+                      : "Join Waitlist"}
+                  </button>
+
+                  <p className="text-[11px] leading-5 text-darb-muted">
+                    Add at least
+                    a phone number
+                    or email so
+                    Darb can reach
+                    you.
+                  </p>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
-        <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
-          <h2 className="font-display text-3xl text-darb-green">
-            The scent story
-          </h2>
+      {/* =========================
+          SCENT STORY
+      ========================== */}
 
-          <p className="mt-4 whitespace-pre-line leading-8 text-darb-muted">
-            {product.description ||
-              "Darb is more than a perfume. It is a memory carried softly with every step."}
-          </p>
-        </div>
+      <section className="border-t border-darb-gold/20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
+          {/* Story */}
 
-        <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
-          <h2 className="font-display text-3xl text-darb-green">
-            Scent notes
-          </h2>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">
+              The Journey
+            </p>
 
-          <div className="mt-5 space-y-4">
-            <NoteRow
-              label="Top"
-              notes={product.scentNotes?.top}
+            <h2 className="mt-3 font-display text-4xl text-darb-green sm:text-5xl">
+              The scent
+            </h2>
+
+            <p className="mt-6 whitespace-pre-line text-sm leading-8 text-darb-muted sm:text-base">
+              {product.description ||
+                "Darb is more than perfume. It is a journey carried softly in every step, leaving behind a memory that stays."}
+            </p>
+          </div>
+
+          {/* Details */}
+
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[1.75rem] border border-darb-gold/20 bg-darb-gold/20">
+            <DetailCell
+              label="Fragrance"
+              value={
+                product.name
+              }
             />
-            <NoteRow
-              label="Middle"
-              notes={product.scentNotes?.middle}
+
+            <DetailCell
+              label="Collection"
+              value={
+                categoryName
+              }
             />
-            <NoteRow
-              label="Base"
-              notes={product.scentNotes?.base}
+
+            <DetailCell
+              label="Size"
+              value={
+                sizeLabel
+              }
+            />
+
+            <DetailCell
+              label="Concentration"
+              value={
+                concentration
+              }
+            />
+
+            <DetailCell
+              label="Scent Family"
+              value={
+                scentFamily ||
+                "Coming soon"
+              }
+            />
+
+            <DetailCell
+              label="Darb"
+              value="A scent for every path"
             />
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {/* =========================
+          SCENT NOTES
+      ========================== */}
+
+      <section className="bg-darb-green text-darb-beige">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <div className="text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
+              Composition
+            </p>
+
+            <h2 className="mt-3 font-display text-4xl sm:text-5xl">
+              Scent Notes
+            </h2>
+          </div>
+
+          <div className="mx-auto mt-9 grid max-w-5xl gap-px overflow-hidden rounded-[1.75rem] border border-darb-gold/20 bg-darb-gold/20 md:grid-cols-3">
+            <ScentNote
+              number="01"
+              label="Top Notes"
+              notes={
+                product
+                  .scentNotes
+                  ?.top
+              }
+            />
+
+            <ScentNote
+              number="02"
+              label="Middle Notes"
+              notes={
+                product
+                  .scentNotes
+                  ?.middle
+              }
+            />
+
+            <ScentNote
+              number="03"
+              label="Base Notes"
+              notes={
+                product
+                  .scentNotes
+                  ?.base
+              }
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* =========================
+          RELATED PRODUCTS
+      ========================== */}
+
+      {relatedProducts.length >
+        0 && (
+        <section className="border-t border-darb-gold/20">
+          <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-16 lg:px-8">
+            <div className="flex items-end justify-between gap-6">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">
+                  Continue the
+                  journey
+                </p>
+
+                <h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">
+                  You may also
+                  like.
+                </h2>
+              </div>
+
+              {categorySlug && (
+                <Link
+                  to={`/category/${categorySlug}`}
+                  className="hidden text-xs font-semibold text-darb-green underline decoration-darb-gold underline-offset-4 transition hover:text-darb-gold sm:block"
+                >
+                  View{" "}
+                  {categoryName}
+                </Link>
+              )}
+            </div>
+
+            <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+              {relatedProducts.map(
+                (
+                  relatedProduct
+                ) => (
+                  <ProductCard
+                    key={
+                      relatedProduct._id ||
+                      relatedProduct.slug
+                    }
+                    product={
+                      relatedProduct
+                    }
+                  />
+                )
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+    </main>
   );
 }
 
-function InfoCard({ label, value }) {
+/* =========================
+   PRODUCT FACT
+========================== */
+
+function ProductFact({
+  label,
+  value,
+  borderLeft = false,
+  borderTop = false,
+}) {
   return (
-    <div className="rounded-2xl border border-darb-gold/20 bg-white p-4 shadow-soft">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
+    <div
+      className={`
+        py-5
+
+        ${
+          borderLeft
+            ? "border-l border-darb-gold/20 pl-5"
+            : "pr-5"
+        }
+
+        ${
+          borderTop
+            ? "border-t border-darb-gold/20"
+            : ""
+        }
+      `}
+    >
+      <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
         {label}
       </p>
-      <p className="mt-2 font-semibold text-darb-green">{value}</p>
+
+      <p className="mt-2 text-sm font-semibold text-darb-green">
+        {value}
+      </p>
     </div>
   );
 }
 
-function NoteRow({ label, notes }) {
+/* =========================
+   DETAIL CELL
+========================== */
+
+function DetailCell({
+  label,
+  value,
+}) {
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
+    <div className="bg-darb-cream p-5 sm:p-6">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
         {label}
       </p>
-      <p className="mt-1 text-darb-muted">
-        {notes?.length ? notes.join(", ") : "Coming soon"}
+
+      <p className="mt-2 text-sm font-semibold leading-6 text-darb-green">
+        {value}
       </p>
     </div>
   );
 }
+
+/* =========================
+   SCENT NOTE
+========================== */
+
+function ScentNote({
+  number,
+  label,
+  notes,
+}) {
+  return (
+    <article className="bg-darb-green p-6 sm:p-8">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">
+        {number}
+      </p>
+
+      <h3 className="mt-4 font-display text-2xl text-darb-beige">
+        {label}
+      </h3>
+
+      <p className="mt-4 text-sm leading-7 text-darb-beige/60">
+        {notes?.length
+          ? notes.join(", ")
+          : "To be revealed."}
+      </p>
+    </article>
+  );
+}
+
+/* =========================
+   WAITLIST FIELD
+========================== */
 
 function WaitlistField({
   label,
@@ -578,16 +1426,19 @@ function WaitlistField({
 }) {
   return (
     <label>
-      <span className="mb-2 block text-sm font-semibold text-darb-green">
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.13em] text-darb-green">
         {label}
       </span>
+
       <input
         name={name}
         value={value}
         onChange={onChange}
         type={type}
-        className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
-        placeholder={placeholder}
+        className="w-full rounded-full border border-darb-gold/30 bg-darb-cream px-4 py-3 text-sm outline-none transition focus:border-darb-green"
+        placeholder={
+          placeholder
+        }
       />
     </label>
   );

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createOrder, previewOrder } from "../../api/orderApi";
 import { getPublicSettings } from "../../api/settingsApi";
-import { useCart } from "../../context/CartContext";
+import { useCart } from "../../context/useCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 
 const initialFormData = {
@@ -89,6 +89,10 @@ function Checkout() {
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
   const [error, setError] = useState("");
 
+  /* =========================
+     ORDER ITEMS
+  ========================== */
+
   const checkoutItems = useMemo(() => {
     return items.map((item) => ({
       product: item.productId,
@@ -101,179 +105,420 @@ function Checkout() {
     }));
   }, [items]);
 
+  /* =========================
+     STORE SETTINGS
+  ========================== */
+
   const settingsQuery = useQuery({
     queryKey: ["public-settings"],
     queryFn: getPublicSettings,
     retry: 1,
   });
 
+  /* =========================
+     ORDER PREVIEW
+  ========================== */
+
   const previewQuery = useQuery({
     queryKey: ["checkout-preview", checkoutItems, appliedCouponCode],
+
     queryFn: () =>
       previewOrder({
         items: checkoutItems,
         couponCode: appliedCouponCode,
       }),
+
     enabled: !isEmpty && checkoutItems.length > 0,
+
     retry: 1,
   });
 
-  const settings = settingsQuery.data?.data || defaultSettings;
+  const settings =
+    settingsQuery.data?.data ||
+    defaultSettings;
 
-  const availablePaymentMethods = useMemo(() => {
-    const methods = paymentMethodMap
-      .map((method) => {
-        const settingsMethod = settings.paymentMethods?.[method.settingsKey];
+  /* =========================
+     AVAILABLE PAYMENT METHODS
+  ========================== */
 
-        return {
-          key: method.checkoutValue,
-          label: settingsMethod?.label || method.fallbackLabel,
-          description:
-            settingsMethod?.instructions || method.fallbackDescription,
-          enabled: Boolean(settingsMethod?.enabled),
-        };
-      })
-      .filter((method) => method.enabled);
+  const availablePaymentMethods =
+    useMemo(() => {
+      const methods =
+        paymentMethodMap
+          .map((method) => {
+            const settingsMethod =
+              settings.paymentMethods?.[
+                method.settingsKey
+              ];
 
-    if (methods.length === 0) {
-      return [
-        {
-          key: "cash_on_delivery",
-          label: "Cash on Delivery",
-          description: "Pay when your Darb order arrives.",
-          enabled: true,
-        },
-      ];
-    }
+            return {
+              key:
+                method.checkoutValue,
 
-    return methods;
-  }, [settings.paymentMethods]);
+              label:
+                settingsMethod?.label ||
+                method.fallbackLabel,
 
-  useEffect(() => {
-    const selectedPaymentIsAvailable = availablePaymentMethods.some(
-      (method) => method.key === formData.paymentMethod
+              description:
+                settingsMethod?.instructions ||
+                method.fallbackDescription,
+
+              enabled:
+                Boolean(
+                  settingsMethod?.enabled
+                ),
+            };
+          })
+          .filter(
+            (method) =>
+              method.enabled
+          );
+
+      if (
+        methods.length === 0
+      ) {
+        return [
+          {
+            key:
+              "cash_on_delivery",
+
+            label:
+              "Cash on Delivery",
+
+            description:
+              "Pay when your Darb order arrives.",
+
+            enabled: true,
+          },
+        ];
+      }
+
+      return methods;
+    }, [
+      settings.paymentMethods,
+    ]);
+
+  /* =========================
+     SELECTED PAYMENT METHOD
+     
+     Derive a valid method rather
+     than setting state in useEffect.
+  ========================== */
+
+  const selectedPaymentMethodKey =
+    useMemo(() => {
+      const currentMethodIsAvailable =
+        availablePaymentMethods.some(
+          (method) =>
+            method.key ===
+            formData.paymentMethod
+        );
+
+      if (
+        currentMethodIsAvailable
+      ) {
+        return formData.paymentMethod;
+      }
+
+      return (
+        availablePaymentMethods[0]
+          ?.key || ""
+      );
+    }, [
+      availablePaymentMethods,
+      formData.paymentMethod,
+    ]);
+
+  const selectedPaymentMethod =
+    availablePaymentMethods.find(
+      (method) =>
+        method.key ===
+        selectedPaymentMethodKey
     );
 
-    if (!selectedPaymentIsAvailable && availablePaymentMethods[0]?.key) {
-      setFormData((current) => ({
-        ...current,
-        paymentMethod: availablePaymentMethods[0].key,
-      }));
-    }
-  }, [availablePaymentMethods, formData.paymentMethod]);
+  /* =========================
+     FALLBACK DELIVERY
+  ========================== */
 
-  const fallbackDeliveryFee = useMemo(() => {
-    const defaultFee = Number(settings.delivery?.defaultFee) || 0;
-    const freeDeliveryThreshold =
-      Number(settings.delivery?.freeDeliveryThreshold) || 0;
+  const fallbackDeliveryFee =
+    useMemo(() => {
+      const defaultFee =
+        Number(
+          settings.delivery
+            ?.defaultFee
+        ) || 0;
 
-    if (freeDeliveryThreshold > 0 && subtotal >= freeDeliveryThreshold) {
-      return 0;
-    }
+      const freeDeliveryThreshold =
+        Number(
+          settings.delivery
+            ?.freeDeliveryThreshold
+        ) || 0;
 
-    return defaultFee;
-  }, [settings.delivery, subtotal]);
+      if (
+        freeDeliveryThreshold >
+          0 &&
+        subtotal >=
+          freeDeliveryThreshold
+      ) {
+        return 0;
+      }
 
-  const pricing = previewQuery.data?.data?.pricing;
+      return defaultFee;
+    }, [
+      settings.delivery,
+      subtotal,
+    ]);
 
-  const calculatedSubtotal = pricing?.subtotal ?? subtotal;
-  const calculatedDiscountTotal = pricing?.discountTotal ?? 0;
-  const calculatedDeliveryFee = pricing?.deliveryFee ?? fallbackDeliveryFee;
+  /* =========================
+     CALCULATED PRICING
+  ========================== */
+
+  const pricing =
+    previewQuery.data?.data
+      ?.pricing;
+
+  const calculatedSubtotal =
+    pricing?.subtotal ??
+    subtotal;
+
+  const calculatedDiscountTotal =
+    pricing?.discountTotal ??
+    0;
+
+  const calculatedDeliveryFee =
+    pricing?.deliveryFee ??
+    fallbackDeliveryFee;
+
   const calculatedTotal =
     pricing?.total ??
-    Math.max(calculatedSubtotal + calculatedDeliveryFee - calculatedDiscountTotal, 0);
+    Math.max(
+      calculatedSubtotal +
+        calculatedDeliveryFee -
+        calculatedDiscountTotal,
+      0
+    );
 
-  const selectedPaymentMethod = availablePaymentMethods.find(
-    (method) => method.key === formData.paymentMethod
-  );
+  /* =========================
+     CREATE ORDER
+  ========================== */
 
-  const orderMutation = useMutation({
-    mutationFn: createOrder,
-    onSuccess: (response) => {
-      clearCart();
+  const orderMutation =
+    useMutation({
+      mutationFn:
+        createOrder,
 
-      navigate("/order-success", {
-        replace: true,
-        state: {
-          order: response?.data,
-          message: response?.message || "Order created successfully.",
-        },
-      });
-    },
-    onError: (err) => {
-      setError(err.friendlyMessage || "Failed to create order.");
-    },
-  });
+      onSuccess: (
+        response
+      ) => {
+        clearCart();
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
+        navigate(
+          "/order-success",
+          {
+            replace: true,
 
-    setFormData((current) => ({
-      ...current,
-      [name]: value,
-    }));
+            state: {
+              order:
+                response?.data,
+
+              message:
+                response?.message ||
+                "Order created successfully.",
+            },
+          }
+        );
+      },
+
+      onError: (err) => {
+        setError(
+          err.friendlyMessage ||
+            "Failed to create order."
+        );
+      },
+    });
+
+  /* =========================
+     FORM CHANGE
+  ========================== */
+
+  const handleChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
+
+    setFormData(
+      (current) => ({
+        ...current,
+        [name]: value,
+      })
+    );
   };
 
-  const handleApplyCoupon = () => {
-    setAppliedCouponCode(formData.couponCode.trim().toUpperCase());
-  };
+  /* =========================
+     COUPON
+  ========================== */
 
-  const handleRemoveCoupon = () => {
-    setFormData((current) => ({
-      ...current,
-      couponCode: "",
-    }));
-    setAppliedCouponCode("");
-  };
+  const handleApplyCoupon =
+    () => {
+      setAppliedCouponCode(
+        formData.couponCode
+          .trim()
+          .toUpperCase()
+      );
+    };
 
-  const validateCheckout = () => {
-    if (isEmpty) return "Your cart is empty.";
-    if (!formData.name.trim()) return "Full name is required.";
-    if (!formData.phone.trim()) return "Phone number is required.";
-    if (!formData.governorate.trim()) return "Governorate is required.";
-    if (!formData.city.trim()) return "City is required.";
-    if (!formData.street.trim()) return "Street address is required.";
-    if (!formData.paymentMethod) return "Payment method is required.";
+  const handleRemoveCoupon =
+    () => {
+      setFormData(
+        (current) => ({
+          ...current,
+          couponCode: "",
+        })
+      );
 
-    return "";
-  };
+      setAppliedCouponCode(
+        ""
+      );
+    };
+
+  /* =========================
+     VALIDATION
+  ========================== */
+
+  const validateCheckout =
+    () => {
+      if (isEmpty) {
+        return "Your cart is empty.";
+      }
+
+      if (
+        !formData.name.trim()
+      ) {
+        return "Full name is required.";
+      }
+
+      if (
+        !formData.phone.trim()
+      ) {
+        return "Phone number is required.";
+      }
+
+      if (
+        !formData.governorate.trim()
+      ) {
+        return "Governorate is required.";
+      }
+
+      if (
+        !formData.city.trim()
+      ) {
+        return "City is required.";
+      }
+
+      if (
+        !formData.street.trim()
+      ) {
+        return "Street address is required.";
+      }
+
+      if (
+        !selectedPaymentMethodKey
+      ) {
+        return "Payment method is required.";
+      }
+
+      return "";
+    };
+
+  /* =========================
+     ORDER PAYLOAD
+  ========================== */
 
   const buildPayload = () => {
     return {
       customer: {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
+        name:
+          formData.name.trim(),
+
+        phone:
+          formData.phone.trim(),
+
+        email:
+          formData.email.trim(),
       },
+
       shippingAddress: {
-        governorate: formData.governorate.trim(),
-        city: formData.city.trim(),
-        street: formData.street.trim(),
-        building: formData.building.trim(),
-        floor: formData.floor.trim(),
-        apartment: formData.apartment.trim(),
-        notes: formData.notes.trim(),
+        governorate:
+          formData.governorate.trim(),
+
+        city:
+          formData.city.trim(),
+
+        street:
+          formData.street.trim(),
+
+        building:
+          formData.building.trim(),
+
+        floor:
+          formData.floor.trim(),
+
+        apartment:
+          formData.apartment.trim(),
+
+        notes:
+          formData.notes.trim(),
       },
-      items: checkoutItems,
-      couponCode: appliedCouponCode,
-      paymentMethod: formData.paymentMethod,
-      customerNotes: formData.notes.trim(),
+
+      items:
+        checkoutItems,
+
+      couponCode:
+        appliedCouponCode,
+
+      paymentMethod:
+        selectedPaymentMethodKey,
+
+      customerNotes:
+        formData.notes.trim(),
     };
   };
 
-  const handleSubmit = (event) => {
+  /* =========================
+     SUBMIT
+  ========================== */
+
+  const handleSubmit = (
+    event
+  ) => {
     event.preventDefault();
 
-    const validationError = validateCheckout();
+    const validationError =
+      validateCheckout();
 
-    if (validationError) {
-      setError(validationError);
+    if (
+      validationError
+    ) {
+      setError(
+        validationError
+      );
+
       return;
     }
 
     setError("");
-    orderMutation.mutate(buildPayload());
+
+    orderMutation.mutate(
+      buildPayload()
+    );
   };
+
+  /* =========================
+     EMPTY CART
+  ========================== */
 
   if (isEmpty) {
     return (
@@ -288,8 +533,10 @@ function Checkout() {
           </h1>
 
           <p className="mt-4 max-w-2xl leading-7 text-darb-beige/75">
-            Add your favorite Darb perfumes to the cart before continuing to
-            checkout.
+            Add your favorite
+            Darb perfumes to the
+            cart before continuing
+            to checkout.
           </p>
 
           <Link
@@ -305,6 +552,10 @@ function Checkout() {
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-14">
+      {/* =========================
+          HEADER
+      ========================== */}
+
       <div className="mb-10">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
           Checkout
@@ -315,69 +566,117 @@ function Checkout() {
         </h1>
 
         <p className="mt-4 max-w-2xl leading-7 text-darb-muted">
-          Add your delivery details and choose how you would like to pay.
+          Add your delivery
+          details and choose how
+          you would like to pay.
         </p>
       </div>
 
+      {/* =========================
+          SETTINGS ERROR
+      ========================== */}
+
       {settingsQuery.isError && (
         <div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          Store settings could not be loaded, so checkout is using default
-          values for now.
+          Store settings could
+          not be loaded, so
+          checkout is using
+          default values for now.
         </div>
       )}
 
+      {/* =========================
+          PREVIEW ERROR
+      ========================== */}
+
       {previewQuery.isError && (
         <div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          {previewQuery.error?.friendlyMessage ||
+          {previewQuery.error
+            ?.friendlyMessage ||
             "Checkout preview could not be calculated. The final order will still be checked before creation."}
         </div>
       )}
 
+      {/* =========================
+          CHECKOUT FORM
+      ========================== */}
+
       <form
-        onSubmit={handleSubmit}
+        onSubmit={
+          handleSubmit
+        }
         className="grid gap-8 lg:grid-cols-[1fr_390px]"
       >
+        {/* =========================
+            LEFT SIDE
+        ========================== */}
+
         <div className="space-y-6">
+          {/* =========================
+              CUSTOMER DETAILS
+          ========================== */}
+
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
               Customer Details
             </h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {/* Name */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Full Name *
                 </label>
+
                 <input
                   name="name"
-                  value={formData.name}
-                  onChange={handleChange}
+                  value={
+                    formData.name
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Customer name"
                 />
               </div>
 
+              {/* Phone */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Phone *
                 </label>
+
                 <input
                   name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
+                  value={
+                    formData.phone
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="01xxxxxxxxx"
                 />
               </div>
 
+              {/* Email */}
+
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Email
                 </label>
+
                 <input
                   name="email"
-                  value={formData.email}
-                  onChange={handleChange}
+                  value={
+                    formData.email
+                  }
+                  onChange={
+                    handleChange
+                  }
                   type="email"
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="example@email.com"
@@ -386,109 +685,171 @@ function Checkout() {
             </div>
           </div>
 
+          {/* =========================
+              DELIVERY ADDRESS
+          ========================== */}
+
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
               Delivery Address
             </h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {/* Governorate */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Governorate *
                 </label>
+
                 <input
                   name="governorate"
-                  value={formData.governorate}
-                  onChange={handleChange}
+                  value={
+                    formData.governorate
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Cairo, Giza..."
                 />
               </div>
 
+              {/* City */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   City / Area *
                 </label>
+
                 <input
                   name="city"
-                  value={formData.city}
-                  onChange={handleChange}
+                  value={
+                    formData.city
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Nasr City, Haram..."
                 />
               </div>
 
+              {/* Street */}
+
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Street Address *
                 </label>
+
                 <input
                   name="street"
-                  value={formData.street}
-                  onChange={handleChange}
+                  value={
+                    formData.street
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Street name and details"
                 />
               </div>
 
+              {/* Building */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Building
                 </label>
+
                 <input
                   name="building"
-                  value={formData.building}
-                  onChange={handleChange}
+                  value={
+                    formData.building
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Building number"
                 />
               </div>
 
+              {/* Floor */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Floor
                 </label>
+
                 <input
                   name="floor"
-                  value={formData.floor}
-                  onChange={handleChange}
+                  value={
+                    formData.floor
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Floor"
                 />
               </div>
 
+              {/* Apartment */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Apartment
                 </label>
+
                 <input
                   name="apartment"
-                  value={formData.apartment}
-                  onChange={handleChange}
+                  value={
+                    formData.apartment
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Apartment"
                 />
               </div>
 
+              {/* Notes */}
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Notes
                 </label>
+
                 <input
                   name="notes"
-                  value={formData.notes}
-                  onChange={handleChange}
+                  value={
+                    formData.notes
+                  }
+                  onChange={
+                    handleChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Any delivery notes"
                 />
               </div>
             </div>
 
+            {/* Delivery Info */}
+
             <div className="mt-5 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
-              {settings.delivery?.estimatedDeliveryText ||
-                defaultSettings.delivery.estimatedDeliveryText}
+              {settings.delivery
+                ?.estimatedDeliveryText ||
+                defaultSettings
+                  .delivery
+                  .estimatedDeliveryText}
             </div>
           </div>
+
+          {/* =========================
+              PAYMENT METHOD
+          ========================== */}
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
@@ -496,50 +857,78 @@ function Checkout() {
             </h2>
 
             {settingsQuery.isLoading ? (
-              <p className="mt-4 text-darb-muted">Loading payment methods...</p>
+              <p className="mt-4 text-darb-muted">
+                Loading payment
+                methods...
+              </p>
             ) : (
               <div className="mt-6 grid gap-3">
-                {availablePaymentMethods.map((method) => (
-                  <label
-                    key={method.key}
-                    className={`cursor-pointer rounded-2xl border p-4 transition ${
-                      formData.paymentMethod === method.key
-                        ? "border-darb-green bg-darb-green/5"
-                        : "border-darb-gold/20 hover:border-darb-gold"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value={method.key}
-                        checked={formData.paymentMethod === method.key}
-                        onChange={handleChange}
-                        className="mt-1"
-                      />
-                      <div>
-                        <p className="font-semibold text-darb-green">
-                          {method.label}
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-darb-muted">
-                          {method.description}
-                        </p>
+                {availablePaymentMethods.map(
+                  (method) => (
+                    <label
+                      key={
+                        method.key
+                      }
+                      className={`cursor-pointer rounded-2xl border p-4 transition ${
+                        selectedPaymentMethodKey ===
+                        method.key
+                          ? "border-darb-green bg-darb-green/5"
+                          : "border-darb-gold/20 hover:border-darb-gold"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={
+                            method.key
+                          }
+                          checked={
+                            selectedPaymentMethodKey ===
+                            method.key
+                          }
+                          onChange={
+                            handleChange
+                          }
+                          className="mt-1"
+                        />
+
+                        <div>
+                          <p className="font-semibold text-darb-green">
+                            {
+                              method.label
+                            }
+                          </p>
+
+                          <p className="mt-1 text-sm leading-6 text-darb-muted">
+                            {
+                              method.description
+                            }
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  )
+                )}
               </div>
             )}
 
             {selectedPaymentMethod?.description && (
               <div className="mt-5 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
                 <span className="font-semibold text-darb-green">
-                  Payment instructions:
+                  Payment
+                  instructions:
                 </span>{" "}
-                {selectedPaymentMethod.description}
+                {
+                  selectedPaymentMethod.description
+                }
               </div>
             )}
           </div>
+
+          {/* =========================
+              ERROR
+          ========================== */}
 
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -548,43 +937,77 @@ function Checkout() {
           )}
         </div>
 
+        {/* =========================
+            ORDER SUMMARY
+        ========================== */}
+
         <aside className="h-fit rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <h2 className="font-display text-3xl text-darb-green">
             Order Summary
           </h2>
 
-          <div className="mt-6 space-y-4">
-            {items.map((item) => (
-              <div
-                key={item.cartItemId}
-                className="flex gap-4 border-b border-darb-gold/10 pb-4 last:border-b-0"
-              >
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <p className="font-display text-sm text-darb-gold">Darb</p>
-                  )}
-                </div>
+          {/* Products */}
 
-                <div className="flex-1">
-                  <p className="font-semibold text-darb-green">{item.name}</p>
-                  <p className="mt-1 text-xs text-darb-muted">
-                    Qty: {item.quantity}
-                    {item.sizeLabel ? ` • ${item.sizeLabel}` : ""}
+          <div className="mt-6 space-y-4">
+            {items.map(
+              (item) => (
+                <div
+                  key={
+                    item.cartItemId
+                  }
+                  className="flex gap-4 border-b border-darb-gold/10 pb-4 last:border-b-0"
+                >
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
+                    {item.image ? (
+                      <img
+                        src={
+                          item.image
+                        }
+                        alt={
+                          item.name
+                        }
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <p className="font-display text-sm text-darb-gold">
+                        Darb
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="font-semibold text-darb-green">
+                      {
+                        item.name
+                      }
+                    </p>
+
+                    <p className="mt-1 text-xs text-darb-muted">
+                      Qty:{" "}
+                      {
+                        item.quantity
+                      }
+
+                      {item.sizeLabel
+                        ? ` • ${item.sizeLabel}`
+                        : ""}
+                    </p>
+                  </div>
+
+                  <p className="font-semibold text-darb-black">
+                    {formatCurrency(
+                      item.price *
+                        item.quantity
+                    )}
                   </p>
                 </div>
-
-                <p className="font-semibold text-darb-black">
-                  {formatCurrency(item.price * item.quantity)}
-                </p>
-              </div>
-            ))}
+              )
+            )}
           </div>
+
+          {/* =========================
+              COUPON
+          ========================== */}
 
           <div className="mt-6">
             <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -594,16 +1017,24 @@ function Checkout() {
             <div className="flex gap-2">
               <input
                 name="couponCode"
-                value={formData.couponCode}
-                onChange={handleChange}
+                value={
+                  formData.couponCode
+                }
+                onChange={
+                  handleChange
+                }
                 className="min-w-0 flex-1 rounded-full border border-darb-gold/30 px-5 py-3 uppercase outline-none transition focus:border-darb-green"
                 placeholder="DARB10"
               />
 
               <button
                 type="button"
-                onClick={handleApplyCoupon}
-                disabled={previewQuery.isFetching}
+                onClick={
+                  handleApplyCoupon
+                }
+                disabled={
+                  previewQuery.isFetching
+                }
                 className="rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Apply
@@ -613,130 +1044,240 @@ function Checkout() {
             {appliedCouponCode && (
               <button
                 type="button"
-                onClick={handleRemoveCoupon}
+                onClick={
+                  handleRemoveCoupon
+                }
                 className="mt-2 text-xs font-semibold text-darb-green underline"
               >
                 Remove coupon
               </button>
             )}
 
-            {pricing?.coupon?.message && (
+            {pricing?.coupon
+              ?.message && (
               <p
                 className={`mt-3 rounded-2xl px-4 py-3 text-xs font-semibold ${
-                  pricing.coupon.status === "valid"
+                  pricing.coupon
+                    .status ===
+                  "valid"
                     ? "bg-green-50 text-green-700"
                     : "bg-yellow-50 text-yellow-800"
                 }`}
               >
-                {pricing.coupon.message}
+                {
+                  pricing.coupon
+                    .message
+                }
               </p>
             )}
           </div>
 
+          {/* =========================
+              RECALCULATING
+          ========================== */}
+
           {previewQuery.isFetching && (
             <div className="mt-4 rounded-2xl bg-darb-cream/70 p-3 text-xs text-darb-muted">
-              Recalculating checkout totals...
+              Recalculating checkout
+              totals...
             </div>
           )}
 
-          {pricing?.discounts?.length > 0 && (
+          {/* =========================
+              APPLIED DISCOUNTS
+          ========================== */}
+
+          {pricing?.discounts
+            ?.length > 0 && (
             <div className="mt-5 rounded-2xl bg-darb-cream/70 p-4">
               <p className="text-sm font-semibold text-darb-green">
                 Applied discounts
               </p>
 
               <div className="mt-3 space-y-2">
-                {pricing.discounts.map((discount, index) => (
-                  <div
-                    key={`${discount.sourceType}-${discount.sourceId || index}`}
-                    className="flex justify-between gap-4 text-xs text-darb-muted"
-                  >
-                    <span>
-                      {discount.title}
-                      {discount.freeShipping ? " • Free delivery" : ""}
-                    </span>
+                {pricing.discounts.map(
+                  (
+                    discount,
+                    index
+                  ) => (
+                    <div
+                      key={`${discount.sourceType}-${discount.sourceId || index}`}
+                      className="flex justify-between gap-4 text-xs text-darb-muted"
+                    >
+                      <span>
+                        {
+                          discount.title
+                        }
 
-                    <span className="font-semibold text-darb-green">
-                      {discount.amount > 0
-                        ? `-${formatCurrency(discount.amount)}`
-                        : "Free delivery"}
-                    </span>
-                  </div>
-                ))}
+                        {discount.freeShipping
+                          ? " • Free delivery"
+                          : ""}
+                      </span>
+
+                      <span className="font-semibold text-darb-green">
+                        {discount.amount >
+                        0
+                          ? `-${formatCurrency(
+                              discount.amount
+                            )}`
+                          : "Free delivery"}
+                      </span>
+                    </div>
+                  )
+                )}
               </div>
             </div>
           )}
 
           <div className="my-6 border-t border-darb-gold/20" />
 
+          {/* =========================
+              TOTAL BREAKDOWN
+          ========================== */}
+
           <div className="space-y-4 text-sm">
-            <div className="flex justify-between gap-4">
-              <span className="text-darb-muted">Items</span>
-              <span className="font-semibold text-darb-black">{itemCount}</span>
-            </div>
+            {/* Items */}
 
             <div className="flex justify-between gap-4">
-              <span className="text-darb-muted">Subtotal</span>
+              <span className="text-darb-muted">
+                Items
+              </span>
+
               <span className="font-semibold text-darb-black">
-                {formatCurrency(calculatedSubtotal)}
+                {
+                  itemCount
+                }
               </span>
             </div>
 
-            <div className="flex justify-between gap-4">
-              <span className="text-darb-muted">Product savings</span>
-              <span className="font-semibold text-darb-green">
-                {productSavings > 0
-                  ? `-${formatCurrency(productSavings)}`
-                  : formatCurrency(0)}
-              </span>
-            </div>
+            {/* Subtotal */}
 
             <div className="flex justify-between gap-4">
-              <span className="text-darb-muted">Offers / coupons</span>
-              <span className="font-semibold text-darb-green">
-                {calculatedDiscountTotal > 0
-                  ? `-${formatCurrency(calculatedDiscountTotal)}`
-                  : formatCurrency(0)}
+              <span className="text-darb-muted">
+                Subtotal
               </span>
-            </div>
 
-            <div className="flex justify-between gap-4">
-              <span className="text-darb-muted">Delivery</span>
               <span className="font-semibold text-darb-black">
-                {calculatedDeliveryFee > 0
-                  ? formatCurrency(calculatedDeliveryFee)
+                {formatCurrency(
+                  calculatedSubtotal
+                )}
+              </span>
+            </div>
+
+            {/* Product Savings */}
+
+            <div className="flex justify-between gap-4">
+              <span className="text-darb-muted">
+                Product savings
+              </span>
+
+              <span className="font-semibold text-darb-green">
+                {productSavings >
+                0
+                  ? `-${formatCurrency(
+                      productSavings
+                    )}`
+                  : formatCurrency(
+                      0
+                    )}
+              </span>
+            </div>
+
+            {/* Offers */}
+
+            <div className="flex justify-between gap-4">
+              <span className="text-darb-muted">
+                Offers / coupons
+              </span>
+
+              <span className="font-semibold text-darb-green">
+                {calculatedDiscountTotal >
+                0
+                  ? `-${formatCurrency(
+                      calculatedDiscountTotal
+                    )}`
+                  : formatCurrency(
+                      0
+                    )}
+              </span>
+            </div>
+
+            {/* Delivery */}
+
+            <div className="flex justify-between gap-4">
+              <span className="text-darb-muted">
+                Delivery
+              </span>
+
+              <span className="font-semibold text-darb-black">
+                {calculatedDeliveryFee >
+                0
+                  ? formatCurrency(
+                      calculatedDeliveryFee
+                    )
                   : "Free"}
               </span>
             </div>
 
-            {Number(settings.delivery?.freeDeliveryThreshold) > 0 &&
-              subtotal < Number(settings.delivery.freeDeliveryThreshold) && (
+            {/* Free Delivery Progress */}
+
+            {Number(
+              settings.delivery
+                ?.freeDeliveryThreshold
+            ) >
+              0 &&
+              subtotal <
+                Number(
+                  settings.delivery
+                    .freeDeliveryThreshold
+                ) && (
                 <div className="rounded-2xl bg-darb-cream/70 p-3 text-xs leading-5 text-darb-muted">
                   Add{" "}
                   <span className="font-semibold text-darb-green">
                     {formatCurrency(
-                      Number(settings.delivery.freeDeliveryThreshold) - subtotal
+                      Number(
+                        settings.delivery
+                          .freeDeliveryThreshold
+                      ) -
+                        subtotal
                     )}
                   </span>{" "}
-                  more to unlock free delivery.
+                  more to unlock
+                  free delivery.
                 </div>
               )}
 
+            {/* Free Shipping Applied */}
+
             {pricing?.freeShipping && (
               <div className="rounded-2xl bg-green-50 p-3 text-xs font-semibold text-green-700">
-                Free delivery applied.
+                Free delivery
+                applied.
               </div>
             )}
           </div>
 
           <div className="my-6 border-t border-darb-gold/20" />
 
+          {/* =========================
+              FINAL TOTAL
+          ========================== */}
+
           <div className="flex justify-between gap-4">
-            <span className="font-semibold text-darb-green">Total</span>
+            <span className="font-semibold text-darb-green">
+              Total
+            </span>
+
             <span className="font-display text-3xl text-darb-green">
-              {formatCurrency(calculatedTotal)}
+              {formatCurrency(
+                calculatedTotal
+              )}
             </span>
           </div>
+
+          {/* =========================
+              PLACE ORDER
+          ========================== */}
 
           <button
             type="submit"
@@ -747,8 +1288,12 @@ function Checkout() {
             }
             className="mt-6 flex w-full justify-center rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {orderMutation.isPending ? "Creating Order..." : "Place Order"}
+            {orderMutation.isPending
+              ? "Creating Order..."
+              : "Place Order"}
           </button>
+
+          {/* Back */}
 
           <Link
             to="/cart"

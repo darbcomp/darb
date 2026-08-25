@@ -237,3 +237,53 @@ export const updateAdminSettings = async (payload) => {
   const { data } = await api.put("/settings/admin", payload);
   return data;
 };
+
+export const getAdminReviews = async (
+  params = {}
+) => {
+  const { data } =
+    await api.get(
+      "/reviews/admin",
+      {
+        params,
+      }
+    );
+
+  return data;
+};
+
+export const createAdminReview = async (
+  payload
+) => {
+  const { data } =
+    await api.post(
+      "/reviews/admin",
+      payload
+    );
+
+  return data;
+};
+
+export const updateAdminReview = async ({
+  reviewId,
+  payload,
+}) => {
+  const { data } =
+    await api.patch(
+      `/reviews/admin/${reviewId}`,
+      payload
+    );
+
+  return data;
+};
+
+export const deleteAdminReview = async (
+  reviewId
+) => {
+  const { data } =
+    await api.delete(
+      `/reviews/admin/${reviewId}`
+    );
+
+  return data;
+};
