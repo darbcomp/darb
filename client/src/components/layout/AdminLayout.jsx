@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 const adminLinks = [
   { label: "Dashboard", path: "/admin" },
   { label: "Products", path: "/admin/products" },
+  { label: "Categories", path: "/admin/categories" },
   { label: "Orders", path: "/admin/orders" },
   { label: "Offers", path: "/admin/offers" },
   { label: "Bundles", path: "/admin/bundles" },
@@ -15,7 +16,7 @@ const adminLinks = [
 function AdminLayout() {
   return (
     <div className="min-h-screen bg-[#f5efe4] text-darb-black">
-      <aside className="fixed left-0 top-0 hidden h-screen w-64 border-r border-darb-gold/20 bg-darb-green p-5 text-darb-beige lg:block">
+      <aside className="fixed left-0 top-0 hidden h-screen w-64 overflow-y-auto border-r border-darb-gold/20 bg-darb-green p-5 text-darb-beige lg:block">
         <h1 className="font-display text-3xl">Darb Admin</h1>
         <p className="mt-1 text-xs text-darb-beige/60">Store Control Panel</p>
 

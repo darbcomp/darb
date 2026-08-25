@@ -1,13 +1,25 @@
 const express = require("express");
 
+const {
+  getPublicBundles,
+  getAdminBundles,
+  getAdminBundleById,
+  createBundle,
+  updateBundle,
+  deleteBundle,
+} = require("../controllers/bundle.controller");
+
+const { protect } = require("../middleware/auth.middleware");
+const { requireAdmin } = require("../middleware/admin.middleware");
+
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Bundle routes ready",
-    data: [],
-  });
-});
+router.get("/admin", protect, requireAdmin, getAdminBundles);
+router.get("/admin/:id", protect, requireAdmin, getAdminBundleById);
+router.post("/admin", protect, requireAdmin, createBundle);
+router.put("/admin/:id", protect, requireAdmin, updateBundle);
+router.delete("/admin/:id", protect, requireAdmin, deleteBundle);
+
+router.get("/", getPublicBundles);
 
 module.exports = router;

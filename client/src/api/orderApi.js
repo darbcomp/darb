@@ -1,5 +1,10 @@
 import api from "./axiosInstance";
 
+export const previewOrder = async (payload) => {
+  const { data } = await api.post("/orders/preview", payload);
+  return data;
+};
+
 export const createOrder = async (payload) => {
   const { data } = await api.post("/orders", payload);
   return data;

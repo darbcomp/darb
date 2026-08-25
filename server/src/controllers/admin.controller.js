@@ -1,0 +1,279 @@
+const mongoose = require("mongoose");
+const Product = require("../models/Product");
+const Category = require("../models/Category");
+const Order = require("../models/Order");
+const Waitlist = require("../models/Waitlist");
+const Coupon = require("../models/Coupon");
+const Bundle = require("../models/Bundle");
+const Offer = require("../models/Offer");
+const User = require("../models/User");
+
+const isDatabaseConnected = () => mongoose.connection.readyState === 1;
+
+const emptyDashboardData = {
+  summary: {
+    totalRevenue: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+    deliveredOrders: 0,
+    cancelledOrders: 0,
+    totalProducts: 0,
+    activeProducts: 0,
+    placeholderProducts: 0,
+    totalCategories: 0,
+    waitlistCount: 0,
+    activeCoupons: 0,
+    activeOffers: 0,
+    activeBundles: 0,
+    totalCustomers: 0,
+  },
+  recentOrders: [],
+  ordersByStatus: [],
+  paymentByStatus: [],
+  topProducts: [],
+  categoryPerformance: [],
+  waitlistDemand: [],
+  couponUsage: [],
+};
+
+const getAdminDashboard = async (req, res) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(200).json({
+        success: true,
+        message: "Database not connected. Returning empty dashboard analytics.",
+        data: emptyDashboardData,
+      });
+    }
+
+    const [
+      totalOrders,
+      pendingOrders,
+      deliveredOrders,
+      cancelledOrders,
+      totalProducts,
+      activeProducts,
+      placeholderProducts,
+      totalCategories,
+      waitlistCount,
+      activeCoupons,
+      activeOffers,
+      activeBundles,
+      totalCustomers,
+      revenueResult,
+      recentOrders,
+      ordersByStatus,
+      paymentByStatus,
+      topProducts,
+      categoryPerformance,
+      waitlistDemand,
+      couponUsage,
+    ] = await Promise.all([
+      Order.countDocuments({}),
+      Order.countDocuments({ orderStatus: "pending" }),
+      Order.countDocuments({ orderStatus: "delivered" }),
+      Order.countDocuments({ orderStatus: "cancelled" }),
+
+      Product.countDocuments({}),
+      Product.countDocuments({ isActive: true }),
+      Product.countDocuments({ isPlaceholder: true }),
+
+      Category.countDocuments({}),
+
+      Waitlist.countDocuments({ status: { $in: ["waiting", "notified", "contacted"] } }),
+
+      Coupon.countDocuments({ isActive: true }),
+      Offer.countDocuments({ isActive: true }),
+      Bundle.countDocuments({ isActive: true }),
+
+      User.countDocuments({ role: "customer" }),
+
+      Order.aggregate([
+        {
+          $match: {
+            orderStatus: { $ne: "cancelled" },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$total" },
+          },
+        },
+      ]),
+
+      Order.find({})
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .select(
+          "orderNumber customerSnapshot total paymentMethod paymentStatus orderStatus createdAt items"
+        )
+        .lean(),
+
+      Order.aggregate([
+        {
+          $group: {
+            _id: "$orderStatus",
+            count: { $sum: 1 },
+            revenue: { $sum: "$total" },
+          },
+        },
+        {
+          $sort: { count: -1 },
+        },
+      ]),
+
+      Order.aggregate([
+        {
+          $group: {
+            _id: "$paymentStatus",
+            count: { $sum: 1 },
+            revenue: { $sum: "$total" },
+          },
+        },
+        {
+          $sort: { count: -1 },
+        },
+      ]),
+
+      Order.aggregate([
+        {
+          $match: {
+            orderStatus: { $ne: "cancelled" },
+          },
+        },
+        {
+          $unwind: "$items",
+        },
+        {
+          $group: {
+            _id: "$items.productSnapshot.slug",
+            name: { $first: "$items.productSnapshot.name" },
+            slug: { $first: "$items.productSnapshot.slug" },
+            image: { $first: "$items.productSnapshot.image" },
+            quantitySold: { $sum: "$items.quantity" },
+            revenue: { $sum: "$items.lineTotal" },
+          },
+        },
+        {
+          $sort: {
+            quantitySold: -1,
+            revenue: -1,
+          },
+        },
+        {
+          $limit: 8,
+        },
+      ]),
+
+      Order.aggregate([
+        {
+          $match: {
+            orderStatus: { $ne: "cancelled" },
+          },
+        },
+        {
+          $unwind: "$items",
+        },
+        {
+          $group: {
+            _id: "$items.productSnapshot.categorySlug",
+            categoryName: { $first: "$items.productSnapshot.categoryName" },
+            categorySlug: { $first: "$items.productSnapshot.categorySlug" },
+            quantitySold: { $sum: "$items.quantity" },
+            revenue: { $sum: "$items.lineTotal" },
+          },
+        },
+        {
+          $sort: {
+            revenue: -1,
+          },
+        },
+      ]),
+
+      Waitlist.aggregate([
+        {
+          $group: {
+            _id: "$productSnapshot.slug",
+            productName: { $first: "$productSnapshot.name" },
+            productSlug: { $first: "$productSnapshot.slug" },
+            image: { $first: "$productSnapshot.image" },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $sort: {
+            count: -1,
+          },
+        },
+        {
+          $limit: 8,
+        },
+      ]),
+
+      Order.aggregate([
+        {
+          $match: {
+            couponCode: { $exists: true, $ne: "" },
+          },
+        },
+        {
+          $group: {
+            _id: "$couponCode",
+            uses: { $sum: 1 },
+            revenue: { $sum: "$total" },
+            discountGiven: { $sum: "$discountTotal" },
+          },
+        },
+        {
+          $sort: {
+            uses: -1,
+          },
+        },
+        {
+          $limit: 8,
+        },
+      ]),
+    ]);
+
+    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalRevenue,
+          totalOrders,
+          pendingOrders,
+          deliveredOrders,
+          cancelledOrders,
+          totalProducts,
+          activeProducts,
+          placeholderProducts,
+          totalCategories,
+          waitlistCount,
+          activeCoupons,
+          activeOffers,
+          activeBundles,
+          totalCustomers,
+        },
+        recentOrders,
+        ordersByStatus,
+        paymentByStatus,
+        topProducts,
+        categoryPerformance,
+        waitlistDemand,
+        couponUsage,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to load admin dashboard.",
+    });
+  }
+};
+
+module.exports = {
+  getAdminDashboard,
+};

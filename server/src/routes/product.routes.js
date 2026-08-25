@@ -1,13 +1,47 @@
 const express = require("express");
 
+const {
+  getProducts,
+  getFeaturedProducts,
+  getProductBySlug,
+  getAdminProducts,
+  getAdminProductById,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  deleteProductImage,
+} = require("../controllers/product.controller");
+
+const { protect } = require("../middleware/auth.middleware");
+const { requireAdmin } = require("../middleware/admin.middleware");
+const { uploadProductImages } = require("../middleware/upload.middleware");
+
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Product routes ready",
-    data: [],
-  });
-});
+router.get("/admin", protect, requireAdmin, getAdminProducts);
+router.get("/admin/:id", protect, requireAdmin, getAdminProductById);
+
+router.post(
+  "/admin",
+  protect,
+  requireAdmin,
+  uploadProductImages,
+  createProduct
+);
+
+router.put(
+  "/admin/:id",
+  protect,
+  requireAdmin,
+  uploadProductImages,
+  updateProduct
+);
+
+router.delete("/admin/:id", protect, requireAdmin, deleteProduct);
+router.delete("/admin/:id/image", protect, requireAdmin, deleteProductImage);
+
+router.get("/featured", getFeaturedProducts);
+router.get("/", getProducts);
+router.get("/:slug", getProductBySlug);
 
 module.exports = router;

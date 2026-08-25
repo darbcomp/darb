@@ -1,13 +1,595 @@
-import { useParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Bell, Minus, Plus, ShoppingBag } from "lucide-react";
+
+import { getProductBySlug } from "../../api/productApi";
+import { createWaitlistRequest } from "../../api/waitlistApi";
+import { useAuth } from "../../context/AuthContext";
+import { useCart } from "../../context/CartContext";
+import { formatCurrency } from "../../utils/formatCurrency";
+
+const initialWaitlistForm = {
+  name: "",
+  phone: "",
+  email: "",
+  note: "",
+};
 
 function ProductDetails() {
   const { slug } = useParams();
+  const { user } = useAuth();
+  const { addToCart } = useCart();
+
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const [cartMessage, setCartMessage] = useState("");
+  const [waitlistForm, setWaitlistForm] = useState(initialWaitlistForm);
+  const [waitlistMessage, setWaitlistMessage] = useState("");
+  const [waitlistError, setWaitlistError] = useState("");
+
+  const productQuery = useQuery({
+    queryKey: ["product", slug],
+    queryFn: () => getProductBySlug(slug),
+    retry: 1,
+  });
+
+  const product = productQuery.data?.data;
+
+  const images = useMemo(() => {
+    if (!product?.images?.length) return [];
+
+    return [...product.images]
+      .sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain)))
+      .slice(0, 3);
+  }, [product]);
+
+
+  const selectedImage = images[selectedImageIndex] || images[0];
+
+  const canPurchase =
+    product &&
+    product.price > 0 &&
+    product.stock > 0 &&
+    product.isActive &&
+    !product.isPlaceholder;
+
+  const unavailableReason = useMemo(() => {
+    if (!product) return "";
+
+    if (product.isPlaceholder) {
+      return "This scent is still being prepared with its final Darb details.";
+    }
+
+    if (!product.isActive) {
+      return "This scent is currently unavailable.";
+    }
+
+    if (!product.price || product.price <= 0) {
+      return "The final price for this scent has not been confirmed yet.";
+    }
+
+    if (!product.stock || product.stock <= 0) {
+      return "This scent is currently out of stock.";
+    }
+
+    return "";
+  }, [product]);
+
+  const waitlistMutation = useMutation({
+    mutationFn: createWaitlistRequest,
+    onSuccess: (response) => {
+      setWaitlistError("");
+      setWaitlistMessage(
+        response?.message ||
+          "You have been added to the waitlist. We will contact you when this scent is available."
+      );
+
+      setWaitlistForm((current) => ({
+        ...current,
+        note: "",
+      }));
+    },
+    onError: (error) => {
+      setWaitlistMessage("");
+      setWaitlistError(
+        error.friendlyMessage || "Failed to join waitlist. Please try again."
+      );
+    },
+  });
+
+  const handleQuantityChange = (type) => {
+    setCartMessage("");
+
+    setQuantity((current) => {
+      if (type === "decrease") {
+        return Math.max(current - 1, 1);
+      }
+
+      const maxStock = product?.stock > 0 ? product.stock : 1;
+      return Math.min(current + 1, maxStock);
+    });
+  };
+
+  const handleAddToCart = () => {
+    if (!canPurchase) return;
+
+    addToCart(product, quantity);
+    setCartMessage("Added to cart successfully.");
+  };
+
+  const handleWaitlistChange = (event) => {
+    const { name, value } = event.target;
+
+    setWaitlistForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const prefillWaitlistFromAccount = () => {
+    if (!user) return;
+
+    setWaitlistForm((current) => ({
+      ...current,
+      name: current.name || user.name || "",
+      phone: current.phone || user.phone || "",
+      email: current.email || user.email || "",
+    }));
+  };
+
+  const handleWaitlistSubmit = (event) => {
+    event.preventDefault();
+
+    if (!product) return;
+
+    if (!waitlistForm.name.trim()) {
+      setWaitlistError("Name is required.");
+      setWaitlistMessage("");
+      return;
+    }
+
+    if (!waitlistForm.phone.trim() && !waitlistForm.email.trim()) {
+      setWaitlistError("Phone or email is required.");
+      setWaitlistMessage("");
+      return;
+    }
+
+    setWaitlistError("");
+    setWaitlistMessage("");
+
+    waitlistMutation.mutate({
+      product: product._id,
+      productId: product._id,
+      slug: product.slug,
+      productSlug: product.slug,
+      productName: product.name,
+      name: waitlistForm.name.trim(),
+      phone: waitlistForm.phone.trim(),
+      email: waitlistForm.email.trim(),
+      source: "product_page",
+      note: waitlistForm.note.trim(),
+    });
+  };
+
+  if (productQuery.isLoading) {
+    return (
+      <section className="mx-auto max-w-7xl px-4 py-14">
+        <div className="rounded-[2rem] bg-white p-8 shadow-soft">
+          <p className="text-darb-muted">Loading product...</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (productQuery.isError || !product) {
+    return (
+      <section className="mx-auto max-w-7xl px-4 py-14">
+        <div className="rounded-[2rem] bg-darb-green p-8 text-darb-beige shadow-soft">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
+            Product
+          </p>
+
+          <h1 className="mt-2 font-display text-5xl">Scent not found</h1>
+
+          <p className="mt-4 max-w-2xl leading-7 text-darb-beige/75">
+            {productQuery.error?.friendlyMessage ||
+              "This Darb product is unavailable right now."}
+          </p>
+
+          <Link
+            to="/shop"
+            className="mt-8 inline-flex rounded-full bg-darb-gold px-7 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-beige"
+          >
+            Back to Shop
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-14">
-      <h1 className="font-display text-4xl text-darb-green">Product Details</h1>
-      <p className="mt-3 text-darb-muted">Product slug: {slug}</p>
+      <div className="mb-8">
+        <Link
+          to="/shop"
+          className="text-sm font-semibold text-darb-green transition hover:text-darb-gold"
+        >
+          ← Back to Shop
+        </Link>
+      </div>
+
+      <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr]">
+        <div>
+          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[2rem] bg-darb-green shadow-soft">
+            {selectedImage?.url ? (
+              <img
+                src={selectedImage.url}
+                alt={selectedImage.alt || product.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="text-center">
+                <p className="font-display text-6xl text-darb-gold">Darb</p>
+                <p className="mt-3 text-xs uppercase tracking-[0.35em] text-darb-beige/70">
+                  Visual soon
+                </p>
+              </div>
+            )}
+
+            {images.length > 0 && (
+              <span className="absolute bottom-4 right-4 rounded-full bg-darb-black/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">
+                {selectedImageIndex + 1} / {images.length}
+              </span>
+            )}
+          </div>
+
+          {images.length > 1 && (
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {images.map((image, index) => (
+                <button
+                  key={image.publicId || image.url || index}
+                  type="button"
+                  onClick={() => setSelectedImageIndex(index)}
+                  aria-label={`View product image ${index + 1}`}
+                  className={`relative aspect-square overflow-hidden rounded-2xl border-2 transition ${
+                    selectedImageIndex === index
+                      ? "border-darb-green"
+                      : "border-transparent hover:border-darb-gold/60"
+                  }`}
+                >
+                  <img
+                    src={image.url}
+                    alt={image.alt || `${product.name} image ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+
+                  {image.isMain && (
+                    <span className="absolute left-2 top-2 rounded-full bg-darb-gold px-2 py-1 text-[10px] font-semibold text-darb-green">
+                      Main
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-darb-green/10 px-3 py-1 text-xs font-semibold text-darb-green">
+              {product.category?.name || product.categorySnapshot?.name || "Darb"}
+            </span>
+
+            {product.isFeatured && (
+              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
+                Featured
+              </span>
+            )}
+
+            {product.isBestSeller && (
+              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
+                Best Seller
+              </span>
+            )}
+
+            {product.isNewArrival && (
+              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
+                New Arrival
+              </span>
+            )}
+          </div>
+
+          <h1 className="mt-5 font-display text-5xl text-darb-green">
+            {product.name}
+          </h1>
+
+          <p className="mt-4 text-lg leading-8 text-darb-muted">
+            {product.shortDescription ||
+              "A Darb scent waiting to become part of your journey."}
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-end gap-3">
+            {product.price > 0 ? (
+              <p className="font-display text-4xl text-darb-green">
+                {formatCurrency(product.price)}
+              </p>
+            ) : (
+              <p className="font-display text-3xl text-darb-green">
+                Price coming soon
+              </p>
+            )}
+
+            {product.compareAtPrice > product.price && product.price > 0 && (
+              <p className="pb-1 text-lg text-darb-muted line-through">
+                {formatCurrency(product.compareAtPrice)}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <InfoCard
+              label="Size"
+              value={
+                product.sizeLabel ||
+                (product.sizeMl ? `${product.sizeMl} ML` : "50 ML")
+              }
+            />
+
+            <InfoCard
+              label="Concentration"
+              value={product.concentration || "Coming soon"}
+            />
+
+            <InfoCard
+              label="Family"
+              value={product.scentFamily || "Coming soon"}
+            />
+
+            <InfoCard
+              label="Availability"
+              value={
+                product.stock > 0
+                  ? `${product.stock} available`
+                  : "Out of stock"
+              }
+            />
+          </div>
+
+          {canPurchase ? (
+            <div className="mt-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center rounded-full border border-darb-gold/30">
+                  <button
+                    type="button"
+                    onClick={() => handleQuantityChange("decrease")}
+                    className="flex h-11 w-11 items-center justify-center text-darb-green transition hover:text-darb-gold"
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus size={17} />
+                  </button>
+
+                  <span className="min-w-10 text-center font-semibold text-darb-green">
+                    {quantity}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleQuantityChange("increase")}
+                    className="flex h-11 w-11 items-center justify-center text-darb-green transition hover:text-darb-gold"
+                    aria-label="Increase quantity"
+                  >
+                    <Plus size={17} />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
+                >
+                  <ShoppingBag size={18} />
+                  Add to Cart
+                </button>
+              </div>
+
+              {cartMessage && (
+                <p className="mt-4 rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                  {cartMessage}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="mt-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                  <Bell size={19} />
+                </div>
+
+                <div>
+                  <h2 className="font-display text-3xl text-darb-green">
+                    Join the waitlist
+                  </h2>
+
+                  <p className="mt-2 leading-7 text-darb-muted">
+                    {unavailableReason ||
+                      "This scent is not available right now. Leave your details and Darb can contact you once it is ready."}
+                  </p>
+                </div>
+              </div>
+
+              {user && (
+                <button
+                  type="button"
+                  onClick={prefillWaitlistFromAccount}
+                  className="mt-5 rounded-full border border-darb-gold/40 px-5 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/15"
+                >
+                  Use my account details
+                </button>
+              )}
+
+              <form onSubmit={handleWaitlistSubmit} className="mt-5 space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <WaitlistField
+                    label="Name *"
+                    name="name"
+                    value={waitlistForm.name}
+                    onChange={handleWaitlistChange}
+                    placeholder="Your name"
+                  />
+
+                  <WaitlistField
+                    label="Phone"
+                    name="phone"
+                    value={waitlistForm.phone}
+                    onChange={handleWaitlistChange}
+                    placeholder="01xxxxxxxxx"
+                  />
+
+                  <div className="md:col-span-2">
+                    <WaitlistField
+                      label="Email"
+                      name="email"
+                      value={waitlistForm.email}
+                      onChange={handleWaitlistChange}
+                      placeholder="example@email.com"
+                      type="email"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label>
+                      <span className="mb-2 block text-sm font-semibold text-darb-green">
+                        Note
+                      </span>
+                      <textarea
+                        name="note"
+                        value={waitlistForm.note}
+                        onChange={handleWaitlistChange}
+                        rows={3}
+                        className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                        placeholder="Optional note"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {waitlistError && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {waitlistError}
+                  </div>
+                )}
+
+                {waitlistMessage && (
+                  <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {waitlistMessage}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={waitlistMutation.isPending}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Bell size={18} />
+                  {waitlistMutation.isPending
+                    ? "Joining Waitlist..."
+                    : "Join Waitlist"}
+                </button>
+
+                <p className="text-xs leading-5 text-darb-muted">
+                  Add at least a phone number or an email so the store can reach
+                  you.
+                </p>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+        <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+          <h2 className="font-display text-3xl text-darb-green">
+            The scent story
+          </h2>
+
+          <p className="mt-4 whitespace-pre-line leading-8 text-darb-muted">
+            {product.description ||
+              "Darb is more than a perfume. It is a memory carried softly with every step."}
+          </p>
+        </div>
+
+        <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+          <h2 className="font-display text-3xl text-darb-green">
+            Scent notes
+          </h2>
+
+          <div className="mt-5 space-y-4">
+            <NoteRow
+              label="Top"
+              notes={product.scentNotes?.top}
+            />
+            <NoteRow
+              label="Middle"
+              notes={product.scentNotes?.middle}
+            />
+            <NoteRow
+              label="Base"
+              notes={product.scentNotes?.base}
+            />
+          </div>
+        </div>
+      </div>
     </section>
+  );
+}
+
+function InfoCard({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-darb-gold/20 bg-white p-4 shadow-soft">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
+        {label}
+      </p>
+      <p className="mt-2 font-semibold text-darb-green">{value}</p>
+    </div>
+  );
+}
+
+function NoteRow({ label, notes }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
+        {label}
+      </p>
+      <p className="mt-1 text-darb-muted">
+        {notes?.length ? notes.join(", ") : "Coming soon"}
+      </p>
+    </div>
+  );
+}
+
+function WaitlistField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}) {
+  return (
+    <label>
+      <span className="mb-2 block text-sm font-semibold text-darb-green">
+        {label}
+      </span>
+      <input
+        name={name}
+        value={value}
+        onChange={onChange}
+        type={type}
+        className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 

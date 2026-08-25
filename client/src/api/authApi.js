@@ -10,8 +10,18 @@ export const registerCustomer = async (payload) => {
   return data;
 };
 
+export const loginAdmin = async (payload) => {
+  const { data } = await api.post("/auth/admin/login", payload);
+  return data;
+};
+
 export const getCurrentUser = async () => {
   const { data } = await api.get("/auth/me");
+  return data;
+};
+
+export const getCurrentAdmin = async () => {
+  const { data } = await api.get("/auth/admin/me");
   return data;
 };
 
