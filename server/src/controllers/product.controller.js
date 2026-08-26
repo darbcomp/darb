@@ -1,10 +1,11 @@
 const mongoose = require("mongoose");
-const { Readable } = require("stream");
+const { randomUUID } = require("crypto");
 
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { cloudinary } = require("../config/cloudinary");
 const slugify = require("../utils/slugify");
+const { processProductImage } = require("../utils/imageProcessor");
 
 const MAX_PRODUCT_IMAGES = 3;
 
@@ -131,32 +132,25 @@ const uploadBufferToCloudinary = (buffer, options = {}) =>
         overwrite: false,
       },
       (error, result) => {
-        if (error) return reject(error);
+        if (error) {
+          return reject(error);
+        }
+
         return resolve(result);
       }
     );
 
-    const readableStream = new Readable();
-    readableStream._read = () => {};
-    readableStream.push(buffer);
-    readableStream.push(null);
-    readableStream.pipe(uploadStream);
+    uploadStream.end(buffer);
   });
-
-const validateUploadFiles = (files = []) => {
-  for (const file of files) {
-    if (file.mimetype !== "image/webp") {
-      throw new Error("Darb product images must be WEBP files.");
-    }
-  }
-};
 
 const uploadFilesToCloudinary = async ({
   files = [],
   categorySlug,
   productSlug,
 }) => {
-  if (!files.length) return [];
+  if (!files.length) {
+    return [];
+  }
 
   if (!isCloudinaryReady()) {
     throw new Error(
@@ -164,30 +158,59 @@ const uploadFilesToCloudinary = async ({
     );
   }
 
-  validateUploadFiles(files);
-
   const uploadedImages = [];
 
   try {
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
+    for (const file of files) {
+      /*
+        Multer performs the first MIME-type check.
 
-      const result = await uploadBufferToCloudinary(file.buffer, {
-        folder: `darb/products/${categorySlug}`,
-        publicId: `${productSlug}-${Date.now()}-${index + 1}`,
-      });
+        Sharp then decodes the actual file here,
+        so we are not trusting the browser's MIME
+        type alone.
+      */
+      const processedImage = await processProductImage(
+        file.buffer
+      );
+
+      /*
+        Sharp has now:
+        - validated the real image
+        - fixed orientation
+        - resized oversized images
+        - removed unnecessary metadata
+        - converted the image to optimized WEBP
+      */
+
+      const result = await uploadBufferToCloudinary(
+        processedImage.buffer,
+        {
+          folder: `darb/products/${categorySlug}`,
+          publicId: `${productSlug}-${randomUUID()}`,
+        }
+      );
 
       uploadedImages.push({
         url: result.secure_url,
         publicId: result.public_id,
-        alt: file.originalname || "Darb product image",
+        alt:
+          file.originalname ||
+          "Darb product image",
         isMain: false,
       });
     }
 
     return uploadedImages;
   } catch (error) {
-    await destroyCloudinaryImages(uploadedImages);
+    /*
+      If image 1 uploads successfully but image 2
+      fails, delete image 1 so Cloudinary does not
+      accumulate abandoned files.
+    */
+    await destroyCloudinaryImages(
+      uploadedImages
+    );
+
     throw error;
   }
 };

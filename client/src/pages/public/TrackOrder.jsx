@@ -1,394 +1,477 @@
-import { useState } from "react";
-
 import {
-  Link,
-  Navigate,
-} from "react-router-dom";
+  useState,
+} from "react";
 
 import {
   useMutation,
 } from "@tanstack/react-query";
 
 import {
-  Check,
+  AlertCircle,
   CheckCircle2,
-  Clock3,
-  Package,
-  PackageCheck,
+  ImagePlus,
   PackageSearch,
-  RotateCcw,
-  Truck,
-  XCircle,
+  Search,
+  UploadCloud,
 } from "lucide-react";
 
 import {
+  getGuestPaymentProofStatus,
+  resubmitGuestPaymentProof,
   trackOrder,
-} from "../../api/trackOrderApi";
+} from "../../api/orderApi";
 
 import {
-  useAuth,
-} from "../../context/AuthContext";
+  formatCurrency,
+} from "../../utils/formatCurrency";
 
-const progressStatuses = [
-  {
-    key: "pending",
-    label: "Order Placed",
-    icon: PackageSearch,
-  },
-  {
-    key: "confirmed",
-    label: "Confirmed",
-    icon: CheckCircle2,
-  },
-  {
-    key: "processing",
-    label: "Preparing",
-    icon: Package,
-  },
-  {
-    key: "shipped",
-    label: "On the Way",
-    icon: Truck,
-  },
-  {
-    key: "delivered",
-    label: "Delivered",
-    icon: PackageCheck,
-  },
+const MAX_PAYMENT_PROOF_SIZE =
+  10 * 1024 * 1024;
+
+const ALLOWED_PAYMENT_PROOF_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
 ];
 
-const statusIndex = {
-  pending: 0,
-  confirmed: 1,
-  processing: 2,
-  shipped: 3,
-  delivered: 4,
+const statusStyles = {
+  pending:
+    "bg-yellow-50 text-yellow-700 border-yellow-200",
+
+  confirmed:
+    "bg-blue-50 text-blue-700 border-blue-200",
+
+  processing:
+    "bg-purple-50 text-purple-700 border-purple-200",
+
+  shipped:
+    "bg-indigo-50 text-indigo-700 border-indigo-200",
+
+  delivered:
+    "bg-green-50 text-green-700 border-green-200",
+
+  cancelled:
+    "bg-red-50 text-red-700 border-red-200",
+
+  paid:
+    "bg-green-50 text-green-700 border-green-200",
+
+  failed:
+    "bg-red-50 text-red-700 border-red-200",
+
+  refunded:
+    "bg-gray-50 text-gray-700 border-gray-200",
+
+  submitted:
+    "bg-yellow-50 text-yellow-700 border-yellow-200",
+
+  approved:
+    "bg-green-50 text-green-700 border-green-200",
+
+  rejected:
+    "bg-red-50 text-red-700 border-red-200",
+
+  not_required:
+    "bg-gray-50 text-gray-700 border-gray-200",
 };
 
-const statusLabels = {
-  pending: "Order Placed",
-  confirmed: "Confirmed",
-  processing: "Preparing",
-  shipped: "On the Way",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
-const paymentLabels = {
-  pending: "Pending",
-  paid: "Paid",
-  failed: "Failed",
-  refunded: "Refunded",
-};
-
-const formatCurrency = (
-  value
+const formatStatus = (
+  value = ""
 ) =>
-  new Intl.NumberFormat(
-    "en-EG",
-    {
-      style: "currency",
-      currency: "EGP",
-      maximumFractionDigits: 0,
-    }
-  ).format(Number(value) || 0);
+  value.replaceAll(
+    "_",
+    " "
+  );
 
 const formatDate = (
-  value,
-  withTime = false
+  date
 ) => {
-  if (!value) return "—";
+  if (!date) return "—";
 
-  const date = new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "—";
-  }
-
-  return date.toLocaleString(
+  return new Intl.DateTimeFormat(
     "en-EG",
-    withTime
-      ? {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }
-      : {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }
+  ).format(
+    new Date(date)
   );
 };
 
-function StatusProgress({
-  order,
-}) {
-  const currentStatus =
-    order.orderStatus;
+const getTrackedOrder = (
+  response
+) => {
+  const data =
+    response?.data ??
+    response;
 
-  const currentIndex =
-    statusIndex[
-      currentStatus
-    ] ?? -1;
+  return (
+    data?.order ??
+    data ??
+    null
+  );
+};
+
+function StatusBadge({
+  status,
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
+        statusStyles[
+          status
+        ] ||
+        "bg-gray-50 text-gray-700 border-gray-200"
+      }`}
+    >
+      {formatStatus(
+        status
+      )}
+    </span>
+  );
+}
+
+function GuestPaymentProofPanel({
+  orderNumber,
+  phone,
+  paymentProofData,
+  onProofUpdated,
+}) {
+  const [
+    file,
+    setFile,
+  ] = useState(null);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    message,
+    setMessage,
+  ] = useState("");
+
+  const proof =
+    paymentProofData
+      ?.paymentProof || {
+      status:
+        "not_required",
+    };
+
+  const mutation =
+    useMutation({
+      mutationFn:
+        resubmitGuestPaymentProof,
+
+      onSuccess:
+        async (
+          response
+        ) => {
+          setFile(null);
+
+          setError("");
+
+          setMessage(
+            response?.message ||
+              "New payment proof submitted successfully."
+          );
+
+          try {
+            const refreshed =
+              await getGuestPaymentProofStatus(
+                {
+                  orderNumber,
+                  phone,
+                }
+              );
+
+            onProofUpdated(
+              refreshed?.data ||
+                refreshed ||
+                null
+            );
+          } catch {
+            onProofUpdated({
+              ...paymentProofData,
+
+              paymentProof:
+                response?.data
+                  ?.paymentProof || {
+                  status:
+                    "submitted",
+                },
+            });
+          }
+        },
+
+      onError: (
+        err
+      ) => {
+        setMessage("");
+
+        setError(
+          err.friendlyMessage ||
+            "Failed to upload the new payment proof."
+        );
+      },
+    });
+
+  const handleFileChange = (
+    event
+  ) => {
+    const selected =
+      event.target
+        .files?.[0] ||
+      null;
+
+    setError("");
+    setMessage("");
+
+    if (!selected) {
+      setFile(null);
+      return;
+    }
+
+    if (
+      !ALLOWED_PAYMENT_PROOF_TYPES.includes(
+        selected.type
+      )
+    ) {
+      setFile(null);
+
+      setError(
+        "Payment proof must be JPG, PNG, or WEBP."
+      );
+
+      event.target.value =
+        "";
+
+      return;
+    }
+
+    if (
+      selected.size >
+      MAX_PAYMENT_PROOF_SIZE
+    ) {
+      setFile(null);
+
+      setError(
+        "Payment proof must be 10 MB or smaller."
+      );
+
+      event.target.value =
+        "";
+
+      return;
+    }
+
+    setFile(selected);
+
+    event.target.value =
+      "";
+  };
+
+  const handleSubmit =
+    () => {
+      setError("");
+      setMessage("");
+
+      if (!file) {
+        setError(
+          "Choose the new transaction screenshot first."
+        );
+
+        return;
+      }
+
+      mutation.mutate({
+        orderNumber,
+        phone,
+        file,
+      });
+    };
 
   if (
-    currentStatus ===
-    "cancelled"
+    paymentProofData
+      ?.paymentMethod !==
+    "instapay"
   ) {
-    return (
-      <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
-            <XCircle
-              size={20}
-            />
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-500">
-              Order Status
-            </p>
-
-            <p className="mt-1 font-display text-2xl text-red-700">
-              Cancelled
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div>
-      {/* Desktop */}
-      <div className="hidden md:flex">
-        {progressStatuses.map(
-          (
-            status,
-            index
-          ) => {
-            const Icon =
-              status.icon;
+    <div className="mt-6 rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/45 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-darb-gold">
+            InstaPay Proof
+          </p>
 
-            const completed =
-              index <
-              currentIndex;
+          <p className="mt-2 text-sm font-semibold text-darb-green">
+            Payment proof
+            status
+          </p>
+        </div>
 
-            const active =
-              index ===
-              currentIndex;
+        <StatusBadge
+          status={
+            proof.status ||
+            "not_required"
+          }
+        />
+      </div>
 
-            return (
-              <div
-                key={
-                  status.key
-                }
-                className="flex flex-1 items-center last:flex-none"
-              >
-                <div className="flex flex-col items-center">
-                  <div
-                    className={`
-                      flex h-11 w-11
-                      items-center
-                      justify-center
-                      rounded-full
-                      border
-                      transition
-                      ${
-                        completed ||
-                        active
-                          ? "border-darb-green bg-darb-green text-darb-beige"
-                          : "border-darb-gold/30 bg-white text-darb-muted"
-                      }
-                    `}
-                  >
-                    {completed ? (
-                      <Check
-                        size={
-                          18
-                        }
-                      />
-                    ) : (
-                      <Icon
-                        size={
-                          18
-                        }
-                        strokeWidth={
-                          1.7
-                        }
-                      />
-                    )}
-                  </div>
+      {proof.status ===
+        "submitted" && (
+        <div className="mt-4 flex gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm leading-6 text-yellow-800">
+          <UploadCloud
+            size={19}
+            className="mt-0.5 shrink-0"
+          />
 
-                  <p
-                    className={`
-                      mt-3
-                      whitespace-nowrap
-                      text-[10px]
-                      font-semibold
-                      uppercase
-                      tracking-[0.12em]
-                      ${
-                        completed ||
-                        active
-                          ? "text-darb-green"
-                          : "text-darb-muted"
-                      }
-                    `}
-                  >
-                    {
-                      status.label
-                    }
-                  </p>
-                </div>
+          <p>
+            Your screenshot
+            is waiting for
+            Darb to review
+            it. You do not
+            need to upload
+            another one
+            right now.
+          </p>
+        </div>
+      )}
 
-                {index <
-                  progressStatuses.length -
-                    1 && (
-                  <div
-                    className={`
-                      mx-3
-                      mb-6
-                      h-px
-                      flex-1
-                      ${
-                        index <
-                        currentIndex
-                          ? "bg-darb-green"
-                          : "bg-darb-gold/25"
-                      }
-                    `}
+      {proof.status ===
+        "approved" && (
+        <div className="mt-4 flex gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-800">
+          <CheckCircle2
+            size={19}
+            className="mt-0.5 shrink-0"
+          />
+
+          <p>
+            Your InstaPay
+            payment proof
+            was approved.
+            No further
+            payment action
+            is needed.
+          </p>
+        </div>
+      )}
+
+      {proof.status ===
+        "rejected" && (
+        <div className="mt-4">
+          <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">
+            <AlertCircle
+              size={19}
+              className="mt-0.5 shrink-0"
+            />
+
+            <div>
+              <p className="font-semibold">
+                Your previous
+                proof was
+                rejected.
+              </p>
+
+              <p className="mt-1">
+                {proof.rejectionReason ||
+                  "Please upload a clearer screenshot of the successful transaction."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-darb-gold/20 bg-white p-4">
+            <p className="text-sm font-semibold text-darb-green">
+              Upload a new
+              screenshot
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-darb-muted">
+              JPG, PNG, or
+              WEBP. Maximum
+              10 MB.
+            </p>
+
+            <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-dashed border-darb-gold/40 bg-darb-cream/50 px-4 py-4 transition hover:border-darb-green">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                  <ImagePlus
+                    size={18}
                   />
-                )}
-              </div>
-            );
-          }
-        )}
-      </div>
-
-      {/* Mobile */}
-      <div className="space-y-0 md:hidden">
-        {progressStatuses.map(
-          (
-            status,
-            index
-          ) => {
-            const Icon =
-              status.icon;
-
-            const completed =
-              index <
-              currentIndex;
-
-            const active =
-              index ===
-              currentIndex;
-
-            return (
-              <div
-                key={
-                  status.key
-                }
-                className="flex gap-4"
-              >
-                <div className="flex flex-col items-center">
-                  <div
-                    className={`
-                      flex h-10 w-10
-                      shrink-0
-                      items-center
-                      justify-center
-                      rounded-full
-                      border
-                      ${
-                        completed ||
-                        active
-                          ? "border-darb-green bg-darb-green text-darb-beige"
-                          : "border-darb-gold/30 bg-white text-darb-muted"
-                      }
-                    `}
-                  >
-                    {completed ? (
-                      <Check
-                        size={
-                          17
-                        }
-                      />
-                    ) : (
-                      <Icon
-                        size={
-                          17
-                        }
-                      />
-                    )}
-                  </div>
-
-                  {index <
-                    progressStatuses.length -
-                      1 && (
-                    <div
-                      className={`
-                        min-h-9
-                        w-px
-                        flex-1
-                        ${
-                          index <
-                          currentIndex
-                            ? "bg-darb-green"
-                            : "bg-darb-gold/25"
-                        }
-                      `}
-                    />
-                  )}
                 </div>
 
-                <div className="pb-7 pt-2">
-                  <p
-                    className={`
-                      text-sm
-                      font-semibold
-                      ${
-                        completed ||
-                        active
-                          ? "text-darb-green"
-                          : "text-darb-muted"
-                      }
-                    `}
-                  >
-                    {
-                      status.label
-                    }
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-darb-green">
+                    Choose
+                    payment
+                    proof
                   </p>
 
-                  {active && (
-                    <p className="mt-1 text-xs text-darb-muted">
-                      Current
-                      status
-                    </p>
-                  )}
+                  <p className="truncate text-xs text-darb-muted">
+                    {file?.name ||
+                      "No file selected"}
+                  </p>
                 </div>
               </div>
-            );
-          }
-        )}
-      </div>
+
+              <span className="shrink-0 rounded-full border border-darb-gold/30 bg-white px-3 py-2 text-xs font-semibold text-darb-green">
+                Browse
+              </span>
+
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                onChange={
+                  handleFileChange
+                }
+                className="hidden"
+              />
+            </label>
+
+            {error && (
+              <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
+            {message && (
+              <p className="mt-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {message}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                handleSubmit
+              }
+              disabled={
+                mutation.isPending
+              }
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            >
+              <UploadCloud
+                size={17}
+              />
+
+              {mutation.isPending
+                ? "Uploading..."
+                : "Submit New Proof"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function TrackOrder() {
-  const {
-    user,
-    isAuthenticated,
-  } = useAuth();
-
   const [
     form,
     setForm,
@@ -398,39 +481,78 @@ function TrackOrder() {
   });
 
   const [
-    validationError,
-    setValidationError,
+    trackedOrder,
+    setTrackedOrder,
+  ] = useState(null);
+
+  const [
+    paymentProofData,
+    setPaymentProofData,
+  ] = useState(null);
+
+  const [
+    error,
+    setError,
   ] = useState("");
 
   const trackingMutation =
     useMutation({
       mutationFn:
-        trackOrder,
+        async (
+          payload
+        ) => {
+          const trackingResponse =
+            await trackOrder(
+              payload
+            );
+
+          const proofResponse =
+            await getGuestPaymentProofStatus(
+              payload
+            );
+
+          return {
+            trackingResponse,
+            proofResponse,
+          };
+        },
+
+      onSuccess: ({
+        trackingResponse,
+        proofResponse,
+      }) => {
+        setTrackedOrder(
+          getTrackedOrder(
+            trackingResponse
+          )
+        );
+
+        setPaymentProofData(
+          proofResponse?.data ||
+            proofResponse ||
+            null
+        );
+
+        setError("");
+      },
+
+      onError: (
+        err
+      ) => {
+        setTrackedOrder(
+          null
+        );
+
+        setPaymentProofData(
+          null
+        );
+
+        setError(
+          err.friendlyMessage ||
+            "We could not find that order. Check the order number and phone number."
+        );
+      },
     });
-
-  /*
-    Logged-in customers use
-    My Orders instead.
-
-    Admins use Admin Orders.
-  */
-  if (isAuthenticated) {
-    return (
-      <Navigate
-        replace
-        to={
-          user?.role ===
-          "admin"
-            ? "/admin/orders"
-            : "/account/orders"
-        }
-      />
-    );
-  }
-
-  const order =
-    trackingMutation
-      .data?.data;
 
   const handleChange = (
     event
@@ -443,21 +565,9 @@ function TrackOrder() {
     setForm(
       (current) => ({
         ...current,
-        [name]:
-          name ===
-          "orderNumber"
-            ? value.toUpperCase()
-            : value,
+        [name]: value,
       })
     );
-
-    setValidationError("");
-
-    if (
-      trackingMutation.isError
-    ) {
-      trackingMutation.reset();
-    }
   };
 
   const handleSubmit = (
@@ -466,7 +576,9 @@ function TrackOrder() {
     event.preventDefault();
 
     const orderNumber =
-      form.orderNumber.trim();
+      form.orderNumber
+        .trim()
+        .toUpperCase();
 
     const phone =
       form.phone.trim();
@@ -475,14 +587,14 @@ function TrackOrder() {
       !orderNumber ||
       !phone
     ) {
-      setValidationError(
-        "Enter both your order number and phone number."
+      setError(
+        "Enter both your order number and checkout phone number."
       );
 
       return;
     }
 
-    setValidationError("");
+    setError("");
 
     trackingMutation.mutate({
       orderNumber,
@@ -490,478 +602,299 @@ function TrackOrder() {
     });
   };
 
-  const resetTracking = () => {
-    trackingMutation.reset();
+  const displayOrder =
+    trackedOrder ||
+    paymentProofData;
 
-    setForm({
-      orderNumber: "",
-      phone: "",
-    });
-
-    setValidationError("");
-  };
+  const items =
+    trackedOrder?.items ||
+    [];
 
   return (
-    <main className="bg-darb-cream">
-      {/* =========================
-          HERO
-      ========================== */}
-
-      <section className="bg-darb-green text-darb-beige">
-        <div className="mx-auto max-w-7xl px-5 py-14 sm:px-6 sm:py-18 lg:px-8 lg:py-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.34em] text-darb-gold">
-            Your Order
+    <section className="mx-auto max-w-6xl px-4 py-14">
+      <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
+            Your Darb
+            Journey
           </p>
 
-          <h1 className="mt-4 max-w-3xl font-display text-5xl leading-[1.02] sm:text-6xl">
-            Follow its path.
+          <h1 className="mt-2 font-display text-5xl text-darb-green">
+            Track Order
           </h1>
 
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-darb-beige/65 sm:text-base">
-            Enter your Darb
+          <p className="mt-4 max-w-xl leading-7 text-darb-muted">
+            Enter the exact
             order number and
             the phone number
-            used when placing
-            the order.
+            used at checkout.
           </p>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-5xl px-5 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
-        {!order ? (
-          <div className="overflow-hidden rounded-[2rem] border border-darb-gold/20 bg-white shadow-soft">
-            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-              {/* Intro */}
+          <form
+            onSubmit={
+              handleSubmit
+            }
+            className="mt-8 rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft"
+          >
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-darb-green">
+                Order Number
+              </span>
 
-              <div className="bg-darb-green p-7 text-darb-beige sm:p-9">
-                <PackageSearch
-                  size={30}
-                  strokeWidth={
-                    1.4
-                  }
-                  className="text-darb-gold"
-                />
-
-                <h2 className="mt-6 font-display text-3xl">
-                  Find your Darb
-                  order.
-                </h2>
-
-                <p className="mt-4 text-sm leading-7 text-darb-beige/60">
-                  Both details
-                  must match the
-                  same order before
-                  any tracking
-                  information is
-                  shown.
-                </p>
-
-                <div className="mt-7 border-t border-darb-beige/10 pt-6">
-                  <p className="text-xs leading-6 text-darb-beige/45">
-                    Your order
-                    number appears
-                    on the order
-                    confirmation
-                    page and in
-                    Darb order
-                    emails.
-                  </p>
-                </div>
-              </div>
-
-              {/* Form */}
-
-              <form
-                onSubmit={
-                  handleSubmit
+              <input
+                name="orderNumber"
+                value={
+                  form.orderNumber
                 }
-                className="p-7 sm:p-9"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                  Track Order
-                </p>
+                onChange={
+                  handleChange
+                }
+                placeholder="DARB-1001"
+                autoComplete="off"
+                className="w-full rounded-full border border-darb-gold/30 px-5 py-3 uppercase outline-none transition focus:border-darb-green"
+              />
+            </label>
 
-                <h2 className="mt-2 font-display text-3xl text-darb-green">
-                  Where is your
-                  order?
-                </h2>
+            <label className="mt-4 block">
+              <span className="mb-2 block text-sm font-semibold text-darb-green">
+                Checkout
+                Phone Number
+              </span>
 
-                <div className="mt-7 space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-darb-green">
-                      Order Number
-                    </label>
+              <input
+                name="phone"
+                value={
+                  form.phone
+                }
+                onChange={
+                  handleChange
+                }
+                placeholder="01XXXXXXXXX"
+                inputMode="tel"
+                autoComplete="tel"
+                className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+              />
+            </label>
 
-                    <input
-                      name="orderNumber"
-                      value={
-                        form.orderNumber
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="DARB-1001"
-                      autoComplete="off"
-                      className="w-full rounded-full border border-darb-gold/30 px-5 py-3.5 uppercase outline-none transition focus:border-darb-green"
-                    />
-                  </div>
+            {error && (
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </p>
+            )}
 
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-darb-green">
-                      Phone Number
-                    </label>
+            <button
+              type="submit"
+              disabled={
+                trackingMutation.isPending
+              }
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Search
+                size={17}
+              />
 
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={
-                        form.phone
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="The number used at checkout"
-                      autoComplete="tel"
-                      className="w-full rounded-full border border-darb-gold/30 px-5 py-3.5 outline-none transition focus:border-darb-green"
-                    />
-                  </div>
+              {trackingMutation.isPending
+                ? "Finding Order..."
+                : "Track Order"}
+            </button>
+          </form>
+        </div>
+
+        <div>
+          {!displayOrder && (
+            <div className="flex min-h-[360px] items-center justify-center rounded-[2rem] border border-darb-gold/20 bg-darb-cream/55 p-8 text-center">
+              <div>
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                  <PackageSearch
+                    size={
+                      27
+                    }
+                  />
                 </div>
 
-                {(validationError ||
-                  trackingMutation.isError) && (
-                  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-                    {validationError ||
-                      trackingMutation.error
-                        ?.friendlyMessage ||
-                      "We couldn't find an order matching those details."}
-                  </div>
-                )}
+                <h2 className="mt-5 font-display text-3xl text-darb-green">
+                  Follow the
+                  path
+                </h2>
 
-                <button
-                  type="submit"
-                  disabled={
-                    trackingMutation.isPending
-                  }
-                  className="mt-7 inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-darb-green px-8 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                >
-                  {trackingMutation.isPending
-                    ? "Finding Order..."
-                    : "Track Order"}
-                </button>
-
-                <p className="mt-4 text-xs leading-6 text-darb-muted">
-                  For your
-                  privacy, both
-                  details must
-                  match before
-                  order information
-                  is displayed.
+                <p className="mx-auto mt-3 max-w-md leading-7 text-darb-muted">
+                  Your current
+                  order and
+                  payment
+                  status will
+                  appear here
+                  after you
+                  verify the
+                  order
+                  details.
                 </p>
-              </form>
+              </div>
             </div>
-          </div>
-        ) : (
-          /* =========================
-              RESULT
-          ========================== */
+          )}
 
-          <div>
-            {/* Top summary */}
-
-            <div className="rounded-[2rem] bg-darb-green p-6 text-darb-beige shadow-soft sm:p-8">
-              <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+          {displayOrder && (
+            <div className="rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                    Order Found
+                    Order
                   </p>
 
-                  <h2 className="mt-2 font-display text-4xl">
-                    {
-                      order.orderNumber
-                    }
+                  <h2 className="mt-1 font-display text-4xl text-darb-green">
+                    {displayOrder.orderNumber ||
+                      form.orderNumber.toUpperCase()}
                   </h2>
 
-                  <p className="mt-3 text-sm text-darb-beige/55">
-                    Placed{" "}
-                    {formatDate(
-                      order.createdAt
-                    )}
-                  </p>
+                  {trackedOrder?.createdAt && (
+                    <p className="mt-2 text-sm text-darb-muted">
+                      Placed on{" "}
+                      {formatDate(
+                        trackedOrder.createdAt
+                      )}
+                    </p>
+                  )}
                 </div>
 
-                <div className="sm:text-right">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
-                    Current Status
-                  </p>
+                <div className="flex flex-wrap gap-2">
+                  {displayOrder.orderStatus && (
+                    <StatusBadge
+                      status={
+                        displayOrder.orderStatus
+                      }
+                    />
+                  )}
 
-                  <p className="mt-1 font-display text-2xl">
-                    {statusLabels[
-                      order.orderStatus
-                    ] ||
-                      order.orderStatus}
-                  </p>
+                  {displayOrder.paymentStatus && (
+                    <StatusBadge
+                      status={
+                        displayOrder.paymentStatus
+                      }
+                    />
+                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Progress */}
-
-            <div className="mt-5 rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                The Journey
-              </p>
-
-              <h2 className="mt-2 font-display text-3xl text-darb-green">
-                Order progress
-              </h2>
-
-              <div className="mt-8">
-                <StatusProgress
-                  order={order}
-                />
-              </div>
-            </div>
-
-            {/* Details */}
-
-            <div className="mt-5 grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
-              {/* Products */}
-
-              <div className="rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-8">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                  Fragrances
-                </p>
-
-                <div className="mt-6 divide-y divide-darb-gold/15">
-                  {(order.items ||
-                    []).map(
+              {items.length >
+                0 && (
+                <div className="mt-6 space-y-3">
+                  {items.map(
                     (
                       item,
                       index
                     ) => (
                       <div
-                        key={`${item.slug}-${index}`}
-                        className="flex gap-4 py-5 first:pt-0 last:pb-0"
+                        key={`${
+                          item
+                            .productSnapshot
+                            ?.slug ||
+                          index
+                        }-${index}`}
+                        className="flex items-center gap-4 rounded-2xl bg-darb-cream/65 p-3"
                       >
-                        <div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-darb-green/10">
-                          {item.image ? (
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-darb-green">
+                          {item
+                            .productSnapshot
+                            ?.image ? (
                             <img
                               src={
-                                item.image
+                                item
+                                  .productSnapshot
+                                  .image
                               }
                               alt={
-                                item.name
+                                item
+                                  .productSnapshot
+                                  .name ||
+                                "Darb product"
                               }
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full items-center justify-center font-display text-lg text-darb-green/30">
+                            <span className="font-display text-xs text-darb-gold">
                               Darb
-                            </div>
+                            </span>
                           )}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="font-display text-xl text-darb-green">
-                            {
-                              item.name
-                            }
+                          <p className="truncate font-semibold text-darb-green">
+                            {item
+                              .productSnapshot
+                              ?.name ||
+                              "Darb Product"}
                           </p>
 
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-darb-muted">
-                            {item.sizeLabel && (
-                              <span>
-                                {
-                                  item.sizeLabel
-                                }
-                              </span>
-                            )}
-
-                            <span>
-                              Qty{" "}
-                              {
-                                item.quantity
-                              }
-                            </span>
-                          </div>
+                          <p className="mt-1 text-xs text-darb-muted">
+                            Qty:{" "}
+                            {
+                              item.quantity
+                            }
+                          </p>
                         </div>
 
-                        <p className="shrink-0 text-sm font-semibold text-darb-black">
-                          {formatCurrency(
-                            item.lineTotal
-                          )}
-                        </p>
+                        {item.lineTotal !==
+                          undefined && (
+                          <p className="text-sm font-semibold text-darb-black">
+                            {formatCurrency(
+                              item.lineTotal
+                            )}
+                          </p>
+                        )}
                       </div>
                     )
                   )}
                 </div>
-              </div>
+              )}
 
-              {/* Totals */}
-
-              <div className="rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-8">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                  Order Summary
-                </p>
-
-                <div className="mt-6 space-y-3 text-sm">
-                  <div className="flex justify-between gap-5">
-                    <span className="text-darb-muted">
-                      Subtotal
-                    </span>
-
-                    <span>
-                      {formatCurrency(
-                        order.subtotal
-                      )}
-                    </span>
-                  </div>
-
-                  {Number(
-                    order.discountTotal
-                  ) > 0 && (
-                    <div className="flex justify-between gap-5">
-                      <span className="text-darb-muted">
-                        Discount
-                      </span>
-
-                      <span className="text-darb-green">
-                        -
-                        {formatCurrency(
-                          order.discountTotal
-                        )}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between gap-5">
-                    <span className="text-darb-muted">
-                      Delivery
-                    </span>
-
-                    <span>
-                      {Number(
-                        order.deliveryFee
-                      ) > 0
-                        ? formatCurrency(
-                            order.deliveryFee
-                          )
-                        : "Free"}
-                    </span>
-                  </div>
-
-                  <div className="border-t border-darb-gold/20 pt-4">
-                    <div className="flex items-end justify-between gap-5">
-                      <span className="font-semibold text-darb-green">
-                        Total
-                      </span>
-
-                      <span className="font-display text-2xl text-darb-green">
-                        {formatCurrency(
-                          order.total
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-2xl bg-darb-cream p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-darb-gold">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-darb-gold/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-darb-gold">
                     Payment
+                    Method
                   </p>
 
-                  <p className="mt-1 text-sm font-semibold text-darb-green">
-                    {paymentLabels[
-                      order.paymentStatus
-                    ] ||
-                      order.paymentStatus}
+                  <p className="mt-2 text-sm font-semibold capitalize text-darb-green">
+                    {formatStatus(
+                      displayOrder.paymentMethod ||
+                        ""
+                    ) ||
+                      "—"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-darb-gold/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-darb-gold">
+                    Order Total
+                  </p>
+
+                  <p className="mt-2 font-display text-2xl text-darb-green">
+                    {displayOrder.total !==
+                    undefined
+                      ? formatCurrency(
+                          displayOrder.total
+                        )
+                      : "—"}
                   </p>
                 </div>
               </div>
-            </div>
 
-            {/* Timeline */}
-
-            {order.statusHistory
-              ?.length > 0 && (
-              <div className="mt-5 rounded-[2rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-8">
-                <div className="flex items-center gap-3">
-                  <Clock3
-                    size={20}
-                    className="text-darb-gold"
-                  />
-
-                  <h2 className="font-display text-2xl text-darb-green">
-                    Order updates
-                  </h2>
-                </div>
-
-                <div className="mt-6 space-y-5">
-                  {[
-                    ...order.statusHistory,
-                  ]
-                    .reverse()
-                    .map(
-                      (
-                        entry,
-                        index
-                      ) => (
-                        <div
-                          key={`${entry.status}-${entry.changedAt}-${index}`}
-                          className="flex gap-4"
-                        >
-                          <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-darb-gold" />
-
-                          <div>
-                            <p className="text-sm font-semibold text-darb-green">
-                              {statusLabels[
-                                entry
-                                  .status
-                              ] ||
-                                entry
-                                  .status}
-                            </p>
-
-                            <p className="mt-1 text-xs text-darb-muted">
-                              {formatDate(
-                                entry.changedAt,
-                                true
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    )}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={
-                  resetTracking
+              <GuestPaymentProofPanel
+                orderNumber={form.orderNumber
+                  .trim()
+                  .toUpperCase()}
+                phone={form.phone.trim()}
+                paymentProofData={
+                  paymentProofData
                 }
-                className="inline-flex items-center gap-2 rounded-full border border-darb-gold/35 px-6 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/10"
-              >
-                <RotateCcw
-                  size={16}
-                />
-
-                Track Another Order
-              </button>
-
-              <Link
-                to="/contact"
-                className="text-sm font-semibold text-darb-green transition hover:text-darb-gold"
-              >
-                Need help? Contact Darb →
-              </Link>
+                onProofUpdated={
+                  setPaymentProofData
+                }
+              />
             </div>
-          </div>
-        )}
-      </section>
-    </main>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

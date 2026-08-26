@@ -7,8 +7,16 @@ const {
   getMyOrderById,
   getAdminOrders,
   getAdminOrderById,
+  getAdminPaymentProofUrl,
+  reviewAdminPaymentProof,
   updateAdminOrderStatus,
 } = require("../controllers/order.controller");
+
+const {
+  getGuestPaymentProofStatus,
+  resubmitGuestPaymentProof,
+  resubmitMyPaymentProof,
+} = require("../controllers/paymentProofResubmission.controller");
 
 const {
   trackOrder,
@@ -23,11 +31,27 @@ const {
   requireAdmin,
 } = require("../middleware/admin.middleware");
 
-const router = express.Router();
+const {
+  uploadPaymentProof,
+} = require("../middleware/upload.middleware");
+
+const router =
+  express.Router();
 
 /* =========================
    Public
 ========================= */
+
+router.post(
+  "/track/payment-proof/status",
+  getGuestPaymentProofStatus
+);
+
+router.post(
+  "/track/payment-proof",
+  uploadPaymentProof,
+  resubmitGuestPaymentProof
+);
 
 router.post(
   "/track",
@@ -43,6 +67,7 @@ router.post(
 router.post(
   "/",
   optionalAuth,
+  uploadPaymentProof,
   createOrder
 );
 
@@ -54,6 +79,13 @@ router.get(
   "/mine",
   protect,
   getMyOrders
+);
+
+router.post(
+  "/mine/:id/payment-proof",
+  protect,
+  uploadPaymentProof,
+  resubmitMyPaymentProof
 );
 
 router.get(
@@ -74,10 +106,17 @@ router.get(
 );
 
 router.get(
-  "/admin/:id",
+  "/admin/:id/payment-proof",
   protect,
   requireAdmin,
-  getAdminOrderById
+  getAdminPaymentProofUrl
+);
+
+router.patch(
+  "/admin/:id/payment-proof",
+  protect,
+  requireAdmin,
+  reviewAdminPaymentProof
 );
 
 router.patch(
@@ -87,4 +126,12 @@ router.patch(
   updateAdminOrderStatus
 );
 
-module.exports = router;
+router.get(
+  "/admin/:id",
+  protect,
+  requireAdmin,
+  getAdminOrderById
+);
+
+module.exports =
+  router;

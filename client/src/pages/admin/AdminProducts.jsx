@@ -23,6 +23,13 @@ import {
 import { formatCurrency } from "../../utils/formatCurrency";
 
 const MAX_IMAGES = 3;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
 
 const emptyForm = {
   name: "",
@@ -152,23 +159,50 @@ const getReadiness = (product) => {
 
   const missing = [];
 
-  if (!product.price || product.price <= 0) missing.push("price");
-  if (!product.images?.length) missing.push("image");
-  if ((product.images?.length || 0) < MAX_IMAGES) {
-    missing.push(`${MAX_IMAGES - (product.images?.length || 0)} more image`);
+  if (!product.price || product.price <= 0) {
+    missing.push("price");
   }
-  if (!product.shortDescription && !product.description) missing.push("description");
-  if (!product.scentFamily) missing.push("scent family");
-  if (!notes) missing.push("scent notes");
-  if (!product.concentration) missing.push("concentration");
+
+  if (!product.images?.length) {
+    missing.push("image");
+  }
+
+  if ((product.images?.length || 0) < MAX_IMAGES) {
+    missing.push(
+      `${MAX_IMAGES - (product.images?.length || 0)} more image`
+    );
+  }
+
+  if (!product.shortDescription && !product.description) {
+    missing.push("description");
+  }
+
+  if (!product.scentFamily) {
+    missing.push("scent family");
+  }
+
+  if (!notes) {
+    missing.push("scent notes");
+  }
+
+  if (!product.concentration) {
+    missing.push("concentration");
+  }
 
   return missing;
 };
 
-function ToggleField({ label, name, checked, onChange }) {
+function ToggleField({
+  label,
+  name,
+  checked,
+  onChange,
+}) {
   return (
     <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-darb-gold/20 bg-darb-cream/60 px-4 py-3">
-      <span className="text-sm font-semibold text-darb-green">{label}</span>
+      <span className="text-sm font-semibold text-darb-green">
+        {label}
+      </span>
 
       <input
         type="checkbox"
@@ -193,10 +227,13 @@ function AdminProducts() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
   const [form, setForm] = useState(emptyForm);
+
   const [existingImages, setExistingImages] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
   const [newMainIndex, setNewMainIndex] = useState(null);
+
   const [formError, setFormError] = useState("");
 
   const newImagePreviews = useMemo(
@@ -210,120 +247,241 @@ function AdminProducts() {
 
   useEffect(() => {
     return () => {
-      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+      newImagePreviews.forEach((preview) => {
+        URL.revokeObjectURL(preview.url);
+      });
     };
   }, [newImagePreviews]);
 
   const queryParams = useMemo(() => {
-    const params = { limit: 40 };
+    const params = {
+      limit: 40,
+    };
 
-    if (filters.search.trim()) params.search = filters.search.trim();
-    if (filters.category) params.category = filters.category;
-    if (filters.status) params.status = filters.status;
-    if (filters.placeholder) params.placeholder = filters.placeholder;
+    if (filters.search.trim()) {
+      params.search = filters.search.trim();
+    }
+
+    if (filters.category) {
+      params.category = filters.category;
+    }
+
+    if (filters.status) {
+      params.status = filters.status;
+    }
+
+    if (filters.placeholder) {
+      params.placeholder = filters.placeholder;
+    }
 
     return params;
   }, [filters]);
 
   const productsQuery = useQuery({
-    queryKey: ["admin-products", queryParams],
-    queryFn: () => getAdminProducts(queryParams),
+    queryKey: [
+      "admin-products",
+      queryParams,
+    ],
+    queryFn: () =>
+      getAdminProducts(queryParams),
     retry: 1,
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ["admin-categories"],
+    queryKey: [
+      "admin-categories",
+    ],
     queryFn: getAdminCategories,
     retry: 1,
   });
 
   const createMutation = useMutation({
     mutationFn: createAdminProduct,
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["featured-products"] });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "admin-products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "featured-products",
+        ],
+      });
+
       closeForm();
     },
+
     onError: (error) => {
-      setFormError(error.friendlyMessage || "Failed to create product.");
+      setFormError(
+        error.friendlyMessage ||
+          "Failed to create product."
+      );
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: updateAdminProduct,
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["featured-products"] });
-      queryClient.invalidateQueries({ queryKey: ["product"] });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "admin-products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "featured-products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "product",
+        ],
+      });
+
       closeForm();
     },
+
     onError: (error) => {
-      setFormError(error.friendlyMessage || "Failed to update product.");
+      setFormError(
+        error.friendlyMessage ||
+          "Failed to update product."
+      );
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteAdminProduct,
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "admin-products",
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "products",
+        ],
+      });
     },
   });
 
-  const products = productsQuery.data?.data || [];
-  const pagination = productsQuery.data?.pagination;
+  const products =
+    productsQuery.data?.data || [];
+
+  const pagination =
+    productsQuery.data?.pagination;
 
   const categories =
     categoriesQuery.data?.data?.length > 0
       ? categoriesQuery.data.data
       : fallbackCategories;
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
-  const totalImageCount = existingImages.length + imageFiles.length;
-  const remainingImageSlots = Math.max(MAX_IMAGES - totalImageCount, 0);
+  const isSubmitting =
+    createMutation.isPending ||
+    updateMutation.isPending;
+
+  const totalImageCount =
+    existingImages.length +
+    imageFiles.length;
+
+  const remainingImageSlots =
+    Math.max(
+      MAX_IMAGES -
+        totalImageCount,
+      0
+    );
 
   const closeForm = () => {
     setIsFormOpen(false);
     setEditingProduct(null);
     setForm(emptyForm);
+
     setExistingImages([]);
     setImageFiles([]);
     setNewMainIndex(null);
+
     setFormError("");
   };
 
   const openCreateForm = () => {
     setEditingProduct(null);
+
     setForm({
       ...emptyForm,
-      category: categories[0]?.slug || "",
+
+      category:
+        categories[0]?.slug ||
+        "",
     });
+
     setExistingImages([]);
     setImageFiles([]);
     setNewMainIndex(null);
+
     setFormError("");
+
     setIsFormOpen(true);
   };
 
-  const openEditForm = (product) => {
-    setEditingProduct(product);
-    setForm(productToForm(product));
-    setExistingImages(normalizeExistingImages(product.images || []));
+  const openEditForm = (
+    product
+  ) => {
+    setEditingProduct(
+      product
+    );
+
+    setForm(
+      productToForm(product)
+    );
+
+    setExistingImages(
+      normalizeExistingImages(
+        product.images || []
+      )
+    );
+
     setImageFiles([]);
     setNewMainIndex(null);
+
     setFormError("");
+
     setIsFormOpen(true);
   };
 
-  const handleFilterChange = (event) => {
-    const { name, value } = event.target;
+  const handleFilterChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
 
-    setFilters((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setFilters(
+      (current) => ({
+        ...current,
+        [name]: value,
+      })
+    );
   };
 
   const resetFilters = () => {
@@ -335,210 +493,483 @@ function AdminProducts() {
     });
   };
 
-  const handleFormChange = (event) => {
-    const { name, value, type, checked } = event.target;
+  const handleFormChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+      type,
+      checked,
+    } = event.target;
 
-    setForm((current) => ({
-      ...current,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    setForm(
+      (current) => ({
+        ...current,
+
+        [name]:
+          type ===
+          "checkbox"
+            ? checked
+            : value,
+      })
+    );
   };
 
-  const handleImageChange = (event) => {
-    const selected = Array.from(event.target.files || []);
+  const handleImageChange = (
+    event
+  ) => {
+    const selected =
+      Array.from(
+        event.target.files ||
+          []
+      );
 
-    if (!selected.length) return;
-
-    if (selected.some((file) => file.type !== "image/webp")) {
-      setFormError("Darb product images must be WEBP files.");
-      event.target.value = "";
+    if (!selected.length) {
       return;
     }
 
-    if (totalImageCount + selected.length > MAX_IMAGES) {
+    const invalidType =
+      selected.find(
+        (file) =>
+          !ALLOWED_IMAGE_TYPES.includes(
+            file.type
+          )
+      );
+
+    if (invalidType) {
+      setFormError(
+        "Product images must be JPG, JPEG, PNG, or WEBP files."
+      );
+
+      event.target.value =
+        "";
+
+      return;
+    }
+
+    const oversizedFile =
+      selected.find(
+        (file) =>
+          file.size >
+          MAX_IMAGE_SIZE
+      );
+
+    if (oversizedFile) {
+      setFormError(
+        `"${oversizedFile.name}" is larger than 5 MB. Please choose a smaller image.`
+      );
+
+      event.target.value =
+        "";
+
+      return;
+    }
+
+    if (
+      totalImageCount +
+        selected.length >
+      MAX_IMAGES
+    ) {
       setFormError(
         `Maximum ${MAX_IMAGES} images total. You currently have ${totalImageCount}/3.`
       );
-      event.target.value = "";
+
+      event.target.value =
+        "";
+
       return;
     }
 
     setFormError("");
 
-    setImageFiles((current) => {
-      const next = [...current, ...selected];
+    setImageFiles(
+      (current) => {
+        const next = [
+          ...current,
+          ...selected,
+        ];
 
-      if (!existingImages.length && newMainIndex === null && next.length) {
-        setNewMainIndex(0);
+        if (
+          !existingImages.length &&
+          newMainIndex ===
+            null &&
+          next.length
+        ) {
+          setNewMainIndex(
+            0
+          );
+        }
+
+        return next;
       }
-
-      return next;
-    });
-
-    event.target.value = "";
-  };
-
-  const removeExistingImage = (index) => {
-    setExistingImages((current) => {
-      const wasMain = current[index]?.isMain;
-      const next = current.filter((_, imageIndex) => imageIndex !== index);
-
-      if (wasMain && next.length) {
-        next[0] = { ...next[0], isMain: true };
-      }
-
-      if (wasMain && !next.length && imageFiles.length) {
-        setNewMainIndex(0);
-      }
-
-      return next;
-    });
-  };
-
-  const makeExistingImageMain = (index) => {
-    setExistingImages((current) =>
-      current.map((image, imageIndex) => ({
-        ...image,
-        isMain: imageIndex === index,
-      }))
     );
 
-    setNewMainIndex(null);
+    event.target.value =
+      "";
   };
 
-  const removeNewImage = (index) => {
-    setImageFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+  const removeExistingImage = (
+    index
+  ) => {
+    setExistingImages(
+      (current) => {
+        const wasMain =
+          current[index]
+            ?.isMain;
 
-    setNewMainIndex((currentMain) => {
-      if (currentMain === null) return null;
+        const next =
+          current.filter(
+            (
+              _,
+              imageIndex
+            ) =>
+              imageIndex !==
+              index
+          );
 
-      if (currentMain === index) {
-        if (existingImages.length) return null;
-        return imageFiles.length > 1 ? 0 : null;
+        if (
+          wasMain &&
+          next.length
+        ) {
+          next[0] = {
+            ...next[0],
+            isMain: true,
+          };
+        }
+
+        if (
+          wasMain &&
+          !next.length &&
+          imageFiles.length
+        ) {
+          setNewMainIndex(
+            0
+          );
+        }
+
+        return next;
       }
-
-      return currentMain > index ? currentMain - 1 : currentMain;
-    });
+    );
   };
 
-  const makeNewImageMain = (index) => {
-    setExistingImages((current) =>
-      current.map((image) => ({
-        ...image,
-        isMain: false,
-      }))
+  const makeExistingImageMain =
+    (index) => {
+      setExistingImages(
+        (current) =>
+          current.map(
+            (
+              image,
+              imageIndex
+            ) => ({
+              ...image,
+
+              isMain:
+                imageIndex ===
+                index,
+            })
+          )
+      );
+
+      setNewMainIndex(null);
+    };
+
+  const removeNewImage = (
+    index
+  ) => {
+    setImageFiles(
+      (current) =>
+        current.filter(
+          (
+            _,
+            fileIndex
+          ) =>
+            fileIndex !==
+            index
+        )
     );
 
-    setNewMainIndex(index);
+    setNewMainIndex(
+      (currentMain) => {
+        if (
+          currentMain ===
+          null
+        ) {
+          return null;
+        }
+
+        if (
+          currentMain ===
+          index
+        ) {
+          if (
+            existingImages.length
+          ) {
+            return null;
+          }
+
+          return imageFiles.length >
+            1
+            ? 0
+            : null;
+        }
+
+        return currentMain >
+          index
+          ? currentMain -
+              1
+          : currentMain;
+      }
+    );
+  };
+
+  const makeNewImageMain = (
+    index
+  ) => {
+    setExistingImages(
+      (current) =>
+        current.map(
+          (image) => ({
+            ...image,
+            isMain: false,
+          })
+        )
+    );
+
+    setNewMainIndex(
+      index
+    );
   };
 
   const validateForm = () => {
-    if (!form.name.trim()) return "Product name is required.";
-    if (!form.category) return "Category is required.";
+    if (
+      !form.name.trim()
+    ) {
+      return "Product name is required.";
+    }
 
-    if (form.isActive && !form.isPlaceholder) {
-      if (!form.price || Number(form.price) <= 0) {
+    if (
+      !form.category
+    ) {
+      return "Category is required.";
+    }
+
+    if (
+      form.isActive &&
+      !form.isPlaceholder
+    ) {
+      if (
+        !form.price ||
+        Number(
+          form.price
+        ) <= 0
+      ) {
         return "Active real products need a valid price.";
       }
 
-      if (totalImageCount === 0) {
+      if (
+        totalImageCount ===
+        0
+      ) {
         return "Active products need at least one product image.";
       }
     }
 
-    if (totalImageCount > MAX_IMAGES) {
+    if (
+      totalImageCount >
+      MAX_IMAGES
+    ) {
       return `A product can have a maximum of ${MAX_IMAGES} images.`;
     }
 
     return "";
   };
 
-  const createFormData = () => {
-    const formData = new FormData();
+  const createFormData =
+    () => {
+      const formData =
+        new FormData();
 
-    const fields = {
-      ...form,
-      sizeLabel: "50 ML",
-      sizeMl: "50",
+      const fields = {
+        ...form,
+
+        sizeLabel:
+          "50 ML",
+
+        sizeMl:
+          "50",
+      };
+
+      Object.entries(
+        fields
+      ).forEach(
+        ([
+          key,
+          value,
+        ]) => {
+          if (
+            typeof value ===
+            "boolean"
+          ) {
+            formData.append(
+              key,
+              String(
+                value
+              )
+            );
+          } else {
+            formData.append(
+              key,
+              value ??
+                ""
+            );
+          }
+        }
+      );
+
+      formData.append(
+        "tags",
+        JSON.stringify(
+          splitCommaText(
+            form.tags
+          )
+        )
+      );
+
+      formData.append(
+        "scentNotes",
+
+        JSON.stringify({
+          top:
+            splitCommaText(
+              form.topNotes
+            ),
+
+          middle:
+            splitCommaText(
+              form.middleNotes
+            ),
+
+          base:
+            splitCommaText(
+              form.baseNotes
+            ),
+        })
+      );
+
+      formData.append(
+        "images",
+
+        JSON.stringify(
+          existingImages.map(
+            (image) => ({
+              url:
+                image.url,
+
+              publicId:
+                image.publicId ||
+                "",
+
+              alt:
+                image.alt ||
+                form.name,
+
+              isMain:
+                Boolean(
+                  image.isMain
+                ),
+            })
+          )
+        )
+      );
+
+      formData.append(
+        "keepExistingImages",
+        "false"
+      );
+
+      if (
+        newMainIndex !==
+        null
+      ) {
+        formData.append(
+          "mainImageFileIndex",
+          String(
+            newMainIndex
+          )
+        );
+      }
+
+      imageFiles.forEach(
+        (file) => {
+          formData.append(
+            "images",
+            file
+          );
+        }
+      );
+
+      return formData;
     };
 
-    Object.entries(fields).forEach(([key, value]) => {
-      if (typeof value === "boolean") {
-        formData.append(key, String(value));
-      } else {
-        formData.append(key, value ?? "");
-      }
-    });
-
-    formData.append("tags", JSON.stringify(splitCommaText(form.tags)));
-
-    formData.append(
-      "scentNotes",
-      JSON.stringify({
-        top: splitCommaText(form.topNotes),
-        middle: splitCommaText(form.middleNotes),
-        base: splitCommaText(form.baseNotes),
-      })
-    );
-
-    formData.append(
-      "images",
-      JSON.stringify(
-        existingImages.map((image) => ({
-          url: image.url,
-          publicId: image.publicId || "",
-          alt: image.alt || form.name,
-          isMain: Boolean(image.isMain),
-        }))
-      )
-    );
-
-    formData.append("keepExistingImages", "false");
-
-    if (newMainIndex !== null) {
-      formData.append("mainImageFileIndex", String(newMainIndex));
-    }
-
-    imageFiles.forEach((file) => {
-      formData.append("images", file);
-    });
-
-    return formData;
-  };
-
-  const handleSubmit = (event) => {
+  const handleSubmit = (
+    event
+  ) => {
     event.preventDefault();
 
-    const validationError = validateForm();
+    const validationError =
+      validateForm();
 
-    if (validationError) {
-      setFormError(validationError);
+    if (
+      validationError
+    ) {
+      setFormError(
+        validationError
+      );
+
       return;
     }
 
     setFormError("");
 
-    const payload = createFormData();
+    const payload =
+      createFormData();
 
-    if (editingProduct) {
+    if (
+      editingProduct
+    ) {
       updateMutation.mutate({
-        productId: editingProduct._id,
+        productId:
+          editingProduct._id,
+
         payload,
       });
+
       return;
     }
 
-    createMutation.mutate(payload);
+    createMutation.mutate(
+      payload
+    );
   };
 
-  const handleDeactivate = (product) => {
-    const confirmed = window.confirm(
-      `Deactivate "${product.name}"? It will be hidden from the public store.`
+  const handleDeactivate = (
+    product
+  ) => {
+    const confirmed =
+      window.confirm(
+        `Deactivate "${product.name}"? It will be hidden from the public store.`
+      );
+
+    if (
+      !confirmed
+    ) {
+      return;
+    }
+
+    deleteMutation.mutate(
+      product._id
     );
-
-    if (!confirmed) return;
-
-    deleteMutation.mutate(product._id);
   };
 
   return (
@@ -548,21 +979,31 @@ function AdminProducts() {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
             Admin
           </p>
+
           <h1 className="mt-2 font-display text-4xl text-darb-green">
             Products
           </h1>
+
           <p className="mt-3 max-w-2xl text-darb-muted">
-            Manage Darb perfumes, their stock, scent details, and the final
-            three-image product gallery.
+            Manage Darb perfumes,
+            their stock, scent
+            details, and the final
+            three-image product
+            gallery.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={openCreateForm}
+          onClick={
+            openCreateForm
+          }
           className="inline-flex items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
         >
-          <Plus size={18} />
+          <Plus
+            size={18}
+          />
+
           Add Product
         </button>
       </div>
@@ -574,10 +1015,15 @@ function AdminProducts() {
               size={18}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-darb-muted"
             />
+
             <input
               name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
+              value={
+                filters.search
+              }
+              onChange={
+                handleFilterChange
+              }
               placeholder="Search product, SKU, scent..."
               className="w-full rounded-full border border-darb-gold/30 py-3 pl-11 pr-5 outline-none transition focus:border-darb-green"
             />
@@ -585,47 +1031,99 @@ function AdminProducts() {
 
           <select
             name="category"
-            value={filters.category}
-            onChange={handleFilterChange}
+            value={
+              filters.category
+            }
+            onChange={
+              handleFilterChange
+            }
             className="rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
           >
-            <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category._id || category.slug} value={category.slug}>
-                {category.name}
-              </option>
-            ))}
+            <option value="">
+              All categories
+            </option>
+
+            {categories.map(
+              (category) => (
+                <option
+                  key={
+                    category._id ||
+                    category.slug
+                  }
+                  value={
+                    category.slug
+                  }
+                >
+                  {
+                    category.name
+                  }
+                </option>
+              )
+            )}
           </select>
 
           <select
             name="status"
-            value={filters.status}
-            onChange={handleFilterChange}
+            value={
+              filters.status
+            }
+            onChange={
+              handleFilterChange
+            }
             className="rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
           >
-            {statusOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            {statusOptions.map(
+              (option) => (
+                <option
+                  key={
+                    option.label
+                  }
+                  value={
+                    option.value
+                  }
+                >
+                  {
+                    option.label
+                  }
+                </option>
+              )
+            )}
           </select>
 
           <select
             name="placeholder"
-            value={filters.placeholder}
-            onChange={handleFilterChange}
+            value={
+              filters.placeholder
+            }
+            onChange={
+              handleFilterChange
+            }
             className="rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
           >
-            {yesNoOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                Placeholder: {option.label}
-              </option>
-            ))}
+            {yesNoOptions.map(
+              (option) => (
+                <option
+                  key={
+                    option.label
+                  }
+                  value={
+                    option.value
+                  }
+                >
+                  Placeholder:{" "}
+                  {
+                    option.label
+                  }
+                </option>
+              )
+            )}
           </select>
 
           <button
             type="button"
-            onClick={resetFilters}
+            onClick={
+              resetFilters
+            }
             className="rounded-full border border-darb-gold/40 px-5 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/15"
           >
             Reset
@@ -638,24 +1136,41 @@ function AdminProducts() {
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-                {editingProduct ? "Edit Product" : "New Product"}
+                {editingProduct
+                  ? "Edit Product"
+                  : "New Product"}
               </p>
+
               <h2 className="mt-2 font-display text-3xl text-darb-green">
-                {editingProduct ? editingProduct.name : "Create Darb Product"}
+                {editingProduct
+                  ? editingProduct.name
+                  : "Create Darb Product"}
               </h2>
+
               <p className="mt-2 text-sm text-darb-muted">
-                Darb perfumes use a fixed 50 ML size and a maximum of three WEBP
-                images.
+                Darb perfumes use
+                a fixed 50 ML size
+                and a maximum of
+                three product
+                images. JPG, JPEG,
+                PNG, and WEBP are
+                accepted and
+                automatically
+                optimized.
               </p>
             </div>
 
             <button
               type="button"
-              onClick={closeForm}
+              onClick={
+                closeForm
+              }
               className="rounded-full border border-darb-gold/40 p-3 text-darb-green transition hover:bg-darb-gold/15"
               aria-label="Close form"
             >
-              <X size={18} />
+              <X
+                size={18}
+              />
             </button>
           </div>
 
@@ -665,29 +1180,46 @@ function AdminProducts() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-7">
+          <form
+            onSubmit={
+              handleSubmit
+            }
+            className="space-y-7"
+          >
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field
                 label="Product Name *"
                 name="name"
-                value={form.name}
-                onChange={handleFormChange}
+                value={
+                  form.name
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Example: Haibah"
               />
 
               <Field
                 label="Slug"
                 name="slug"
-                value={form.slug}
-                onChange={handleFormChange}
+                value={
+                  form.slug
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="auto if empty"
               />
 
               <Field
                 label="SKU"
                 name="sku"
-                value={form.sku}
-                onChange={handleFormChange}
+                value={
+                  form.sku
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="DARB-001"
               />
 
@@ -695,29 +1227,52 @@ function AdminProducts() {
                 <span className="mb-2 block text-sm font-semibold text-darb-green">
                   Category *
                 </span>
+
                 <select
                   name="category"
-                  value={form.category}
-                  onChange={handleFormChange}
+                  value={
+                    form.category
+                  }
+                  onChange={
+                    handleFormChange
+                  }
                   className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
                 >
-                  <option value="">Select category</option>
-                  {categories.map((category) => (
-                    <option
-                      key={category._id || category.slug}
-                      value={category.slug}
-                    >
-                      {category.name}
-                    </option>
-                  ))}
+                  <option value="">
+                    Select category
+                  </option>
+
+                  {categories.map(
+                    (
+                      category
+                    ) => (
+                      <option
+                        key={
+                          category._id ||
+                          category.slug
+                        }
+                        value={
+                          category.slug
+                        }
+                      >
+                        {
+                          category.name
+                        }
+                      </option>
+                    )
+                  )}
                 </select>
               </label>
 
               <Field
                 label="Price"
                 name="price"
-                value={form.price}
-                onChange={handleFormChange}
+                value={
+                  form.price
+                }
+                onChange={
+                  handleFormChange
+                }
                 type="number"
                 min="0"
                 placeholder="0"
@@ -726,8 +1281,12 @@ function AdminProducts() {
               <Field
                 label="Compare At Price"
                 name="compareAtPrice"
-                value={form.compareAtPrice}
-                onChange={handleFormChange}
+                value={
+                  form.compareAtPrice
+                }
+                onChange={
+                  handleFormChange
+                }
                 type="number"
                 min="0"
                 placeholder="Old price"
@@ -736,8 +1295,12 @@ function AdminProducts() {
               <Field
                 label="Cost Price"
                 name="costPrice"
-                value={form.costPrice}
-                onChange={handleFormChange}
+                value={
+                  form.costPrice
+                }
+                onChange={
+                  handleFormChange
+                }
                 type="number"
                 min="0"
                 placeholder="Internal only"
@@ -746,8 +1309,12 @@ function AdminProducts() {
               <Field
                 label="Stock"
                 name="stock"
-                value={form.stock}
-                onChange={handleFormChange}
+                value={
+                  form.stock
+                }
+                onChange={
+                  handleFormChange
+                }
                 type="number"
                 min="0"
                 placeholder="0"
@@ -756,8 +1323,12 @@ function AdminProducts() {
               <Field
                 label="Low Stock Threshold"
                 name="lowStockThreshold"
-                value={form.lowStockThreshold}
-                onChange={handleFormChange}
+                value={
+                  form.lowStockThreshold
+                }
+                onChange={
+                  handleFormChange
+                }
                 type="number"
                 min="0"
                 placeholder="3"
@@ -780,40 +1351,60 @@ function AdminProducts() {
               <Field
                 label="Concentration"
                 name="concentration"
-                value={form.concentration}
-                onChange={handleFormChange}
+                value={
+                  form.concentration
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Eau de Parfum"
               />
 
               <Field
                 label="Scent Family"
                 name="scentFamily"
-                value={form.scentFamily}
-                onChange={handleFormChange}
+                value={
+                  form.scentFamily
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Woody, Musk, Amber..."
               />
 
               <Field
                 label="Top Notes"
                 name="topNotes"
-                value={form.topNotes}
-                onChange={handleFormChange}
+                value={
+                  form.topNotes
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Bergamot, Lemon"
               />
 
               <Field
                 label="Middle Notes"
                 name="middleNotes"
-                value={form.middleNotes}
-                onChange={handleFormChange}
+                value={
+                  form.middleNotes
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Rose, Jasmine"
               />
 
               <Field
                 label="Base Notes"
                 name="baseNotes"
-                value={form.baseNotes}
-                onChange={handleFormChange}
+                value={
+                  form.baseNotes
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="Musk, Amber, Oud"
               />
 
@@ -821,8 +1412,12 @@ function AdminProducts() {
                 <Field
                   label="Short Description"
                   name="shortDescription"
-                  value={form.shortDescription}
-                  onChange={handleFormChange}
+                  value={
+                    form.shortDescription
+                  }
+                  onChange={
+                    handleFormChange
+                  }
                   placeholder="One-line product summary"
                 />
               </div>
@@ -832,10 +1427,15 @@ function AdminProducts() {
                   <span className="mb-2 block text-sm font-semibold text-darb-green">
                     Description
                   </span>
+
                   <textarea
                     name="description"
-                    value={form.description}
-                    onChange={handleFormChange}
+                    value={
+                      form.description
+                    }
+                    onChange={
+                      handleFormChange
+                    }
                     rows={4}
                     className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                     placeholder="Full product story and details"
@@ -847,8 +1447,12 @@ function AdminProducts() {
                 <Field
                   label="Tags"
                   name="tags"
-                  value={form.tags}
-                  onChange={handleFormChange}
+                  value={
+                    form.tags
+                  }
+                  onChange={
+                    handleFormChange
+                  }
                   placeholder="musk, fresh, gift"
                 />
               </div>
@@ -858,23 +1462,44 @@ function AdminProducts() {
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h3 className="font-display text-2xl text-darb-green">
-                    Product Images
+                    Product
+                    Images
                   </h3>
+
                   <p className="mt-1 text-sm text-darb-muted">
-                    {totalImageCount}/3 images ready · {remainingImageSlots} slot
-                    {remainingImageSlots === 1 ? "" : "s"} remaining
+                    {
+                      totalImageCount
+                    }
+                    /3 images
+                    ready ·{" "}
+                    {
+                      remainingImageSlots
+                    }{" "}
+                    slot
+                    {remainingImageSlots ===
+                    1
+                      ? ""
+                      : "s"}{" "}
+                    remaining
                   </p>
                 </div>
 
-                {remainingImageSlots > 0 && (
+                {remainingImageSlots >
+                  0 && (
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black">
-                    <ImagePlus size={17} />
-                    Add WEBP
+                    <ImagePlus
+                      size={17}
+                    />
+
+                    Add Images
+
                     <input
                       type="file"
                       multiple
-                      accept="image/webp,.webp"
-                      onChange={handleImageChange}
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      onChange={
+                        handleImageChange
+                      }
                       className="hidden"
                     />
                   </label>
@@ -882,39 +1507,106 @@ function AdminProducts() {
               </div>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {existingImages.map((image, index) => (
-                  <ImageEditorCard
-                    key={image.publicId || image.url}
-                    src={image.url}
-                    alt={image.alt || form.name}
-                    label={`Saved image ${index + 1}`}
-                    isMain={Boolean(image.isMain) && newMainIndex === null}
-                    onMakeMain={() => makeExistingImageMain(index)}
-                    onRemove={() => removeExistingImage(index)}
-                  />
-                ))}
+                {existingImages.map(
+                  (
+                    image,
+                    index
+                  ) => (
+                    <ImageEditorCard
+                      key={
+                        image.publicId ||
+                        image.url
+                      }
+                      src={
+                        image.url
+                      }
+                      alt={
+                        image.alt ||
+                        form.name
+                      }
+                      label={`Saved image ${
+                        index +
+                        1
+                      }`}
+                      isMain={
+                        Boolean(
+                          image.isMain
+                        ) &&
+                        newMainIndex ===
+                          null
+                      }
+                      onMakeMain={() =>
+                        makeExistingImageMain(
+                          index
+                        )
+                      }
+                      onRemove={() =>
+                        removeExistingImage(
+                          index
+                        )
+                      }
+                    />
+                  )
+                )}
 
-                {newImagePreviews.map((preview, index) => (
-                  <ImageEditorCard
-                    key={`${preview.file.name}-${preview.file.lastModified}`}
-                    src={preview.url}
-                    alt={preview.file.name}
-                    label={`New image ${index + 1}`}
-                    isMain={newMainIndex === index}
-                    onMakeMain={() => makeNewImageMain(index)}
-                    onRemove={() => removeNewImage(index)}
-                  />
-                ))}
+                {newImagePreviews.map(
+                  (
+                    preview,
+                    index
+                  ) => (
+                    <ImageEditorCard
+                      key={`${preview.file.name}-${preview.file.lastModified}`}
+                      src={
+                        preview.url
+                      }
+                      alt={
+                        preview.file
+                          .name
+                      }
+                      label={`New image ${
+                        index +
+                        1
+                      }`}
+                      isMain={
+                        newMainIndex ===
+                        index
+                      }
+                      onMakeMain={() =>
+                        makeNewImageMain(
+                          index
+                        )
+                      }
+                      onRemove={() =>
+                        removeNewImage(
+                          index
+                        )
+                      }
+                    />
+                  )
+                )}
 
-                {totalImageCount === 0 && (
-                  <div className="sm:col-span-2 lg:col-span-3 rounded-3xl border border-dashed border-darb-gold/40 bg-white px-6 py-10 text-center">
-                    <ImagePlus size={30} className="mx-auto text-darb-green" />
+                {totalImageCount ===
+                  0 && (
+                  <div className="rounded-3xl border border-dashed border-darb-gold/40 bg-white px-6 py-10 text-center sm:col-span-2 lg:col-span-3">
+                    <ImagePlus
+                      size={30}
+                      className="mx-auto text-darb-green"
+                    />
+
                     <p className="mt-3 font-semibold text-darb-green">
-                      No product images yet
+                      No product
+                      images yet
                     </p>
+
                     <p className="mt-1 text-sm text-darb-muted">
-                      Add the first WEBP image. The gallery will support exactly
-                      three images per product.
+                      Add the first
+                      product image.
+                      JPG, JPEG,
+                      PNG, and WEBP
+                      are accepted,
+                      with up to
+                      three images
+                      per product.
                     </p>
                   </div>
                 )}
@@ -925,32 +1617,56 @@ function AdminProducts() {
               <ToggleField
                 label="Active"
                 name="isActive"
-                checked={form.isActive}
-                onChange={handleFormChange}
+                checked={
+                  form.isActive
+                }
+                onChange={
+                  handleFormChange
+                }
               />
+
               <ToggleField
                 label="Placeholder"
                 name="isPlaceholder"
-                checked={form.isPlaceholder}
-                onChange={handleFormChange}
+                checked={
+                  form.isPlaceholder
+                }
+                onChange={
+                  handleFormChange
+                }
               />
+
               <ToggleField
                 label="Featured"
                 name="isFeatured"
-                checked={form.isFeatured}
-                onChange={handleFormChange}
+                checked={
+                  form.isFeatured
+                }
+                onChange={
+                  handleFormChange
+                }
               />
+
               <ToggleField
                 label="Best Seller"
                 name="isBestSeller"
-                checked={form.isBestSeller}
-                onChange={handleFormChange}
+                checked={
+                  form.isBestSeller
+                }
+                onChange={
+                  handleFormChange
+                }
               />
+
               <ToggleField
                 label="New Arrival"
                 name="isNewArrival"
-                checked={form.isNewArrival}
-                onChange={handleFormChange}
+                checked={
+                  form.isNewArrival
+                }
+                onChange={
+                  handleFormChange
+                }
               />
             </div>
 
@@ -958,19 +1674,29 @@ function AdminProducts() {
               <Field
                 label="Meta Title"
                 name="metaTitle"
-                value={form.metaTitle}
-                onChange={handleFormChange}
+                value={
+                  form.metaTitle
+                }
+                onChange={
+                  handleFormChange
+                }
                 placeholder="SEO title"
               />
 
               <label>
                 <span className="mb-2 block text-sm font-semibold text-darb-green">
-                  Meta Description
+                  Meta
+                  Description
                 </span>
+
                 <textarea
                   name="metaDescription"
-                  value={form.metaDescription}
-                  onChange={handleFormChange}
+                  value={
+                    form.metaDescription
+                  }
+                  onChange={
+                    handleFormChange
+                  }
                   rows={3}
                   className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="SEO description"
@@ -981,7 +1707,9 @@ function AdminProducts() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting
+                }
                 className="rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting
@@ -993,7 +1721,9 @@ function AdminProducts() {
 
               <button
                 type="button"
-                onClick={closeForm}
+                onClick={
+                  closeForm
+                }
                 className="rounded-full border border-darb-gold/40 px-7 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/15"
               >
                 Cancel
@@ -1005,17 +1735,24 @@ function AdminProducts() {
 
       {productsQuery.isLoading && (
         <Panel>
-          <p className="text-darb-muted">Loading products...</p>
+          <p className="text-darb-muted">
+            Loading
+            products...
+          </p>
         </Panel>
       )}
 
       {productsQuery.isError && (
         <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-8 shadow-soft">
           <h2 className="font-display text-3xl text-red-700">
-            Could not load products
+            Could not load
+            products
           </h2>
+
           <p className="mt-3 leading-7 text-red-700">
-            {productsQuery.error?.friendlyMessage ||
+            {productsQuery
+              .error
+              ?.friendlyMessage ||
               "Admin products are unavailable right now."}
           </p>
         </div>
@@ -1023,176 +1760,278 @@ function AdminProducts() {
 
       {!productsQuery.isLoading &&
         !productsQuery.isError &&
-        products.length === 0 && (
+        products.length ===
+          0 && (
           <Panel>
             <PackageBadge />
+
             <h2 className="mt-6 font-display text-3xl text-darb-green">
-              No products found
+              No products
+              found
             </h2>
+
             <p className="mt-3 max-w-2xl leading-7 text-darb-muted">
-              No products match the current filters.
+              No products
+              match the current
+              filters.
             </p>
           </Panel>
         )}
 
       {!productsQuery.isLoading &&
         !productsQuery.isError &&
-        products.length > 0 && (
+        products.length >
+          0 && (
           <div>
             <div className="mb-4 flex justify-end text-sm text-darb-muted">
-              Showing {products.length} of {pagination?.total || products.length}
+              Showing{" "}
+              {
+                products.length
+              }{" "}
+              of{" "}
+              {pagination?.total ||
+                products.length}
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              {products.map((product) => {
-                const mainImage =
-                  product.images?.find((image) => image.isMain) ||
-                  product.images?.[0];
+              {products.map(
+                (
+                  product
+                ) => {
+                  const mainImage =
+                    product.images?.find(
+                      (
+                        image
+                      ) =>
+                        image.isMain
+                    ) ||
+                    product
+                      .images?.[0];
 
-                const missing = getReadiness(product);
+                  const missing =
+                    getReadiness(
+                      product
+                    );
 
-                return (
-                  <article
-                    key={product._id}
-                    className="overflow-hidden rounded-[1.5rem] border border-darb-gold/20 bg-white shadow-soft"
-                  >
-                    <div className="grid gap-5 p-5 sm:grid-cols-[150px_1fr]">
-                      <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
-                        {mainImage?.url ? (
-                          <img
-                            src={mainImage.url}
-                            alt={mainImage.alt || product.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="text-center">
-                            <p className="font-display text-3xl text-darb-gold">
-                              Darb
+                  return (
+                    <article
+                      key={
+                        product._id
+                      }
+                      className="overflow-hidden rounded-[1.5rem] border border-darb-gold/20 bg-white shadow-soft"
+                    >
+                      <div className="grid gap-5 p-5 sm:grid-cols-[150px_1fr]">
+                        <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
+                          {mainImage?.url ? (
+                            <img
+                              src={
+                                mainImage.url
+                              }
+                              alt={
+                                mainImage.alt ||
+                                product.name
+                              }
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="text-center">
+                              <p className="font-display text-3xl text-darb-gold">
+                                Darb
+                              </p>
+
+                              <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-darb-beige/70">
+                                Visual
+                                soon
+                              </p>
+                            </div>
+                          )}
+
+                          <span className="absolute bottom-3 right-3 rounded-full bg-darb-black/75 px-2.5 py-1 text-xs font-semibold text-white">
+                            {product
+                              .images
+                              ?.length ||
+                              0}
+                            /3
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-darb-green/10 px-3 py-1 text-xs font-semibold text-darb-green">
+                              {product
+                                .category
+                                ?.name ||
+                                product
+                                  .categorySnapshot
+                                  ?.name ||
+                                "Darb"}
+                            </span>
+
+                            {product.isPlaceholder && (
+                              <span className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
+                                Placeholder
+                              </span>
+                            )}
+
+                            {!product.isActive && (
+                              <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                                Inactive
+                              </span>
+                            )}
+
+                            {product.isFeatured && (
+                              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
+                                Featured
+                              </span>
+                            )}
+
+                            {missing.length ===
+                            0 ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                                <Check
+                                  size={
+                                    12
+                                  }
+                                />
+
+                                Complete
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                                Needs{" "}
+                                {
+                                  missing.length
+                                }{" "}
+                                item
+                                {missing.length ===
+                                1
+                                  ? ""
+                                  : "s"}
+                              </span>
+                            )}
+                          </div>
+
+                          <h2 className="mt-3 font-display text-3xl text-darb-green">
+                            {
+                              product.name
+                            }
+                          </h2>
+
+                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-darb-muted">
+                            {product.shortDescription ||
+                              product.description ||
+                              "No description yet."}
+                          </p>
+
+                          <div className="mt-4 grid gap-3 text-sm text-darb-muted sm:grid-cols-2">
+                            <p>
+                              Price:{" "}
+                              <span className="font-semibold text-darb-black">
+                                {product.price >
+                                0
+                                  ? formatCurrency(
+                                      product.price
+                                    )
+                                  : "Not set"}
+                              </span>
                             </p>
-                            <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-darb-beige/70">
-                              Visual soon
+
+                            <p>
+                              Stock:{" "}
+                              <span className="font-semibold text-darb-black">
+                                {
+                                  product.stock
+                                }
+                              </span>
+                            </p>
+
+                            <p>
+                              Size:{" "}
+                              <span className="font-semibold text-darb-black">
+                                {product.sizeLabel ||
+                                  (product.sizeMl
+                                    ? `${product.sizeMl} ML`
+                                    : "50 ML")}
+                              </span>
+                            </p>
+
+                            <p>
+                              Created:{" "}
+                              <span className="font-semibold text-darb-black">
+                                {formatDate(
+                                  product.createdAt
+                                )}
+                              </span>
                             </p>
                           </div>
-                        )}
 
-                        <span className="absolute bottom-3 right-3 rounded-full bg-darb-black/75 px-2.5 py-1 text-xs font-semibold text-white">
-                          {product.images?.length || 0}/3
-                        </span>
-                      </div>
+                          {missing.length >
+                            0 && (
+                            <p className="mt-3 text-xs leading-5 text-orange-700">
+                              Missing:{" "}
+                              {missing
+                                .slice(
+                                  0,
+                                  4
+                                )
+                                .join(
+                                  ", "
+                                )}
 
-                      <div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-darb-green/10 px-3 py-1 text-xs font-semibold text-darb-green">
-                            {product.category?.name ||
-                              product.categorySnapshot?.name ||
-                              "Darb"}
-                          </span>
-
-                          {product.isPlaceholder && (
-                            <span className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
-                              Placeholder
-                            </span>
+                              {missing.length >
+                              4
+                                ? "..."
+                                : ""}
+                            </p>
                           )}
 
-                          {!product.isActive && (
-                            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                              Inactive
-                            </span>
-                          )}
+                          <div className="mt-5 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openEditForm(
+                                  product
+                                )
+                              }
+                              className="inline-flex items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
+                            >
+                              <Edit
+                                size={
+                                  16
+                                }
+                              />
 
-                          {product.isFeatured && (
-                            <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
-                              Featured
-                            </span>
-                          )}
+                              Edit
+                            </button>
 
-                          {missing.length === 0 ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                              <Check size={12} />
-                              Complete
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                              Needs {missing.length} item
-                              {missing.length === 1 ? "" : "s"}
-                            </span>
-                          )}
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDeactivate(
+                                  product
+                                )
+                              }
+                              disabled={
+                                deleteMutation.isPending ||
+                                !product.isActive
+                              }
+                              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Trash2
+                                size={
+                                  16
+                                }
+                              />
 
-                        <h2 className="mt-3 font-display text-3xl text-darb-green">
-                          {product.name}
-                        </h2>
-
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-darb-muted">
-                          {product.shortDescription ||
-                            product.description ||
-                            "No description yet."}
-                        </p>
-
-                        <div className="mt-4 grid gap-3 text-sm text-darb-muted sm:grid-cols-2">
-                          <p>
-                            Price:{" "}
-                            <span className="font-semibold text-darb-black">
-                              {product.price > 0
-                                ? formatCurrency(product.price)
-                                : "Not set"}
-                            </span>
-                          </p>
-                          <p>
-                            Stock:{" "}
-                            <span className="font-semibold text-darb-black">
-                              {product.stock}
-                            </span>
-                          </p>
-                          <p>
-                            Size:{" "}
-                            <span className="font-semibold text-darb-black">
-                              {product.sizeLabel ||
-                                (product.sizeMl
-                                  ? `${product.sizeMl} ML`
-                                  : "50 ML")}
-                            </span>
-                          </p>
-                          <p>
-                            Created:{" "}
-                            <span className="font-semibold text-darb-black">
-                              {formatDate(product.createdAt)}
-                            </span>
-                          </p>
-                        </div>
-
-                        {missing.length > 0 && (
-                          <p className="mt-3 text-xs leading-5 text-orange-700">
-                            Missing: {missing.slice(0, 4).join(", ")}
-                            {missing.length > 4 ? "..." : ""}
-                          </p>
-                        )}
-
-                        <div className="mt-5 flex flex-wrap gap-3">
-                          <button
-                            type="button"
-                            onClick={() => openEditForm(product)}
-                            className="inline-flex items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
-                          >
-                            <Edit size={16} />
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeactivate(product)}
-                            disabled={deleteMutation.isPending || !product.isActive}
-                            className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Trash2 size={16} />
-                            Deactivate
-                          </button>
+                              Deactivate
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
+                    </article>
+                  );
+                }
+              )}
             </div>
           </div>
         )}
@@ -1215,6 +2054,7 @@ function Field({
       <span className="mb-2 block text-sm font-semibold text-darb-green">
         {label}
       </span>
+
       <input
         name={name}
         value={value}
@@ -1227,7 +2067,9 @@ function Field({
             ? "cursor-not-allowed border-darb-gold/20 bg-darb-cream/80 text-darb-muted"
             : "border-darb-gold/30 bg-white focus:border-darb-green"
         }`}
-        placeholder={placeholder}
+        placeholder={
+          placeholder
+        }
       />
     </label>
   );
@@ -1244,28 +2086,42 @@ function ImageEditorCard({
   return (
     <div
       className={`overflow-hidden rounded-3xl border bg-white ${
-        isMain ? "border-darb-green" : "border-darb-gold/20"
+        isMain
+          ? "border-darb-green"
+          : "border-darb-gold/20"
       }`}
     >
       <div className="relative aspect-square overflow-hidden bg-darb-green">
-        <img src={src} alt={alt} className="h-full w-full object-cover" />
+        <img
+          src={src}
+          alt={alt}
+          className="h-full w-full object-cover"
+        />
 
         {isMain && (
           <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-darb-gold px-3 py-1 text-xs font-semibold text-darb-green">
-            <Star size={12} fill="currentColor" />
+            <Star
+              size={12}
+              fill="currentColor"
+            />
+
             Main
           </span>
         )}
       </div>
 
       <div className="p-3">
-        <p className="truncate text-xs font-semibold text-darb-muted">{label}</p>
+        <p className="truncate text-xs font-semibold text-darb-muted">
+          {label}
+        </p>
 
         <div className="mt-3 flex gap-2">
           {!isMain && (
             <button
               type="button"
-              onClick={onMakeMain}
+              onClick={
+                onMakeMain
+              }
               className="flex-1 rounded-full border border-darb-gold/40 px-3 py-2 text-xs font-semibold text-darb-green transition hover:bg-darb-gold/15"
             >
               Make main
@@ -1274,7 +2130,9 @@ function ImageEditorCard({
 
           <button
             type="button"
-            onClick={onRemove}
+            onClick={
+              onRemove
+            }
             className="rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
           >
             Remove
@@ -1285,7 +2143,9 @@ function ImageEditorCard({
   );
 }
 
-function Panel({ children }) {
+function Panel({
+  children,
+}) {
   return (
     <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-8 shadow-soft">
       {children}
@@ -1296,7 +2156,9 @@ function Panel({ children }) {
 function PackageBadge() {
   return (
     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-darb-green text-darb-beige">
-      <Package size={24} />
+      <Package
+        size={24}
+      />
     </div>
   );
 }

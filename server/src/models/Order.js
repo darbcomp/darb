@@ -120,6 +120,84 @@ const statusHistorySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const paymentProofSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["not_required", "submitted", "approved", "rejected"],
+      default: "not_required",
+      index: true,
+    },
+
+    // Cloudinary storage identifiers are intentionally hidden from normal queries.
+    publicId: {
+      type: String,
+      default: "",
+      select: false,
+    },
+    assetId: {
+      type: String,
+      default: "",
+      select: false,
+    },
+    resourceType: {
+      type: String,
+      default: "image",
+      select: false,
+    },
+    deliveryType: {
+      type: String,
+      default: "authenticated",
+      select: false,
+    },
+    format: {
+      type: String,
+      default: "webp",
+      select: false,
+    },
+
+    originalName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    bytes: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    width: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    height: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    uploadedAt: {
+      type: Date,
+      default: null,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    rejectionReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: {
@@ -190,6 +268,12 @@ const orderSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
+    paymentProof: {
+      type: paymentProofSchema,
+      default: () => ({
+        status: "not_required",
+      }),
+    },
     orderStatus: {
       type: String,
       enum: [
@@ -232,5 +316,6 @@ orderSchema.pre("validate", function () {
 
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ orderStatus: 1, paymentStatus: 1 });
+orderSchema.index({ "paymentProof.status": 1, createdAt: -1 });
 
 module.exports = mongoose.model("Order", orderSchema);

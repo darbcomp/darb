@@ -1,9 +1,17 @@
 import api from "./axiosInstance";
 
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
 export const getAdminDashboard = async () => {
   const { data } = await api.get("/admin");
   return data;
 };
+
+/* =========================================================
+   PRODUCTS
+========================================================= */
 
 export const getAdminProducts = async (params = {}) => {
   const { data } = await api.get("/products/admin", { params });
@@ -45,13 +53,23 @@ export const hardDeleteAdminProduct = async (productId) => {
   return data;
 };
 
-export const deleteAdminProductImage = async ({ productId, payload }) => {
-  const { data } = await api.delete(`/products/admin/${productId}/image`, {
-    data: payload,
-  });
+export const deleteAdminProductImage = async ({
+  productId,
+  payload,
+}) => {
+  const { data } = await api.delete(
+    `/products/admin/${productId}/image`,
+    {
+      data: payload,
+    }
+  );
 
   return data;
 };
+
+/* =========================================================
+   CATEGORIES
+========================================================= */
 
 export const getAdminCategories = async () => {
   const { data } = await api.get("/categories/admin");
@@ -73,12 +91,19 @@ export const createAdminCategory = async (payload) => {
   return data;
 };
 
-export const updateAdminCategory = async ({ categoryId, payload }) => {
-  const { data } = await api.put(`/categories/admin/${categoryId}`, payload, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+export const updateAdminCategory = async ({
+  categoryId,
+  payload,
+}) => {
+  const { data } = await api.put(
+    `/categories/admin/${categoryId}`,
+    payload,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
 
   return data;
 };
@@ -89,9 +114,16 @@ export const deleteAdminCategory = async (categoryId) => {
 };
 
 export const hardDeleteAdminCategory = async (categoryId) => {
-  const { data } = await api.delete(`/categories/admin/${categoryId}?hard=true`);
+  const { data } = await api.delete(
+    `/categories/admin/${categoryId}?hard=true`
+  );
+
   return data;
 };
+
+/* =========================================================
+   ORDERS
+========================================================= */
 
 export const getAdminOrders = async (params = {}) => {
   const { data } = await api.get("/orders/admin", { params });
@@ -103,10 +135,49 @@ export const getAdminOrderById = async (orderId) => {
   return data;
 };
 
-export const updateAdminOrderStatus = async ({ orderId, payload }) => {
-  const { data } = await api.patch(`/orders/admin/${orderId}/status`, payload);
+export const updateAdminOrderStatus = async ({
+  orderId,
+  payload,
+}) => {
+  const { data } = await api.patch(
+    `/orders/admin/${orderId}/status`,
+    payload
+  );
+
   return data;
 };
+
+/* =========================================================
+   PAYMENT PROOFS
+========================================================= */
+
+export const getAdminOrderPaymentProof = async (orderId) => {
+  const { data } = await api.get(
+    `/orders/admin/${orderId}/payment-proof`
+  );
+
+  return data;
+};
+
+export const reviewAdminOrderPaymentProof = async ({
+  orderId,
+  action,
+  reason = "",
+}) => {
+  const { data } = await api.patch(
+    `/orders/admin/${orderId}/payment-proof`,
+    {
+      action,
+      reason,
+    }
+  );
+
+  return data;
+};
+
+/* =========================================================
+   COUPONS
+========================================================= */
 
 export const getAdminCoupons = async (params = {}) => {
   const { data } = await api.get("/coupons/admin", { params });
@@ -123,8 +194,15 @@ export const createAdminCoupon = async (payload) => {
   return data;
 };
 
-export const updateAdminCoupon = async ({ couponId, payload }) => {
-  const { data } = await api.put(`/coupons/admin/${couponId}`, payload);
+export const updateAdminCoupon = async ({
+  couponId,
+  payload,
+}) => {
+  const { data } = await api.put(
+    `/coupons/admin/${couponId}`,
+    payload
+  );
+
   return data;
 };
 
@@ -134,7 +212,10 @@ export const deleteAdminCoupon = async (couponId) => {
 };
 
 export const hardDeleteAdminCoupon = async (couponId) => {
-  const { data } = await api.delete(`/coupons/admin/${couponId}?hard=true`);
+  const { data } = await api.delete(
+    `/coupons/admin/${couponId}?hard=true`
+  );
+
   return data;
 };
 
@@ -142,6 +223,10 @@ export const validateCoupon = async (payload) => {
   const { data } = await api.post("/coupons/validate", payload);
   return data;
 };
+
+/* =========================================================
+   OFFERS
+========================================================= */
 
 export const getAdminOffers = async (params = {}) => {
   const { data } = await api.get("/offers/admin", { params });
@@ -158,8 +243,15 @@ export const createAdminOffer = async (payload) => {
   return data;
 };
 
-export const updateAdminOffer = async ({ offerId, payload }) => {
-  const { data } = await api.put(`/offers/admin/${offerId}`, payload);
+export const updateAdminOffer = async ({
+  offerId,
+  payload,
+}) => {
+  const { data } = await api.put(
+    `/offers/admin/${offerId}`,
+    payload
+  );
+
   return data;
 };
 
@@ -169,9 +261,16 @@ export const deleteAdminOffer = async (offerId) => {
 };
 
 export const hardDeleteAdminOffer = async (offerId) => {
-  const { data } = await api.delete(`/offers/admin/${offerId}?hard=true`);
+  const { data } = await api.delete(
+    `/offers/admin/${offerId}?hard=true`
+  );
+
   return data;
 };
+
+/* =========================================================
+   BUNDLES
+========================================================= */
 
 export const getAdminBundles = async (params = {}) => {
   const { data } = await api.get("/bundles/admin", { params });
@@ -188,8 +287,15 @@ export const createAdminBundle = async (payload) => {
   return data;
 };
 
-export const updateAdminBundle = async ({ bundleId, payload }) => {
-  const { data } = await api.put(`/bundles/admin/${bundleId}`, payload);
+export const updateAdminBundle = async ({
+  bundleId,
+  payload,
+}) => {
+  const { data } = await api.put(
+    `/bundles/admin/${bundleId}`,
+    payload
+  );
+
   return data;
 };
 
@@ -199,67 +305,81 @@ export const deleteAdminBundle = async (bundleId) => {
 };
 
 export const hardDeleteAdminBundle = async (bundleId) => {
-  const { data } = await api.delete(`/bundles/admin/${bundleId}?hard=true`);
+  const { data } = await api.delete(
+    `/bundles/admin/${bundleId}?hard=true`
+  );
+
   return data;
 };
+
+/* =========================================================
+   WAITLIST
+========================================================= */
 
 export const getAdminWaitlist = async (params = {}) => {
   const { data } = await api.get("/waitlist/admin", { params });
   return data;
 };
 
-export const getAdminWaitlistRequestById = async (requestId) => {
-  const { data } = await api.get(`/waitlist/admin/${requestId}`);
-  return data;
-};
-
-export const updateAdminWaitlistRequest = async ({ requestId, payload }) => {
-  const { data } = await api.patch(`/waitlist/admin/${requestId}`, payload);
-  return data;
-};
-
-export const deleteAdminWaitlistRequest = async (requestId) => {
-  const { data } = await api.delete(`/waitlist/admin/${requestId}`);
-  return data;
-};
-
-export const hardDeleteAdminWaitlistRequest = async (requestId) => {
-  const { data } = await api.delete(`/waitlist/admin/${requestId}?hard=true`);
-  return data;
-};
-
-export const getAdminSettings = async () => {
-  const { data } = await api.get("/settings/admin");
-  return data;
-};
-
-export const updateAdminSettings = async (payload) => {
-  const { data } = await api.put("/settings/admin", payload);
-  return data;
-};
-
-export const getAdminReviews = async (
-  params = {}
+export const getAdminWaitlistRequestById = async (
+  requestId
 ) => {
-  const { data } =
-    await api.get(
-      "/reviews/admin",
-      {
-        params,
-      }
-    );
+  const { data } = await api.get(
+    `/waitlist/admin/${requestId}`
+  );
 
   return data;
 };
 
-export const createAdminReview = async (
-  payload
+export const updateAdminWaitlistRequest = async ({
+  requestId,
+  payload,
+}) => {
+  const { data } = await api.patch(
+    `/waitlist/admin/${requestId}`,
+    payload
+  );
+
+  return data;
+};
+
+export const deleteAdminWaitlistRequest = async (
+  requestId
 ) => {
-  const { data } =
-    await api.post(
-      "/reviews/admin",
-      payload
-    );
+  const { data } = await api.delete(
+    `/waitlist/admin/${requestId}`
+  );
+
+  return data;
+};
+
+export const hardDeleteAdminWaitlistRequest = async (
+  requestId
+) => {
+  const { data } = await api.delete(
+    `/waitlist/admin/${requestId}?hard=true`
+  );
+
+  return data;
+};
+
+/* =========================================================
+   REVIEWS
+========================================================= */
+
+export const getAdminReviews = async (params = {}) => {
+  const { data } = await api.get("/reviews/admin", {
+    params,
+  });
+
+  return data;
+};
+
+export const createAdminReview = async (payload) => {
+  const { data } = await api.post(
+    "/reviews/admin",
+    payload
+  );
 
   return data;
 };
@@ -268,22 +388,36 @@ export const updateAdminReview = async ({
   reviewId,
   payload,
 }) => {
-  const { data } =
-    await api.patch(
-      `/reviews/admin/${reviewId}`,
-      payload
-    );
+  const { data } = await api.patch(
+    `/reviews/admin/${reviewId}`,
+    payload
+  );
 
   return data;
 };
 
-export const deleteAdminReview = async (
-  reviewId
-) => {
-  const { data } =
-    await api.delete(
-      `/reviews/admin/${reviewId}`
-    );
+export const deleteAdminReview = async (reviewId) => {
+  const { data } = await api.delete(
+    `/reviews/admin/${reviewId}`
+  );
+
+  return data;
+};
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+export const getAdminSettings = async () => {
+  const { data } = await api.get("/settings/admin");
+  return data;
+};
+
+export const updateAdminSettings = async (payload) => {
+  const { data } = await api.put(
+    "/settings/admin",
+    payload
+  );
 
   return data;
 };

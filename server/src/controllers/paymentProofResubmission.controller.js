@@ -1,0 +1,506 @@
+const mongoose = require("mongoose");
+
+const Order = require("../models/Order");
+
+const {
+  uploadPaymentProofToCloudinary,
+  deletePaymentProofFromCloudinary,
+} = require("../services/paymentProof.service");
+
+const isDatabaseConnected = () =>
+  mongoose.connection.readyState === 1;
+
+const PAYMENT_PROOF_PRIVATE_SELECT =
+  "+paymentProof.publicId +paymentProof.assetId +paymentProof.resourceType +paymentProof.deliveryType +paymentProof.format";
+
+const sanitizePaymentProof = (paymentProof) => {
+  if (!paymentProof) {
+    return {
+      status: "not_required",
+    };
+  }
+
+  return {
+    status: paymentProof.status || "not_required",
+
+    originalName:
+      paymentProof.originalName || "",
+
+    bytes:
+      Number(paymentProof.bytes) || 0,
+
+    width:
+      Number(paymentProof.width) || 0,
+
+    height:
+      Number(paymentProof.height) || 0,
+
+    uploadedAt:
+      paymentProof.uploadedAt || null,
+
+    reviewedAt:
+      paymentProof.reviewedAt || null,
+
+    rejectionReason:
+      paymentProof.rejectionReason || "",
+  };
+};
+
+const sanitizeOrderForClient = (order) => {
+  if (!order) {
+    return order;
+  }
+
+  const plain =
+    typeof order.toObject === "function"
+      ? order.toObject()
+      : { ...order };
+
+  plain.paymentProof =
+    sanitizePaymentProof(
+      plain.paymentProof
+    );
+
+  return plain;
+};
+
+const validatePaymentProofResubmission = (
+  order
+) => {
+  if (!order) {
+    throw new Error(
+      "Order not found."
+    );
+  }
+
+  if (
+    order.orderStatus ===
+    "cancelled"
+  ) {
+    throw new Error(
+      "A cancelled order cannot receive a new payment proof."
+    );
+  }
+
+  if (
+    order.paymentStatus ===
+    "paid"
+  ) {
+    throw new Error(
+      "This order is already marked as paid."
+    );
+  }
+
+  if (
+    !order.paymentProof ||
+    order.paymentProof.status !==
+      "rejected"
+  ) {
+    throw new Error(
+      "A new payment proof can only be uploaded after the previous proof was rejected."
+    );
+  }
+};
+
+const replaceRejectedPaymentProof =
+  async ({
+    order,
+    file,
+  }) => {
+    if (!file?.buffer) {
+      throw new Error(
+        "Please choose a payment screenshot to upload."
+      );
+    }
+
+    validatePaymentProofResubmission(
+      order
+    );
+
+    const previousProof =
+      order.paymentProof?.toObject
+        ? order.paymentProof.toObject()
+        : {
+            ...(order.paymentProof ||
+              {}),
+          };
+
+    let newProof = null;
+
+    try {
+      newProof =
+        await uploadPaymentProofToCloudinary(
+          file
+        );
+
+      order.paymentProof =
+        newProof;
+
+      order.paymentStatus =
+        "pending";
+
+      await order.save();
+    } catch (error) {
+      if (newProof) {
+        try {
+          await deletePaymentProofFromCloudinary(
+            newProof
+          );
+        } catch (
+          cleanupError
+        ) {
+          console.error(
+            "Failed to clean up replacement payment proof:",
+            cleanupError.message
+          );
+        }
+      }
+
+      throw error;
+    }
+
+    /*
+      Only delete the old rejected
+      screenshot AFTER MongoDB has
+      successfully saved the new one.
+    */
+
+    if (
+      previousProof?.publicId
+    ) {
+      try {
+        await deletePaymentProofFromCloudinary(
+          previousProof
+        );
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "Replacement proof saved, but old proof cleanup failed:",
+          cleanupError.message
+        );
+      }
+    }
+
+    return order;
+  };
+
+/* =========================================================
+   GUEST — GET PAYMENT PROOF STATUS
+========================================================= */
+
+const getGuestPaymentProofStatus =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      if (
+        !isDatabaseConnected()
+      ) {
+        return res
+          .status(503)
+          .json({
+            success: false,
+
+            message:
+              "Database is not connected.",
+          });
+      }
+
+      const orderNumber =
+        String(
+          req.body
+            .orderNumber ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+
+      const phone =
+        String(
+          req.body.phone ||
+            ""
+        ).trim();
+
+      if (
+        !orderNumber ||
+        !phone
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            message:
+              "Order number and phone number are required.",
+          });
+      }
+
+      const order =
+        await Order.findOne({
+          orderNumber,
+
+          "customerSnapshot.phone":
+            phone,
+        }).lean();
+
+      if (!order) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            message:
+              "Order not found. Check the order number and phone number.",
+          });
+      }
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          data: {
+            orderNumber:
+              order.orderNumber,
+
+            orderStatus:
+              order.orderStatus,
+
+            paymentMethod:
+              order.paymentMethod,
+
+            paymentStatus:
+              order.paymentStatus,
+
+            total:
+              order.total,
+
+            paymentProof:
+              sanitizePaymentProof(
+                order.paymentProof
+              ),
+          },
+        });
+    } catch (error) {
+      return res
+        .status(500)
+        .json({
+          success: false,
+
+          message:
+            error.message ||
+            "Failed to load payment proof status.",
+        });
+    }
+  };
+
+/* =========================================================
+   GUEST — RESUBMIT REJECTED PROOF
+========================================================= */
+
+const resubmitGuestPaymentProof =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      if (
+        !isDatabaseConnected()
+      ) {
+        return res
+          .status(503)
+          .json({
+            success: false,
+
+            message:
+              "Database is not connected.",
+          });
+      }
+
+      const orderNumber =
+        String(
+          req.body
+            .orderNumber ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+
+      const phone =
+        String(
+          req.body.phone ||
+            ""
+        ).trim();
+
+      if (
+        !orderNumber ||
+        !phone
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            message:
+              "Order number and phone number are required.",
+          });
+      }
+
+      /*
+        Guest ownership check:
+        exact order number +
+        exact checkout phone.
+      */
+
+      const order =
+        await Order.findOne({
+          orderNumber,
+
+          "customerSnapshot.phone":
+            phone,
+        }).select(
+          PAYMENT_PROOF_PRIVATE_SELECT
+        );
+
+      if (!order) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            message:
+              "Order not found. Check the order number and phone number.",
+          });
+      }
+
+      const updatedOrder =
+        await replaceRejectedPaymentProof(
+          {
+            order,
+            file: req.file,
+          }
+        );
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          message:
+            "New payment proof submitted successfully. Darb will review it again.",
+
+          data:
+            sanitizeOrderForClient(
+              updatedOrder
+            ),
+        });
+    } catch (error) {
+      const status =
+        error.message ===
+        "Order not found."
+          ? 404
+          : 400;
+
+      return res
+        .status(status)
+        .json({
+          success: false,
+
+          message:
+            error.message ||
+            "Failed to resubmit payment proof.",
+        });
+    }
+  };
+
+/* =========================================================
+   LOGGED-IN CUSTOMER — RESUBMIT
+========================================================= */
+
+const resubmitMyPaymentProof =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      if (
+        !isDatabaseConnected()
+      ) {
+        return res
+          .status(503)
+          .json({
+            success: false,
+
+            message:
+              "Database is not connected.",
+          });
+      }
+
+      const order =
+        await Order.findOne({
+          _id: req.params.id,
+
+          customer:
+            req.user._id,
+        }).select(
+          PAYMENT_PROOF_PRIVATE_SELECT
+        );
+
+      if (!order) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            message:
+              "Order not found.",
+          });
+      }
+
+      const updatedOrder =
+        await replaceRejectedPaymentProof(
+          {
+            order,
+            file: req.file,
+          }
+        );
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          message:
+            "New payment proof submitted successfully. Darb will review it again.",
+
+          data:
+            sanitizeOrderForClient(
+              updatedOrder
+            ),
+        });
+    } catch (error) {
+      const status =
+        error.message ===
+        "Order not found."
+          ? 404
+          : 400;
+
+      return res
+        .status(status)
+        .json({
+          success: false,
+
+          message:
+            error.message ||
+            "Failed to resubmit payment proof.",
+        });
+    }
+  };
+
+module.exports = {
+  getGuestPaymentProofStatus,
+  resubmitGuestPaymentProof,
+  resubmitMyPaymentProof,
+};
