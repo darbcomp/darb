@@ -15,12 +15,17 @@ Do not run the seed, build, or repository-wide tests.
   `/images/home/category-for-him.webp` and
   `/images/home/category-for-her.webp`.
 - Cards remain clickable and responsive, with their existing subtle hover effect and
-  two desktop columns. Remove category copy, watermark, radial treatment, and dark
+  existing horizontal mobile behavior. At desktop widths, the grid changes from four
+  columns to exactly two equal-width columns. Remove category copy, watermark, radial treatment, and dark
   overlay so the supplied artwork is unobstructed.
 
 ## Product seed
 
-- Seed 26 inactive, new-arrival products: 11 Men and 15 Women.
+- Seed exactly these 26 inactive, new-arrival products:
+  - Men: Barq, Faris, Haibah, Hawas, Hazeem, Mazaq, Mog, Najm, Naseem,
+    Qandeel, Sahm.
+  - Women: Gharam, Ghazal, Ghewaa, Haneen, Hawa, Ishq, Layla, Mahd, Nagham,
+    Rahaf, Roh, Sahar, Sehr, Shaghaf, Ward.
 - Use the supplied lowercase `.webp` filenames in the existing `male` and `female`
   folders.
 - Preserve the existing Product schema and Cloudinary upload/upsert path.
