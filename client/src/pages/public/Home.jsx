@@ -38,10 +38,8 @@ import ProductCard from "../../components/product/ProductCard";
 import { useAuth } from "../../context/AuthContext";
 
 const categoryVisuals = {
-  men: "/images/home/categories/men.webp",
-  women: "/images/home/categories/women.webp",
-  unisex: "/images/home/categories/unisex.webp",
-  musk: "/images/home/categories/musk.webp",
+  men: "/images/home/category-for-him.webp",
+  women: "/images/home/category-for-her.webp",
 };
 
 const fallbackCategories = [
@@ -52,14 +50,6 @@ const fallbackCategories = [
   {
     name: "Women",
     slug: "women",
-  },
-  {
-    name: "Unisex",
-    slug: "unisex",
-  },
-  {
-    name: "Musk",
-    slug: "musk",
   },
 ];
 
@@ -110,14 +100,11 @@ function CategoryCard({
         snap-start
         overflow-hidden
         rounded-[1.75rem]
-        bg-darb-green
         sm:min-w-[48%]
         md:min-w-0
       "
     >
       <div className="relative aspect-[4/5] overflow-hidden lg:aspect-[3/4]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#C8A97E40,#0F3D2E_58%)]" />
-
         {image && (
           <img
             src={image}
@@ -136,38 +123,6 @@ function CategoryCard({
             "
           />
         )}
-
-        <div
-          className="
-            absolute inset-0
-            bg-gradient-to-t
-            from-darb-black/80
-            via-darb-black/15
-            to-transparent
-          "
-        />
-
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-display text-5xl text-darb-gold/20 transition group-hover:text-darb-gold/10">
-            Darb
-          </span>
-        </div>
-
-        <div className="absolute inset-x-0 bottom-0 p-6 lg:p-7">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-darb-gold">
-            Explore
-          </p>
-
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <h3 className="font-display text-4xl text-darb-beige lg:text-[2.7rem]">
-              {category.name}
-            </h3>
-
-            <span className="mb-1 text-xl text-darb-beige transition duration-300 group-hover:translate-x-1">
-              →
-            </span>
-          </div>
-        </div>
       </div>
     </Link>
   );
@@ -205,6 +160,7 @@ function RatingStars({
 
 function ReviewCard({
   review,
+  isDuplicate = false,
 }) {
   const dateValue =
     review.reviewDate ||
@@ -229,6 +185,9 @@ function ReviewCard({
 
   return (
     <article
+      aria-hidden={
+        isDuplicate || undefined
+      }
       className="
         flex min-h-[340px]
         min-w-[84%]
@@ -371,9 +330,23 @@ function Home() {
     useRef(null);
 
   const [
-    reviewProgress,
-    setReviewProgress,
-  ] = useState(0);
+    reviewMarqueePaused,
+    setReviewMarqueePaused,
+  ] = useState(false);
+
+  const [
+    reduceReviewMotion,
+    setReduceReviewMotion,
+  ] = useState(
+    () =>
+      typeof window !==
+        "undefined" &&
+      Boolean(
+        window.matchMedia?.(
+          "(prefers-reduced-motion: reduce)"
+        )?.matches
+      )
+  );
 
   const [
     reviewForm,
@@ -487,8 +460,6 @@ function Home() {
   const categoryOrder = [
     "men",
     "women",
-    "unisex",
-    "musk",
   ];
 
   const sourceCategories =
@@ -506,6 +477,17 @@ function Home() {
         )
       )
       .filter(Boolean);
+
+  const categoryGridClasses = {
+    2: "md:grid-cols-2 md:max-w-3xl",
+    3: "md:grid-cols-3 md:max-w-5xl",
+    4: "md:grid-cols-4 md:max-w-7xl",
+  };
+
+  const categoryGridClass =
+    categoryGridClasses[
+      displayCategories.length
+    ] || categoryGridClasses[4];
 
   useEffect(() => {
     if (!reviewModalOpen) {
@@ -546,6 +528,159 @@ function Home() {
       );
     };
   }, [reviewModalOpen]);
+
+  useEffect(() => {
+    const mediaQuery =
+      window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      );
+
+    const updateMotionPreference =
+      () => {
+        setReduceReviewMotion(
+          mediaQuery.matches
+        );
+      };
+
+    updateMotionPreference();
+
+    mediaQuery.addEventListener?.(
+      "change",
+      updateMotionPreference
+    );
+
+    return () => {
+      mediaQuery.removeEventListener?.(
+        "change",
+        updateMotionPreference
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const container =
+      reviewTrackRef.current;
+
+    if (
+      !container ||
+      reduceReviewMotion ||
+      reviewMarqueePaused ||
+      reviews.length === 0
+    ) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    let scrollPosition =
+      container.scrollLeft;
+    let previousTime =
+      performance.now();
+
+    const moveReviews = (
+      currentTime
+    ) => {
+      const firstReview =
+        container.children[0];
+
+      const firstDuplicate =
+        container.children[
+          reviews.length
+        ];
+
+      if (
+        firstReview &&
+        firstDuplicate
+      ) {
+        const loopWidth =
+          firstDuplicate.offsetLeft -
+          firstReview.offsetLeft;
+
+        const elapsed =
+          Math.min(
+            currentTime -
+              previousTime,
+            64
+          );
+
+        scrollPosition +=
+          (elapsed / 1000) *
+          30;
+
+        if (
+          loopWidth > 0 &&
+          scrollPosition >=
+            loopWidth
+        ) {
+          scrollPosition %=
+            loopWidth;
+        }
+
+        container.scrollLeft =
+          scrollPosition;
+      }
+
+      previousTime =
+        currentTime;
+
+      frameId =
+        window.requestAnimationFrame(
+          moveReviews
+        );
+    };
+
+    frameId =
+      window.requestAnimationFrame(
+        moveReviews
+      );
+
+    return () => {
+      window.cancelAnimationFrame(
+        frameId
+      );
+    };
+  }, [
+    reduceReviewMotion,
+    reviewMarqueePaused,
+    reviews.length,
+  ]);
+
+  useEffect(() => {
+    if (!reviewMarqueePaused) {
+      return undefined;
+    }
+
+    const resumeOutside = (
+      event
+    ) => {
+      const container =
+        reviewTrackRef.current;
+
+      if (
+        container &&
+        !container.contains(
+          event.target
+        )
+      ) {
+        setReviewMarqueePaused(
+          false
+        );
+      }
+    };
+
+    document.addEventListener(
+      "pointerdown",
+      resumeOutside,
+      true
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        resumeOutside,
+        true
+      );
+    };
+  }, [reviewMarqueePaused]);
 
   const reviewMutation =
     useMutation({
@@ -730,79 +865,6 @@ function Home() {
     });
   };
 
-  const scrollReviews = (
-    direction
-  ) => {
-    const container =
-      reviewTrackRef.current;
-
-    if (!container) {
-      return;
-    }
-
-    container.scrollBy({
-      left:
-        direction *
-        container.clientWidth *
-        0.82,
-
-      behavior: "smooth",
-    });
-  };
-
-  const handleReviewScroll = (
-    event
-  ) => {
-    const element =
-      event.currentTarget;
-
-    const maxScroll =
-      element.scrollWidth -
-      element.clientWidth;
-
-    if (maxScroll <= 0) {
-      setReviewProgress(0);
-      return;
-    }
-
-    setReviewProgress(
-      Math.min(
-        Math.max(
-          element.scrollLeft /
-            maxScroll,
-          0
-        ),
-        1
-      )
-    );
-  };
-
-  const mobileDotCount =
-    reviews.length;
-
-  const desktopDotCount =
-    Math.ceil(
-      reviews.length / 4
-    );
-
-  const mobileActiveDot =
-    mobileDotCount <= 1
-      ? 0
-      : Math.round(
-          reviewProgress *
-            (mobileDotCount -
-              1)
-        );
-
-  const desktopActiveDot =
-    desktopDotCount <= 1
-      ? 0
-      : Math.round(
-          reviewProgress *
-            (desktopDotCount -
-              1)
-        );
-
   const selectedProduct =
     purchasedProducts.find(
       (product) =>
@@ -813,6 +875,11 @@ function Home() {
           reviewForm.productId
         )
     );
+
+  const reviewCloneCount =
+    reviews.length === 1
+      ? 4
+      : 2;
 
   return (
     <div className="bg-darb-cream">
@@ -841,22 +908,28 @@ function Home() {
           lg:min-h-[760px]
         "
       >
-        <img
-          src="/images/home/hero.webp"
-          alt=""
-          aria-hidden="true"
-          onError={(event) => {
-            event.currentTarget.style.display =
-              "none";
-          }}
-          className="
-            absolute inset-0 -z-30
-            h-full w-full
-            object-cover
-            object-[62%_center]
-            md:object-center
-          "
-        />
+        <picture className="absolute inset-0 -z-30">
+          <source
+            media="(min-width: 768px)"
+            srcSet="/images/home/home_hero_desktop.webp"
+          />
+
+          <img
+            src="/images/home/home_hero_mobile.webp"
+            alt=""
+            aria-hidden="true"
+            onError={(event) => {
+              event.currentTarget.style.display =
+                "none";
+            }}
+            className="
+              h-full w-full
+              object-cover
+              object-[62%_center]
+              md:object-center
+            "
+          />
+        </picture>
 
         <div className="absolute inset-0 -z-40 bg-[radial-gradient(circle_at_70%_35%,#C8A97E33,#0F3D2E_62%)]" />
 
@@ -902,10 +975,6 @@ function Home() {
           "
         >
           <div className="max-w-[680px]">
-            <p className="text-xs font-semibold uppercase tracking-[0.38em] text-darb-gold sm:text-sm">
-              Darb Perfumes
-            </p>
-
             <h1
               className="
                 mt-5
@@ -1004,38 +1073,33 @@ function Home() {
               Categories
             </p>
 
-            <div className="mt-2 flex items-end justify-between gap-4">
-              <h2 className="font-display text-4xl leading-tight text-darb-green sm:text-5xl">
-                Choose your path
-              </h2>
-
-              <Link
-                to="/shop"
-                className="hidden text-sm font-semibold text-darb-green transition hover:text-darb-black md:block"
-              >
-                Shop all
-              </Link>
-            </div>
+            <h2 className="mt-2 font-display text-4xl leading-tight text-darb-green sm:text-5xl">
+              Choose your path
+            </h2>
           </div>
 
           <div
-            className="
+            className={`
               darb-horizontal-scroll
               flex
               snap-x
               snap-mandatory
               gap-4
               overflow-x-auto
-              px-5
+              pl-5 pr-0
               pb-2
-              sm:px-6
+              scroll-pl-5
+              sm:pl-5
+              sm:pr-0
               md:grid
-              md:grid-cols-4
+              md:mx-auto
               md:overflow-visible
               md:px-6
+              md:scroll-pl-0
               lg:gap-5
               lg:px-8
-            "
+              ${categoryGridClass}
+            `}
           >
             {displayCategories.map(
               (category) => (
@@ -1051,13 +1115,12 @@ function Home() {
             )}
           </div>
 
-          <div className="mt-7 px-5 sm:px-6 md:hidden">
+          <div className="mt-8 flex justify-center px-5 sm:px-6 lg:px-8">
             <Link
               to="/shop"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-darb-green"
+              className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-darb-green px-8 text-sm font-semibold text-darb-beige transition duration-300 hover:bg-darb-gold hover:text-darb-green"
             >
-              Shop all fragrances
-              <span>→</span>
+              Shop All Fragrances
             </Link>
           </div>
         </div>
@@ -1171,7 +1234,7 @@ function Home() {
         className="bg-darb-cream py-16 sm:py-20 lg:py-24"
       >
         <div className="mx-auto max-w-7xl">
-          <div className="flex items-end justify-between gap-5 px-5 sm:px-6 lg:px-8">
+          <div className="px-5 sm:px-6 lg:px-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-sm">
                 What They Remember
@@ -1188,41 +1251,6 @@ function Home() {
                 journey.
               </p>
             </div>
-
-            {reviews.length >
-              4 && (
-              <div className="hidden items-center gap-2 lg:flex">
-                <button
-                  type="button"
-                  onClick={() =>
-                    scrollReviews(
-                      -1
-                    )
-                  }
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/35 text-darb-green transition hover:bg-darb-green hover:text-darb-beige"
-                  aria-label="Previous reviews"
-                >
-                  <ArrowLeft
-                    size={18}
-                  />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    scrollReviews(
-                      1
-                    )
-                  }
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/35 text-darb-green transition hover:bg-darb-green hover:text-darb-beige"
-                  aria-label="Next reviews"
-                >
-                  <ArrowRight
-                    size={18}
-                  />
-                </button>
-              </div>
-            )}
           </div>
 
           {reviewsQuery.isLoading && (
@@ -1260,15 +1288,15 @@ function Home() {
                   ref={
                     reviewTrackRef
                   }
-                  onScroll={
-                    handleReviewScroll
+                  onPointerDown={() =>
+                    setReviewMarqueePaused(
+                      true
+                    )
                   }
                   className="
                     darb-horizontal-scroll
                     mt-10
                     flex
-                    snap-x
-                    snap-mandatory
                     gap-4
                     overflow-x-auto
                     px-5
@@ -1280,11 +1308,13 @@ function Home() {
                 >
                   {reviews.map(
                     (
-                      review
+                      review,
+                      index
                     ) => (
                       <ReviewCard
                         key={
-                          review._id
+                          review._id ||
+                          index
                         }
                         review={
                           review
@@ -1292,65 +1322,37 @@ function Home() {
                       />
                     )
                   )}
+
+                  {!reduceReviewMotion &&
+                    Array.from(
+                      {
+                        length:
+                          reviewCloneCount,
+                      },
+                      (_, index) =>
+                        index + 1
+                    ).flatMap(
+                      (copy) =>
+                        reviews.map(
+                          (
+                            review,
+                            index
+                          ) => (
+                            <ReviewCard
+                              key={`${
+                                review._id ||
+                                index
+                              }-duplicate-${copy}`}
+                              review={
+                                review
+                              }
+                              isDuplicate
+                            />
+                          )
+                        )
+                    )}
                 </div>
 
-                {mobileDotCount >
-                  1 && (
-                  <div className="mt-5 flex justify-center gap-2 lg:hidden">
-                    {Array.from({
-                      length:
-                        mobileDotCount,
-                    }).map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <span
-                          key={
-                            index
-                          }
-                          className={`h-1.5 rounded-full transition-all duration-300 ${
-                            mobileActiveDot ===
-                            index
-                              ? "w-6 bg-darb-green"
-                              : "w-1.5 bg-darb-gold/40"
-                          }`}
-                        />
-                      )
-                    )}
-                  </div>
-                )}
-
-                {desktopDotCount >
-                  1 && (
-                  <div className="mt-5 hidden justify-center gap-2 lg:flex">
-                    {Array.from({
-                      length:
-                        desktopDotCount,
-                    }).map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <span
-                          key={
-                            index
-                          }
-                          className={`h-1.5 rounded-full transition-all duration-300 ${
-                            desktopActiveDot ===
-                            index
-                              ? "w-6 bg-darb-green"
-                              : "w-1.5 bg-darb-gold/40"
-                          }`}
-                        />
-                      )
-                    )}
-                  </div>
-                )}
-
-                <p className="mt-4 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-muted lg:hidden">
-                  Swipe to explore
-                </p>
               </>
             )}
 

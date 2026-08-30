@@ -1,9 +1,16 @@
-import { Link } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
+import { Link } from "react-router-dom";
 
+import { useCart } from "../../context/useCart";
+import { flyProductImageToCart } from "../../utils/flyToCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 
 function ProductCard({ product }) {
+  const {
+    addToCart,
+    items,
+  } = useCart();
+
   const images = [
     ...(product?.images || []),
   ]
@@ -28,10 +35,60 @@ function ProductCard({ product }) {
       ? `${product.sizeMl} ML`
       : "50 ML");
 
+  const price = Number(
+    product.price
+  );
+
+  const stock = Number(
+    product.stock
+  );
+
   const hasDiscount =
     Number(product.compareAtPrice) >
-      Number(product.price) &&
-    Number(product.price) > 0;
+      price &&
+    price > 0;
+
+  const canPurchase =
+    product.isActive &&
+    !product.isPlaceholder &&
+    Number.isFinite(price) &&
+    price > 0 &&
+    Number.isFinite(stock) &&
+    stock > 0;
+
+  const cartItemId = `${
+    product._id || product.slug
+  }_default`;
+
+  const cartQuantity =
+    items.find(
+      (item) =>
+        item.cartItemId ===
+        cartItemId
+    )?.quantity || 0;
+
+  const atCartLimit =
+    canPurchase &&
+    cartQuantity >= stock;
+
+  const handleAddToCart = (
+    event
+  ) => {
+    if (
+      !canPurchase ||
+      atCartLimit
+    ) {
+      return;
+    }
+
+    addToCart(product, 1);
+
+    flyProductImageToCart({
+      imageUrl: mainImage?.url,
+      origin:
+        event.currentTarget,
+    });
+  };
 
   return (
     <article
@@ -52,234 +109,158 @@ function ProductCard({ product }) {
     >
       <Link
         to={`/product/${product.slug}`}
-        className="flex h-full flex-col"
+        className="relative block aspect-[4/5] overflow-hidden bg-darb-green"
+        aria-label={product.name}
       >
-        {/* PRODUCT IMAGE */}
-        <div
-          className="
-            relative
-            aspect-[4/5]
-            overflow-hidden
-            bg-darb-green
-          "
-        >
-          {mainImage?.url ? (
-            <>
-              <img
-                src={mainImage.url}
-                alt={
-                  mainImage.alt ||
-                  product.name
+        {mainImage?.url ? (
+          <>
+            <img
+              src={mainImage.url}
+              alt={
+                mainImage.alt ||
+                product.name
+              }
+              className={`
+                h-full w-full object-cover
+                transition duration-500
+                ${
+                  hoverImage
+                    ? "md:group-hover:opacity-0"
+                    : "md:group-hover:scale-105"
                 }
-                className={`
-                  h-full w-full object-cover
+              `}
+            />
+
+            {hoverImage?.url && (
+              <img
+                src={hoverImage.url}
+                alt={
+                  hoverImage.alt ||
+                  `${product.name} alternate view`
+                }
+                className="
+                  absolute inset-0
+                  h-full w-full
+                  object-cover
+                  opacity-0
                   transition duration-500
-                  ${
-                    hoverImage
-                      ? "md:group-hover:opacity-0"
-                      : "md:group-hover:scale-105"
-                  }
-                `}
+
+                  md:group-hover:scale-105
+                  md:group-hover:opacity-100
+                "
               />
-
-              {hoverImage?.url && (
-                <img
-                  src={hoverImage.url}
-                  alt={
-                    hoverImage.alt ||
-                    `${product.name} alternate view`
-                  }
-                  className="
-                    absolute inset-0
-                    h-full w-full
-                    object-cover
-                    opacity-0
-                    transition duration-500
-
-                    md:group-hover:scale-105
-                    md:group-hover:opacity-100
-                  "
-                />
-              )}
-            </>
-          ) : (
-            <div
-              className="
-                flex h-full w-full
-                items-center justify-center
-                bg-[radial-gradient(circle_at_top,#C8A97E33,#0F3D2E_55%)]
-                px-4 text-center
-              "
-            >
-              <div>
-                <p className="font-display text-3xl text-darb-gold sm:text-4xl">
-                  Darb
-                </p>
-
-                <p className="mt-2 text-[8px] font-semibold uppercase tracking-[0.25em] text-darb-beige/65 sm:text-xs sm:tracking-[0.35em]">
-                  Visual soon
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* BADGES */}
-          <div className="absolute left-2 top-2 flex flex-col items-start gap-1.5 sm:left-4 sm:top-4">
-            {product.isBestSeller &&
-              !product.isPlaceholder && (
-                <span
-                  className="
-                    rounded-full
-                    bg-darb-beige
-                    px-2 py-1
-                    text-[8px]
-                    font-bold
-                    uppercase
-                    tracking-[0.08em]
-                    text-darb-green
-
-                    sm:px-3
-                    sm:text-[10px]
-                  "
-                >
-                  Best Seller
-                </span>
-              )}
-
-            {product.isNewArrival &&
-              !product.isPlaceholder && (
-                <span
-                  className="
-                    rounded-full
-                    bg-darb-gold
-                    px-2 py-1
-                    text-[8px]
-                    font-bold
-                    uppercase
-                    tracking-[0.08em]
-                    text-darb-green
-
-                    sm:px-3
-                    sm:text-[10px]
-                  "
-                >
-                  New
-                </span>
-              )}
-          </div>
-        </div>
-
-        {/* PRODUCT INFORMATION */}
-        <div className="flex flex-1 flex-col p-3.5 sm:p-5">
-          <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2">
-            <p
-              className="
-                min-w-0 truncate
-                text-[8px]
-                font-semibold
-                uppercase
-                tracking-[0.18em]
-                text-darb-gold
-
-                sm:text-xs
-                sm:tracking-[0.25em]
-              "
-            >
-              {categoryName}
-            </p>
-
-            <p className="shrink-0 text-[9px] text-darb-muted sm:text-xs">
-              {size}
-            </p>
-          </div>
-
-          <h3
+            )}
+          </>
+        ) : (
+          <div
             className="
-              line-clamp-2
-              font-display
-              text-xl
-              leading-tight
-              text-darb-green
-
-              sm:text-2xl
+              flex h-full w-full
+              items-center justify-center
+              bg-[radial-gradient(circle_at_top,#C8A97E33,#0F3D2E_55%)]
+              px-4 text-center
             "
           >
-            {product.name}
-          </h3>
-
-          {/* Description hidden on narrow mobile cards */}
-          <p
-            className="
-              mt-2 hidden
-              line-clamp-2
-              min-h-[3rem]
-              text-sm
-              leading-6
-              text-darb-muted
-
-              sm:block
-            "
-          >
-            {product.shortDescription ||
-              product.description ||
-              "A scent waiting to begin its path."}
-          </p>
-
-          <div className="mt-auto flex items-end justify-between gap-2 pt-4 sm:gap-4 sm:pt-5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
-                {product.price > 0
-                  ? formatCurrency(
-                      product.price
-                    )
-                  : "Price soon"}
+            <div>
+              <p className="font-display text-3xl text-darb-gold sm:text-4xl">
+                Darb
               </p>
 
-              {hasDiscount && (
-                <p className="mt-0.5 text-[10px] text-darb-muted line-through sm:text-sm">
-                  {formatCurrency(
-                    product.compareAtPrice
-                  )}
-                </p>
-              )}
-
-              {product.stock <= 0 && (
-                <p className="mt-1 text-[9px] font-semibold text-darb-muted sm:text-xs">
-                  Join waitlist
-                </p>
-              )}
-            </div>
-
-            <div
-              className="
-                flex h-9 w-9 shrink-0
-                items-center justify-center
-                rounded-full
-                bg-darb-green
-                text-darb-beige
-                transition
-
-                sm:h-11 sm:w-11
-
-                md:group-hover:bg-darb-gold
-                md:group-hover:text-darb-green
-              "
-            >
-              <ShoppingBag
-                size={16}
-                strokeWidth={1.8}
-                className="sm:hidden"
-              />
-
-              <ShoppingBag
-                size={18}
-                strokeWidth={1.8}
-                className="hidden sm:block"
-              />
+              <p className="mt-2 text-[8px] font-semibold uppercase tracking-[0.25em] text-darb-beige/65 sm:text-xs sm:tracking-[0.35em]">
+                Visual soon
+              </p>
             </div>
           </div>
+        )}
+
+        <div className="absolute left-2 top-2 flex flex-col items-start gap-1.5 sm:left-4 sm:top-4">
+          {product.isBestSeller &&
+            !product.isPlaceholder && (
+              <span className="rounded-full bg-darb-beige px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-green sm:px-3 sm:text-[10px]">
+                Best Seller
+              </span>
+            )}
+
+          {product.isNewArrival &&
+            !product.isPlaceholder && (
+              <span className="rounded-full bg-darb-gold px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-green sm:px-3 sm:text-[10px]">
+                New
+              </span>
+            )}
         </div>
       </Link>
+
+      <div className="flex flex-1 flex-col p-3.5 sm:p-5">
+        <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2">
+          <p className="min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.18em] text-darb-gold sm:text-xs sm:tracking-[0.25em]">
+            {categoryName}
+          </p>
+
+          <p className="shrink-0 text-[9px] text-darb-muted sm:text-xs">
+            {size}
+          </p>
+        </div>
+
+        <h3 className="line-clamp-2 font-display text-xl leading-tight text-darb-green sm:text-2xl">
+          <Link
+            to={`/product/${product.slug}`}
+            className="transition hover:text-darb-black"
+          >
+            {product.name}
+          </Link>
+        </h3>
+
+        <p className="mt-2 hidden line-clamp-2 min-h-[3rem] text-sm leading-6 text-darb-muted sm:block">
+          {product.shortDescription ||
+            product.description ||
+            "A scent waiting to begin its path."}
+        </p>
+
+        <div className="mt-auto pt-4 sm:pt-5">
+          <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
+            {price > 0
+              ? formatCurrency(price)
+              : "Price soon"}
+          </p>
+
+          {hasDiscount && (
+            <p className="mt-0.5 text-[10px] text-darb-muted line-through sm:text-sm">
+              {formatCurrency(
+                product.compareAtPrice
+              )}
+            </p>
+          )}
+
+          {stock <= 0 && (
+            <p className="mt-1 text-[9px] font-semibold text-darb-muted sm:text-xs">
+              Join waitlist
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            handleAddToCart
+          }
+          disabled={
+            !canPurchase ||
+            atCartLimit
+          }
+          className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full bg-darb-green px-2 text-[10px] font-semibold text-darb-beige transition hover:bg-darb-gold hover:text-darb-green active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-darb-muted/20 disabled:text-darb-muted disabled:hover:bg-darb-muted/20 sm:min-h-11 sm:gap-2 sm:px-4 sm:text-sm"
+        >
+          <ShoppingBag
+            size={15}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
+
+          {atCartLimit
+            ? "Max in Cart"
+            : canPurchase
+              ? "Add to Cart"
+              : "Unavailable"}
+        </button>
+      </div>
     </article>
   );
 }

@@ -834,6 +834,7 @@ function Navbar() {
 
               <Link
                 to="/cart"
+                data-cart-target
                 onClick={
                   closeDesktopMenus
                 }
@@ -927,6 +928,7 @@ function Navbar() {
 
             <Link
               to="/cart"
+              data-cart-target
               onClick={
                 closeMobileMenu
               }

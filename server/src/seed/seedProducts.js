@@ -38,10 +38,40 @@ const configureCloudinary = () => {
 const productSeedData = [
   // MEN
   {
+    name: "Barq",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "barq.webp",
+  },
+  {
+    name: "Faris",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "faris.webp",
+  },
+  {
     name: "Haibah",
     categorySlug: "men",
     imageFolder: "male",
     imageFile: "haibah.webp",
+  },
+  {
+    name: "Hawas",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "hawas.webp",
+  },
+  {
+    name: "Hazeem",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "hazeem.webp",
+  },
+  {
+    name: "Mazaq",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "mazaq.webp",
   },
   {
     name: "Mog",
@@ -50,16 +80,22 @@ const productSeedData = [
     imageFile: "mog.webp",
   },
   {
-    name: "Namoos",
+    name: "Najm",
     categorySlug: "men",
     imageFolder: "male",
-    imageFile: "namoos.webp",
+    imageFile: "najm.webp",
   },
   {
     name: "Naseem",
     categorySlug: "men",
     imageFolder: "male",
     imageFile: "naseem.webp",
+  },
+  {
+    name: "Qandeel",
+    categorySlug: "men",
+    imageFolder: "male",
+    imageFile: "qandeel.webp",
   },
   {
     name: "Sahm",
@@ -82,10 +118,40 @@ const productSeedData = [
     imageFile: "ghazal.webp",
   },
   {
+    name: "Ghewaa",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "ghewaa.webp",
+  },
+  {
+    name: "Haneen",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "haneen.webp",
+  },
+  {
     name: "Hawa",
     categorySlug: "women",
     imageFolder: "female",
     imageFile: "hawa.webp",
+  },
+  {
+    name: "Ishq",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "ishq.webp",
+  },
+  {
+    name: "Layla",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "layla.webp",
+  },
+  {
+    name: "Mahd",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "mahd.webp",
   },
   {
     name: "Nagham",
@@ -116,6 +182,18 @@ const productSeedData = [
     categorySlug: "women",
     imageFolder: "female",
     imageFile: "sehr.webp",
+  },
+  {
+    name: "Shaghaf",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "shaghaf.webp",
+  },
+  {
+    name: "Ward",
+    categorySlug: "women",
+    imageFolder: "female",
+    imageFile: "ward.webp",
   },
 ];
 
@@ -269,6 +347,39 @@ const seedRealProducts = async () => {
       `✅ ${product.name} — ${category.name} — 50 ML`
     );
   }
+
+  const currentProductSlugs =
+    productSeedData.map(
+      (productData) =>
+        slugify(productData.name)
+    );
+
+  const legacyProducts =
+    await Product.updateMany(
+      {
+        sku: {
+          $in: [
+            /^DARB-MEN-/,
+            /^DARB-WOMEN-/,
+          ],
+        },
+        slug: {
+          $nin: currentProductSlugs,
+        },
+      },
+      {
+        $set: {
+          isActive: false,
+          isFeatured: false,
+          isBestSeller: false,
+          isNewArrival: false,
+        },
+      }
+    );
+
+  console.log(
+    `✅ ${legacyProducts.modifiedCount} legacy Darb product(s) deactivated.`
+  );
 
   console.log(
     `\n✅ ${productSeedData.length} real Darb products are ready.\n`

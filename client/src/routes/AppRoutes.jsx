@@ -8,6 +8,7 @@ import AdminLayout from "../components/layout/AdminLayout";
 
 import ProtectedRoute from "../components/common/ProtectedRoute";
 import AdminRoute from "../components/common/AdminRoute";
+import ScrollToTop from "../components/common/ScrollToTop";
 
 import Home from "../pages/public/Home";
 import Shop from "../pages/public/Shop";
@@ -45,7 +46,10 @@ import AdminSettings from "../pages/admin/AdminSettings";
 
 function AppRoutes() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+
+      <Routes>
       <Route
         element={<PublicLayout />}
       >
@@ -245,7 +249,8 @@ function AppRoutes() {
           }
         />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

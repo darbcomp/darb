@@ -42,6 +42,7 @@ import ProductCard from "../../components/product/ProductCard";
 import {
   formatCurrency,
 } from "../../utils/formatCurrency";
+import { flyProductImageToCart } from "../../utils/flyToCart";
 
 const initialWaitlistForm = {
   name: "",
@@ -376,7 +377,7 @@ function ProductDetails() {
   ========================== */
 
   const handleAddToCart =
-    () => {
+    (event) => {
       if (!canPurchase) {
         return;
       }
@@ -385,6 +386,13 @@ function ProductDetails() {
         product,
         quantity
       );
+
+      flyProductImageToCart({
+        imageUrl:
+          selectedImage?.url,
+        origin:
+          event.currentTarget,
+      });
 
       setCartMessage(
         `${quantity} ${
