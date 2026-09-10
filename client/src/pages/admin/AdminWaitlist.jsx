@@ -197,7 +197,7 @@ function AdminWaitlist() {
   };
 
   return (
-    <section>
+    <section className="admin-page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -219,7 +219,7 @@ function AdminWaitlist() {
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-8 grid gap-0 border-y border-darb-gold/25 md:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label="Total" value={summary.total} />
         <SummaryCard label="Waiting" value={summary.waiting} />
         <SummaryCard label="Notified" value={summary.notified} />
@@ -419,7 +419,7 @@ function AdminWaitlist() {
               Showing {requests.length} of {pagination?.total || requests.length}
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="admin-record-list border-y border-darb-gold/25">
               {requests.map((request) => {
                 const productImage =
                   request.productSnapshot?.image ||

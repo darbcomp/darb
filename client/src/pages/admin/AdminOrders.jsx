@@ -221,7 +221,7 @@ function AdminOrders() {
             reason: reason.trim(),
         });
     };
-    return (<section>
+    return (<section className="admin-page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -332,7 +332,7 @@ function AdminOrders() {
 
       {!ordersQuery.isLoading &&
             !ordersQuery.isError &&
-            orders.length > 0 && (<div className="space-y-5">
+            orders.length > 0 && (<div className="admin-record-list border-y border-darb-gold/25">
             {orders.map((order) => {
                 const isEditing = editingOrderId === order._id;
                 const previewItems = order.items?.slice(0, 3) || [];

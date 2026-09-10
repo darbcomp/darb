@@ -1036,7 +1036,7 @@ function AdminProducts() {
   };
 
   return (
-    <section>
+    <section className="admin-page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -1852,7 +1852,7 @@ function AdminProducts() {
                 products.length}
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="admin-record-list border-y border-darb-gold/25">
               {products.map(
                 (
                   product
@@ -1877,10 +1877,10 @@ function AdminProducts() {
                       key={
                         product._id
                       }
-                      className="overflow-hidden rounded-[1.5rem] border border-darb-gold/20 bg-white shadow-soft"
+                      className="admin-record-row border-b border-darb-gold/15 last:border-0"
                     >
-                      <div className="grid gap-5 p-5 sm:grid-cols-[150px_1fr]">
-                        <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
+                      <div className="grid gap-4 py-4 sm:grid-cols-[84px_1fr] sm:items-start">
+                        <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg bg-darb-green">
                           {mainImage?.url ? (
                             <img
                               src={
@@ -1898,14 +1898,10 @@ function AdminProducts() {
                                 Darb
                               </p>
 
-                              <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-darb-beige/70">
-                                Visual
-                                soon
-                              </p>
                             </div>
                           )}
 
-                          <span className="absolute bottom-3 right-3 rounded-full bg-darb-black/75 px-2.5 py-1 text-xs font-semibold text-white">
+                          <span className="absolute bottom-1 right-1 rounded bg-darb-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                             {product
                               .images
                               ?.length ||
@@ -1926,15 +1922,13 @@ function AdminProducts() {
                                 "Darb"}
                             </span>
 
+                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                              {product.isActive ? "Active" : "Inactive"}
+                            </span>
+
                             {product.isPlaceholder && (
                               <span className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
                                 Placeholder
-                              </span>
-                            )}
-
-                            {!product.isActive && (
-                              <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                                Inactive
                               </span>
                             )}
 
@@ -1942,6 +1936,14 @@ function AdminProducts() {
                               <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">
                                 Featured
                               </span>
+                            )}
+
+                            {product.isBestSeller && (
+                              <span className="rounded-full bg-darb-gold/20 px-3 py-1 text-xs font-semibold text-darb-green">Best Seller</span>
+                            )}
+
+                            {product.isNewArrival && (
+                              <span className="rounded-full bg-darb-green px-3 py-1 text-xs font-semibold text-darb-beige">New</span>
                             )}
 
                             {missing.length ===
@@ -1970,19 +1972,15 @@ function AdminProducts() {
                             )}
                           </div>
 
-                          <h2 className="mt-3 font-display text-3xl text-darb-green">
+                          <h2 className="mt-2 font-display text-2xl text-darb-green">
                             {
                               product.name
                             }
                           </h2>
 
-                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-darb-muted">
-                            {product.shortDescription ||
-                              product.description ||
-                              "No description yet."}
-                          </p>
+                          {(product.arabicName || product.inspiredBy) && <p className="mt-1 text-xs text-darb-muted">{product.arabicName || `Inspired by ${product.inspiredBy}`}</p>}
 
-                          <div className="mt-4 grid gap-3 text-sm text-darb-muted sm:grid-cols-2">
+                          <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs text-darb-muted lg:grid-cols-4">
                             <p>
                               Price:{" "}
                               <span className="font-semibold text-darb-black">
@@ -2010,7 +2008,7 @@ function AdminProducts() {
                                 {product.sizeLabel ||
                                   (product.sizeMl
                                     ? `${product.sizeMl} ML`
-                                    : "50 ML")}
+                                    : "Not set")}
                               </span>
                             </p>
 
@@ -2044,7 +2042,7 @@ function AdminProducts() {
                             </p>
                           )}
 
-                          <div className="mt-5 flex flex-wrap gap-3">
+                          <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={() =>
@@ -2052,7 +2050,7 @@ function AdminProducts() {
                                   product
                                 )
                               }
-                              className="inline-flex items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
+                              className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-xs font-semibold text-darb-beige transition hover:bg-darb-black"
                             >
                               <Edit
                                 size={
@@ -2074,7 +2072,7 @@ function AdminProducts() {
                                 deleteMutation.isPending ||
                                 !product.isActive
                               }
-                              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Trash2
                                 size={

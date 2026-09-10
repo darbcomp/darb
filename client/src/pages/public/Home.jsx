@@ -1185,7 +1185,7 @@ function Home() {
           </div>
 
           {bestSellersQuery.isLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
               {Array.from({
                 length: 8,
               }).map(
@@ -1194,7 +1194,7 @@ function Home() {
                     key={
                       index
                     }
-                    className="aspect-[3/5] animate-pulse rounded-[1.25rem] bg-darb-beige/10 sm:rounded-[1.5rem]"
+                    className="aspect-[3/5] w-[82vw] max-w-[21rem] shrink-0 snap-start animate-pulse rounded-[1.25rem] bg-darb-beige/10 sm:w-auto sm:max-w-none sm:rounded-[1.5rem]"
                   />
                 )
               )}
@@ -1214,22 +1214,16 @@ function Home() {
             </div>
           ) : bestSellerProducts.length >
             0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
               {bestSellerProducts
                 .slice(0, 8)
                 .map(
                   (
                     product
                   ) => (
-                    <ProductCard
-                      key={
-                        product._id ||
-                        product.slug
-                      }
-                      product={
-                        product
-                      }
-                    />
+                    <div key={product._id || product.slug} className="w-[82vw] max-w-[21rem] shrink-0 snap-start sm:w-auto sm:max-w-none">
+                      <ProductCard product={product} />
+                    </div>
                   )
                 )}
             </div>

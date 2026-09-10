@@ -947,7 +947,7 @@ function AdminSettings() {
   ========================= */
 
   return (
-    <section>
+    <section className="admin-page admin-settings">
       {/* HEADER */}
 
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">

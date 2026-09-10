@@ -265,7 +265,7 @@ function AdminCategories() {
   };
 
   return (
-    <section>
+    <section className="admin-page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -559,7 +559,7 @@ function AdminCategories() {
       )}
 
       {!categoriesQuery.isLoading && !categoriesQuery.isError && (
-        <div className="grid gap-5 xl:grid-cols-2">
+        <div className="admin-record-list border-y border-darb-gold/25">
           {filteredCategories.map((category) => {
             const stats = category.productStats || {
               totalProducts: 0,
@@ -570,10 +570,10 @@ function AdminCategories() {
             return (
               <article
                 key={category._id || category.slug}
-                className="overflow-hidden rounded-[1.5rem] border border-darb-gold/20 bg-white shadow-soft"
+                className="admin-record-row border-b border-darb-gold/15 last:border-0"
               >
-                <div className="grid gap-5 p-5 sm:grid-cols-[150px_1fr]">
-                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
+                <div className="grid gap-4 py-4 sm:grid-cols-[84px_1fr] sm:items-start">
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg bg-darb-green">
                     {category.image?.url ? (
                       <img
                         src={category.image.url}
@@ -611,15 +611,15 @@ function AdminCategories() {
                       </span>
                     </div>
 
-                    <h2 className="mt-3 font-display text-3xl text-darb-green">
+                    <h2 className="mt-2 font-display text-2xl text-darb-green">
                       {category.name}
                     </h2>
 
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-darb-muted">
+                    <p className="mt-1 line-clamp-1 text-xs leading-5 text-darb-muted">
                       {category.description || "No category description yet."}
                     </p>
 
-                    <div className="mt-4 grid gap-3 text-sm text-darb-muted sm:grid-cols-2">
+                    <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs text-darb-muted lg:grid-cols-4">
                       <p>
                         Total products:{" "}
                         <span className="font-semibold text-darb-black">
@@ -649,11 +649,11 @@ function AdminCategories() {
                       </p>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap gap-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => openEditForm(category)}
-                        className="inline-flex items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
+                        className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-xs font-semibold text-darb-beige transition hover:bg-darb-black"
                       >
                         <Edit size={16} />
                         Edit
@@ -663,7 +663,7 @@ function AdminCategories() {
                         type="button"
                         onClick={() => handleDeactivate(category)}
                         disabled={deleteMutation.isPending}
-                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Trash2 size={16} />
                         Deactivate

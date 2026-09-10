@@ -435,7 +435,7 @@ function AdminBundles() {
   };
 
   return (
-    <section>
+    <section className="admin-page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">

@@ -6,7 +6,7 @@ import Navbar from "./Navbar";
 
 function AdminLayout() {
   return (
-    <div className="min-h-screen bg-darb-cream text-darb-black">
+    <div className="admin-workspace min-h-screen bg-darb-cream text-darb-black">
       <Navbar />
 
       <main>
@@ -14,7 +14,7 @@ function AdminLayout() {
           className="
             mx-auto
             w-full
-            max-w-7xl
+            max-w-[1500px]
             px-5
             py-8
 

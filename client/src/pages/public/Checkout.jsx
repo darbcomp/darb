@@ -105,6 +105,8 @@ function Checkout() {
     const [appliedCouponCode, setAppliedCouponCode] = useState("");
     const [error, setError] = useState("");
     const [paymentProof, setPaymentProof] = useState(null);
+    const [paymentProofError, setPaymentProofError] = useState("");
+    const [isProofDragging, setIsProofDragging] = useState(false);
     const [copyStatus, setCopyStatus] = useState("idle");
     const copyResetRef = useRef(null);
     const paymentProofPreview = useMemo(() => (paymentProof ? URL.createObjectURL(paymentProof) : ""), [paymentProof]);
@@ -276,24 +278,29 @@ function Checkout() {
             [name]: type === "checkbox" ? checked : value,
         }));
     };
-    const handlePaymentProofChange = (event) => {
-        const file = event.target.files?.[0] || null;
+    const selectPaymentProof = (file) => {
         if (!file) {
             return;
         }
         if (!ALLOWED_PAYMENT_PROOF_TYPES.includes(file.type)) {
-            setError("Payment proof must be a JPG, PNG, or WEBP image.");
-            event.target.value = "";
+            setPaymentProofError("Choose a JPG, PNG, or WEBP screenshot.");
             return;
         }
         if (file.size > MAX_PAYMENT_PROOF_SIZE) {
-            setError("Payment proof must be 10 MB or smaller.");
-            event.target.value = "";
+            setPaymentProofError("Choose a screenshot that is 10 MB or smaller.");
             return;
         }
-        setError("");
+        setPaymentProofError("");
         setPaymentProof(file);
+    };
+    const handlePaymentProofChange = (event) => {
+        selectPaymentProof(event.target.files?.[0] || null);
         event.target.value = "";
+    };
+    const handlePaymentProofDrop = (event) => {
+        event.preventDefault();
+        setIsProofDragging(false);
+        selectPaymentProof(event.dataTransfer.files?.[0] || null);
     };
     const handleCopyRecipient = async () => {
         const recipient = selectedPaymentMethod?.recipient;
@@ -674,11 +681,11 @@ function Checkout() {
             {settingsQuery.isLoading ? (<p className="mt-4 text-darb-muted">
                 Loading payment
                 methods...
-              </p>) : (<div className="mt-6 grid gap-3">
-                {availablePaymentMethods.map((method) => (<label key={method.key} className={`cursor-pointer rounded-2xl border p-4 transition ${selectedPaymentMethodKey ===
+              </p>) : (<div className="mt-6 border-y border-darb-gold/25">
+                {availablePaymentMethods.map((method) => (<label key={method.key} className={`block cursor-pointer border-b border-darb-gold/15 px-1 py-4 transition last:border-0 ${selectedPaymentMethodKey ===
                     method.key
-                    ? "border-darb-green bg-darb-green/5"
-                    : "border-darb-gold/20 hover:border-darb-gold"}`}>
+                    ? "bg-darb-green/5 px-4"
+                    : "hover:bg-darb-surface/50 hover:px-4"}`}>
                       <div className="flex items-start gap-3">
                         <input type="radio" name="paymentMethod" value={method.key} checked={selectedPaymentMethodKey ===
                     method.key} onChange={handleChange} className="mt-1"/>
@@ -732,50 +739,37 @@ function Checkout() {
                 </div>
               </div>)}
 
-            {selectedPaymentMethod?.requireProof && (<div className="mt-5 rounded-3xl border border-darb-gold/25 bg-darb-cream/60 p-5">
+            {selectedPaymentMethod?.requireProof && (<div className="mt-5 border-t border-darb-gold/25 pt-5">
                 <label className="mb-4 block">
                   <span className="mb-2 block text-sm font-semibold text-darb-green">Sender name *</span>
                   <input name="transferSenderName" value={formData.transferSenderName} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green" placeholder="Name used for the transfer" />
                 </label>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-darb-green">
-                      Transaction Screenshot *
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-darb-muted">
-                      JPG, PNG, or WEBP up to 10 MB. Darb securely optimizes the screenshot before storing it for admin review.
-                    </p>
-                    {!pricing && (<p className="mt-2 text-xs font-semibold text-amber-700">
-                        Wait for the server-confirmed total above before transferring.
-                      </p>)}
-                  </div>
 
-                  {!paymentProof && (<label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black">
-                      <ImagePlus size={17}/>
-                      Upload Proof
-                      <input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="hidden"/>
-                    </label>)}
-                </div>
-
-                {paymentProof && (<div className="mt-4 grid gap-4 rounded-2xl bg-white p-4 sm:grid-cols-[120px_1fr_auto] sm:items-center">
-                    <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green sm:w-28">
+                <p className="font-semibold text-darb-green">Transaction Screenshot *</p>
+                {!paymentProof ? (<label onDragEnter={() => setIsProofDragging(true)} onDragLeave={() => setIsProofDragging(false)} onDragOver={(event) => event.preventDefault()} onDrop={handlePaymentProofDrop} className={`mt-3 flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border border-dashed px-6 py-10 text-center transition focus-within:ring-2 focus-within:ring-darb-gold focus-within:ring-offset-2 ${isProofDragging ? "border-darb-green bg-darb-green/10" : "border-darb-gold/55 bg-darb-surface/60 hover:border-darb-green hover:bg-darb-surface"}`}>
+                    <span className="grid h-14 w-14 place-items-center rounded-full bg-darb-green text-darb-beige"><ImagePlus size={24} aria-hidden="true"/></span>
+                    <span className="mt-4 font-semibold text-darb-green">Choose screenshot</span>
+                    <span className="mt-2 max-w-md text-xs leading-5 text-darb-muted">Upload a screenshot of your completed transfer. JPG, PNG, or WebP up to 10 MB.</span>
+                    <span className="mt-2 text-[11px] text-darb-muted">You can also drag and drop the file here.</span>
+                    <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
+                  </label>) : (<div className="mt-3 grid min-h-64 gap-5 rounded-[1.25rem] border border-darb-gold/40 bg-darb-surface/60 p-5 sm:grid-cols-[160px_1fr_auto] sm:items-center">
+                    <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green sm:w-40">
                       {paymentProofPreview ? (<img src={paymentProofPreview} alt="Payment proof preview" className="h-full w-full object-contain"/>) : null}
                     </div>
 
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-darb-green">
-                        {paymentProof.name}
-                      </p>
-                      <p className="mt-1 text-xs text-darb-muted">
-                        {(paymentProof.size / 1024 / 1024).toFixed(2)} MB · ready to upload
-                      </p>
+                      <p className="truncate font-semibold text-darb-green">{paymentProof.name}</p>
+                      <p className="mt-1 text-xs text-darb-muted">{(paymentProof.size / 1024 / 1024).toFixed(2)} MB · ready with your order</p>
                     </div>
 
-                    <button type="button" onClick={() => setPaymentProof(null)} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">
-                      <Trash2 size={16}/>
-                      Remove
-                    </button>
+                    <div className="flex flex-wrap gap-2 sm:flex-col">
+                      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>Change</span><input aria-label="Change transaction screenshot" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/></label>
+                      <button type="button" onClick={() => { setPaymentProof(null); setPaymentProofError(""); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>Remove</button>
+                    </div>
                   </div>)}
+                <p id="payment-proof-help" className="mt-3 text-xs leading-5 text-darb-muted">Darb securely optimizes the screenshot before private storage and admin review.</p>
+                {paymentProofError && <p id="payment-proof-error" className="mt-2 text-sm font-semibold text-red-700" role="alert">{paymentProofError}</p>}
+                {!pricing && (<p className="mt-2 text-xs font-semibold text-amber-700">Wait for the server-confirmed total above before transferring.</p>)}
               </div>)}
           </div>
 
@@ -783,7 +777,7 @@ function Checkout() {
             ERROR
         ========================== */}
 
-          {error && (<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error && (<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
               {error}
             </div>)}
 

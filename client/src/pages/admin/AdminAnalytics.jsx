@@ -47,7 +47,7 @@ function AdminAnalytics() {
   const topProducts = data?.topProducts || [];
 
   return (
-    <section>
+    <section className="admin-page admin-analytics">
       <div className="mb-8">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
           Admin
@@ -80,7 +80,7 @@ function AdminAnalytics() {
 
       {!analyticsQuery.isLoading && !analyticsQuery.isError && (
         <>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-0 border-y border-darb-gold/25 md:grid-cols-2 xl:grid-cols-4">
             <SmallStat
               title="Revenue"
               value={formatCurrency(summary.totalRevenue)}

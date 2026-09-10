@@ -541,7 +541,7 @@ function AdminReviews() {
     editMutation.isPending;
 
   return (
-    <section>
+    <section className="admin-page">
       {/* Page heading */}
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -575,7 +575,7 @@ function AdminReviews() {
       </div>
 
       {/* Statistics */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-8 grid gap-0 border-y border-darb-gold/25 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
             Total
@@ -1013,7 +1013,7 @@ function AdminReviews() {
       {!reviewsQuery.isLoading &&
         !reviewsQuery.isError &&
         reviews.length > 0 && (
-          <div className="space-y-5">
+          <div className="admin-record-list border-y border-darb-gold/25">
             {reviews.map(
               (review) => (
                 <article

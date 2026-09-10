@@ -30,6 +30,12 @@ function ProductCard({ product }) {
     product.categorySnapshot?.name ||
     "Darb";
 
+  const secondaryLabel =
+    product.arabicName ||
+    (product.inspiredBy
+      ? `Inspired by ${product.inspiredBy}`
+      : "");
+
   const activeVariants = getActiveProductVariants(product);
   const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
   const size = quickVariant?.label || `${activeVariants.length} sizes`;
@@ -95,7 +101,7 @@ function ProductCard({ product }) {
         overflow-hidden
         rounded-[1.25rem]
         border border-darb-gold/20
-        bg-darb-surface
+        bg-[#EFE6D7]
         shadow-soft
         transition duration-300
 
@@ -185,10 +191,18 @@ function ProductCard({ product }) {
                 New
               </span>
             )}
+
+          {product.isFeatured &&
+            !product.isBestSeller &&
+            !product.isPlaceholder && (
+              <span className="rounded-full bg-darb-green px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-beige sm:px-3 sm:text-[10px]">
+                Featured
+              </span>
+            )}
         </div>
       </Link>
 
-      <div className="flex flex-1 flex-col p-3.5 sm:p-5">
+      <div className="flex min-h-[10.5rem] flex-1 flex-col bg-[#EFE6D7] p-3.5 text-darb-green sm:p-5">
         <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2">
           <p className="min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.18em] text-darb-gold sm:text-xs sm:tracking-[0.25em]">
             {categoryName}
@@ -208,9 +222,11 @@ function ProductCard({ product }) {
           </Link>
         </h3>
 
-        <p className="mt-2 hidden line-clamp-2 min-h-[3rem] text-sm leading-6 text-darb-muted sm:block">
-          {product.shortDescription || product.description}
-        </p>
+        {secondaryLabel && (
+          <p className="mt-1 truncate text-xs text-darb-muted">
+            {secondaryLabel}
+          </p>
+        )}
 
         <div className="mt-auto pt-4 sm:pt-5">
           <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
