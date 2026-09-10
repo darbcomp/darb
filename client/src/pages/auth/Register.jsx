@@ -17,6 +17,7 @@ function Register() {
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [showWheel, setShowWheel] = useState(false);
 
   const handleChange = (event) => {
