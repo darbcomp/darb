@@ -9,6 +9,11 @@ const categorySchema = new mongoose.Schema(
       trim: true,
       unique: true,
     },
+    arabicName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     slug: {
       type: String,
       required: true,
@@ -18,6 +23,11 @@ const categorySchema = new mongoose.Schema(
       index: true,
     },
     description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicDescription: {
       type: String,
       trim: true,
       default: "",
@@ -42,6 +52,16 @@ const categorySchema = new mongoose.Schema(
       default: "",
     },
     seoDescription: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicSeoTitle: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicSeoDescription: {
       type: String,
       trim: true,
       default: "",

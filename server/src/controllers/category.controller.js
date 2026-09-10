@@ -44,11 +44,15 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
 
   const payload = {
     name,
+    arabicName: body.arabicName?.trim() || existingCategory?.arabicName || "",
     description: body.description?.trim() || "",
+    arabicDescription: body.arabicDescription?.trim() || existingCategory?.arabicDescription || "",
     isActive: parseBoolean(body.isActive, true),
     sortOrder: parseNumber(body.sortOrder, 0),
     seoTitle: body.seoTitle?.trim() || "",
     seoDescription: body.seoDescription?.trim() || "",
+    arabicSeoTitle: body.arabicSeoTitle?.trim() || existingCategory?.arabicSeoTitle || "",
+    arabicSeoDescription: body.arabicSeoDescription?.trim() || existingCategory?.arabicSeoDescription || "",
   };
 
   if (body.slug) {
@@ -98,7 +102,7 @@ const getCategories = async (req, res) => {
 
     const categories = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 })
-      .select("name slug description image sortOrder seoTitle seoDescription")
+      .select("name arabicName slug description arabicDescription image sortOrder seoTitle seoDescription arabicSeoTitle arabicSeoDescription")
       .lean();
 
     return res.status(200).json({
@@ -127,7 +131,7 @@ const getCategoryBySlug = async (req, res) => {
       slug: req.params.slug,
       isActive: true,
     })
-      .select("name slug description image sortOrder seoTitle seoDescription")
+      .select("name arabicName slug description arabicDescription image sortOrder seoTitle seoDescription arabicSeoTitle arabicSeoDescription")
       .lean();
 
     if (!category) {

@@ -35,6 +35,7 @@ const emptyForm = {
   name: "",
   arabicName: "",
   inspiredBy: "",
+  arabicInspiredBy: "",
   productType: "perfume",
   slug: "",
   sku: "",
@@ -42,7 +43,9 @@ const emptyForm = {
   categories: [],
   variants: [{ label: "50 ML", sizeMl: "50", sku: "", price: "1000", compareAtPrice: "", stock: "", isActive: true }],
   shortDescription: "",
+  arabicShortDescription: "",
   description: "",
+  arabicDescription: "",
   price: "",
   compareAtPrice: "",
   costPrice: "",
@@ -51,11 +54,17 @@ const emptyForm = {
   concentration: "",
   scentFamily: "",
   scentFamilies: "",
+  arabicScentFamilies: "",
   bestFor: "",
+  arabicBestFor: "",
   keyNotes: "",
+  arabicKeyNotes: "",
   topNotes: "",
   middleNotes: "",
   baseNotes: "",
+  arabicTopNotes: "",
+  arabicMiddleNotes: "",
+  arabicBaseNotes: "",
   stock: "",
   lowStockThreshold: "3",
   tags: "",
@@ -107,6 +116,7 @@ const productToForm = (product) => ({
   name: product.name || "",
   arabicName: product.arabicName || "",
   inspiredBy: product.inspiredBy || "",
+  arabicInspiredBy: product.arabicInspiredBy || "",
   productType: product.productType || "perfume",
   slug: product.slug || "",
   sku: product.sku || "",
@@ -125,7 +135,9 @@ const productToForm = (product) => ({
     isActive: variant.isActive !== false,
   })),
   shortDescription: product.shortDescription || "",
+  arabicShortDescription: product.arabicShortDescription || "",
   description: product.description || "",
+  arabicDescription: product.arabicDescription || "",
   price: product.price || "",
   compareAtPrice: product.compareAtPrice || "",
   costPrice: product.costPrice || "",
@@ -134,11 +146,17 @@ const productToForm = (product) => ({
   concentration: product.concentration || "",
   scentFamily: product.scentFamily || "",
   scentFamilies: (product.scentFamilies || []).join(", "),
+  arabicScentFamilies: (product.arabicScentFamilies || []).join(", "),
   bestFor: (product.bestFor || []).join(", "),
+  arabicBestFor: (product.arabicBestFor || []).join(", "),
   keyNotes: (product.keyNotes || []).join(", "),
+  arabicKeyNotes: (product.arabicKeyNotes || []).join(", "),
   topNotes: product.scentNotes?.top?.join(", ") || "",
   middleNotes: product.scentNotes?.middle?.join(", ") || "",
   baseNotes: product.scentNotes?.base?.join(", ") || "",
+  arabicTopNotes: product.arabicScentNotes?.top?.join(", ") || "",
+  arabicMiddleNotes: product.arabicScentNotes?.middle?.join(", ") || "",
+  arabicBaseNotes: product.arabicScentNotes?.base?.join(", ") || "",
   stock: product.stock ?? "",
   lowStockThreshold: product.lowStockThreshold ?? "3",
   tags: product.tags?.join(", ") || "",
@@ -898,6 +916,9 @@ function AdminProducts() {
       formData.set("scentFamilies", JSON.stringify(splitCommaText(form.scentFamilies)));
       formData.set("bestFor", JSON.stringify(splitCommaText(form.bestFor)));
       formData.set("keyNotes", JSON.stringify(splitCommaText(form.keyNotes)));
+      formData.set("arabicScentFamilies", JSON.stringify(splitCommaText(form.arabicScentFamilies)));
+      formData.set("arabicBestFor", JSON.stringify(splitCommaText(form.arabicBestFor)));
+      formData.set("arabicKeyNotes", JSON.stringify(splitCommaText(form.arabicKeyNotes)));
 
       formData.append(
         "scentNotes",
@@ -917,6 +938,15 @@ function AdminProducts() {
             splitCommaText(
               form.baseNotes
             ),
+        })
+      );
+
+      formData.append(
+        "arabicScentNotes",
+        JSON.stringify({
+          top: splitCommaText(form.arabicTopNotes),
+          middle: splitCommaText(form.arabicMiddleNotes),
+          base: splitCommaText(form.arabicBaseNotes),
         })
       );
 
@@ -1254,6 +1284,7 @@ function AdminProducts() {
 
               <Field label="Arabic Name" name="arabicName" value={form.arabicName} onChange={handleFormChange} placeholder="Arabic product name" dir="rtl" />
               <Field label="Inspired By" name="inspiredBy" value={form.inspiredBy} onChange={handleFormChange} placeholder="Optional fragrance inspiration" />
+              <Field label="Inspired By — Arabic" name="arabicInspiredBy" value={form.arabicInspiredBy} onChange={handleFormChange} placeholder="اسم العطر المستوحى منه بالعربية" dir="rtl" />
 
               <label><span className="mb-2 block text-sm font-semibold text-darb-green">Product Type</span><select name="productType" value={form.productType} onChange={handleProductTypeChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green"><option value="perfume">Perfume</option><option value="musk">Musk</option></select></label>
 
@@ -1414,6 +1445,9 @@ function AdminProducts() {
 
               <Field label="Best For" name="bestFor" value={form.bestFor} onChange={handleFormChange} placeholder="Evening, gifting, daily wear" />
               <Field label="Key Notes" name="keyNotes" value={form.keyNotes} onChange={handleFormChange} placeholder="Use instead of a note pyramid when appropriate" />
+              <Field label="Scent Families — Arabic" name="arabicScentFamilies" value={form.arabicScentFamilies} onChange={handleFormChange} placeholder="خشبي، مسك، عنبر" dir="rtl" />
+              <Field label="Best For — Arabic" name="arabicBestFor" value={form.arabicBestFor} onChange={handleFormChange} placeholder="مساء، هدايا، استخدام يومي" dir="rtl" />
+              <Field label="Key Notes — Arabic" name="arabicKeyNotes" value={form.arabicKeyNotes} onChange={handleFormChange} placeholder="النوتات الرئيسية بالعربية" dir="rtl" />
 
               <Field
                 label="Top Notes"
@@ -1451,6 +1485,10 @@ function AdminProducts() {
                 placeholder="Musk, Amber, Oud"
               />
 
+              <Field label="Top Notes — Arabic" name="arabicTopNotes" value={form.arabicTopNotes} onChange={handleFormChange} placeholder="برغموت، ليمون" dir="rtl" />
+              <Field label="Middle Notes — Arabic" name="arabicMiddleNotes" value={form.arabicMiddleNotes} onChange={handleFormChange} placeholder="ورد، ياسمين" dir="rtl" />
+              <Field label="Base Notes — Arabic" name="arabicBaseNotes" value={form.arabicBaseNotes} onChange={handleFormChange} placeholder="مسك، عنبر، عود" dir="rtl" />
+
               <div className="md:col-span-2 xl:col-span-3"><SectionHeader title="Story" description="Storefront summary and full fragrance description." /></div>
               <div className="md:col-span-2 xl:col-span-3">
                 <Field
@@ -1463,6 +1501,17 @@ function AdminProducts() {
                     handleFormChange
                   }
                   placeholder="One-line product summary"
+                />
+              </div>
+
+              <div className="md:col-span-2 xl:col-span-3">
+                <Field
+                  label="Short Description — Arabic"
+                  name="arabicShortDescription"
+                  value={form.arabicShortDescription}
+                  onChange={handleFormChange}
+                  placeholder="ملخص قصير للمنتج بالعربية"
+                  dir="rtl"
                 />
               </div>
 
@@ -1483,6 +1532,23 @@ function AdminProducts() {
                     rows={4}
                     className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                     placeholder="Full product story and details"
+                  />
+                </label>
+              </div>
+
+              <div className="md:col-span-2 xl:col-span-3">
+                <label>
+                  <span className="mb-2 block text-sm font-semibold text-darb-green">
+                    Description — Arabic
+                  </span>
+                  <textarea
+                    name="arabicDescription"
+                    value={form.arabicDescription}
+                    onChange={handleFormChange}
+                    rows={4}
+                    dir="rtl"
+                    className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                    placeholder="الوصف الكامل للعطر بالعربية"
                   />
                 </label>
               </div>

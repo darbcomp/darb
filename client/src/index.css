@@ -123,3 +123,39 @@ select {
     border-left: 0;
   }
 }
+
+/* Darb bilingual / RTL foundation */
+html[dir="rtl"] body {
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+html[dir="rtl"] .darb-mobile-drawer {
+  left: auto !important;
+  right: 0 !important;
+  animation-name: darbDrawerEnterRtl;
+}
+
+@keyframes darbDrawerEnterRtl {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+html[dir="rtl"] input[type="email"],
+html[dir="rtl"] input[type="tel"],
+html[dir="rtl"] input[type="url"],
+html[dir="rtl"] input[autocomplete="email"],
+html[dir="rtl"] input[autocomplete="tel"] {
+  direction: ltr;
+  text-align: left;
+}
+
+html[dir="rtl"] [data-darb-ltr="true"] {
+  direction: ltr;
+  text-align: left;
+}
+

@@ -12,7 +12,9 @@ import { formatCurrency } from "../../utils/formatCurrency";
 const emptyForm = {
   name: "",
   title: "",
+  arabicTitle: "",
   description: "",
+  arabicDescription: "",
   scope: "sitewide",
   discountType: "percentage",
   discountValue: "",
@@ -90,7 +92,9 @@ const offerToForm = (offer) => {
   return {
     name: offer.name || "",
     title: offer.title || "",
+    arabicTitle: offer.arabicTitle || "",
     description: offer.description || "",
+    arabicDescription: offer.arabicDescription || "",
     scope: offer.scope || offer.offerType || "sitewide",
     discountType: offer.discountType || "percentage",
     discountValue: offer.discountValue || "",
@@ -112,7 +116,9 @@ const createPayload = (form) => {
   return {
     name: form.name.trim(),
     title: form.title.trim(),
+    arabicTitle: form.arabicTitle.trim(),
     description: form.description.trim(),
+    arabicDescription: form.arabicDescription.trim(),
     scope: form.scope,
     offerType: form.scope,
     discountType: form.discountType,
@@ -500,6 +506,20 @@ function AdminOffers() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Public Title — Arabic
+                </label>
+                <input
+                  name="arabicTitle"
+                  value={form.arabicTitle}
+                  onChange={handleFormChange}
+                  dir="rtl"
+                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="عنوان العرض بالعربية"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Scope
                 </label>
 
@@ -674,6 +694,21 @@ function AdminOffers() {
                   rows={3}
                   className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Describe the automatic offer"
+                />
+              </div>
+
+              <div className="md:col-span-2 xl:col-span-3">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Description — Arabic
+                </label>
+                <textarea
+                  name="arabicDescription"
+                  value={form.arabicDescription}
+                  onChange={handleFormChange}
+                  rows={3}
+                  dir="rtl"
+                  className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="وصف العرض بالعربية"
                 />
               </div>
 

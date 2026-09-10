@@ -7,6 +7,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import "./index.css";
 import AppErrorBoundary from "./components/common/AppErrorBoundary.jsx";
+import { LanguageProvider } from "./context/LanguageContext.jsx";
 
 const queryClient = new QueryClient();
 
@@ -14,11 +15,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <CartProvider>
-            <AppErrorBoundary><App /></AppErrorBoundary>
-          </CartProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <CartProvider>
+              <AppErrorBoundary><App /></AppErrorBoundary>
+            </CartProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

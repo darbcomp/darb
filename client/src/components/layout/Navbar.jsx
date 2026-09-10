@@ -27,6 +27,7 @@ import {
 } from "../../context/AuthContext";
 
 import { useCart } from "../../context/useCart";
+import { useLanguage } from "../../context/LanguageContext";
 import { getSearchSuggestions } from "../../api/productApi";
 
 
@@ -117,6 +118,11 @@ function Navbar() {
   const {
     itemCount,
   } = useCart();
+
+  const {
+    language,
+    toggleLanguage,
+  } = useLanguage();
 
   const location =
     useLocation();
@@ -786,6 +792,18 @@ function Navbar() {
             ========================== */}
 
             <div className="flex items-center justify-self-end gap-2">
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-darb-gold/35 px-3 text-xs font-bold text-darb-green transition hover:border-darb-green hover:bg-darb-green hover:text-darb-beige"
+                  aria-label={language === "ar" ? "Switch to English" : "Switch to Arabic"}
+                  title={language === "ar" ? "English" : "العربية"}
+                >
+                  {language === "ar" ? "EN" : "ع"}
+                </button>
+              )}
+
               {/* Search */}
 
               <button
@@ -999,7 +1017,7 @@ function Navbar() {
             className="absolute inset-0 bg-darb-black/45 backdrop-blur-[1px]"
           />
 
-          <aside className="darb-drawer-enter absolute left-0 top-0 flex h-full w-[86%] max-w-[350px] flex-col bg-darb-cream shadow-2xl">
+          <aside className="darb-mobile-drawer darb-drawer-enter absolute left-0 top-0 flex h-full w-[86%] max-w-[350px] flex-col bg-darb-cream shadow-2xl">
             {/* Header */}
 
             <div className="flex items-center justify-between border-b border-darb-gold/20 px-6 py-5">
@@ -1231,6 +1249,22 @@ function Navbar() {
                   </NavLink>
                 )}
               </nav>
+
+              {!isAdmin && (
+                <div className="mt-7 flex items-center justify-between border-y border-darb-gold/15 py-4">
+                  <span className="text-sm font-semibold text-darb-green">
+                    Language
+                  </span>
+                  <button
+                    type="button"
+                    onClick={toggleLanguage}
+                    className="rounded-full border border-darb-gold/35 px-4 py-2 text-sm font-semibold text-darb-green"
+                    aria-label={language === "ar" ? "Switch to English" : "Switch to Arabic"}
+                  >
+                    {language === "ar" ? "English" : "العربية"}
+                  </button>
+                </div>
+              )}
 
               {/* =========================
                   MOBILE ROLE ACTION

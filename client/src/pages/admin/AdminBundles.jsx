@@ -12,7 +12,9 @@ import { formatCurrency } from "../../utils/formatCurrency";
 const emptyForm = {
   name: "",
   title: "",
+  arabicTitle: "",
   description: "",
+  arabicDescription: "",
   bundleType: "any_products",
   requiredQuantity: "2",
   specificItems: "",
@@ -128,7 +130,9 @@ const bundleToForm = (bundle) => {
   return {
     name: bundle.name || "",
     title: bundle.title || "",
+    arabicTitle: bundle.arabicTitle || "",
     description: bundle.description || "",
+    arabicDescription: bundle.arabicDescription || "",
     bundleType: bundle.bundleType || "any_products",
     requiredQuantity: bundle.requiredQuantity || "2",
     specificItems: specificItemsToText(bundle.specificItems),
@@ -158,7 +162,9 @@ const createPayload = (form) => {
   const values = {
     name: form.name.trim(),
     title: form.title.trim(),
+    arabicTitle: form.arabicTitle.trim(),
     description: form.description.trim(),
+    arabicDescription: form.arabicDescription.trim(),
     bundleType: form.bundleType,
     requiredQuantity: Number(form.requiredQuantity) || 2,
     specificItems: parseSpecificItems(form.specificItems),
@@ -591,6 +597,20 @@ function AdminBundles() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Public Title — Arabic
+                </label>
+                <input
+                  name="arabicTitle"
+                  value={form.arabicTitle}
+                  onChange={handleFormChange}
+                  dir="rtl"
+                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="عنوان الباقة بالعربية"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Bundle Type
                 </label>
 
@@ -786,6 +806,21 @@ function AdminBundles() {
                   rows={3}
                   className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Describe the bundle"
+                />
+              </div>
+
+              <div className="md:col-span-2 xl:col-span-3">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Description — Arabic
+                </label>
+                <textarea
+                  name="arabicDescription"
+                  value={form.arabicDescription}
+                  onChange={handleFormChange}
+                  rows={3}
+                  dir="rtl"
+                  className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="وصف الباقة بالعربية"
                 />
               </div>
 

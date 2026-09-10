@@ -37,6 +37,8 @@ import {
 import ProductCard from "../../components/product/ProductCard";
 import { getPublicBundles } from "../../api/bundleApi";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { localizeBundle, localizeCategory } from "../../utils/localizedContent";
 
 const categoryVisuals = {
   men: "/images/categories/for-him.webp",
@@ -48,14 +50,16 @@ const categoryVisuals = {
 const fallbackCategories = [
   {
     name: "Men",
+    arabicName: "رجالي",
     slug: "men",
   },
   {
     name: "Women",
+    arabicName: "نسائي",
     slug: "women",
   },
-  { name: "Unisex", slug: "unisex" },
-  { name: "Musk", slug: "musk" },
+  { name: "Unisex", arabicName: "للجنسين", slug: "unisex" },
+  { name: "Musk", arabicName: "مسك", slug: "musk" },
 ];
 
 const initialReviewForm = {
@@ -90,8 +94,10 @@ const reviewPrompts = [
 ];
 
 function CategoryCard({
-  category,
+  category: sourceCategory,
 }) {
+  const { language } = useLanguage();
+  const category = localizeCategory(sourceCategory, language);
   const image =
     categoryVisuals[
       category.slug
@@ -134,7 +140,9 @@ function CategoryCard({
   );
 }
 
-function BundleCard({ bundle }) {
+function BundleCard({ bundle: sourceBundle }) {
+  const { language } = useLanguage();
+  const bundle = localizeBundle(sourceBundle, language);
   const price = Number(bundle.fixedBundlePrice || (bundle.discountType === "fixed_bundle_price" ? bundle.discountValue : 0));
   const detail = bundle.description || (bundle.requiredQuantity ? `Choose ${bundle.requiredQuantity} Darb fragrances.` : "");
   return <article className="flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-darb-surface shadow-soft">
@@ -1185,7 +1193,7 @@ function Home() {
           </div>
 
           {bestSellersQuery.isLoading ? (
-            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
               {Array.from({
                 length: 8,
               }).map(
@@ -1194,7 +1202,7 @@ function Home() {
                     key={
                       index
                     }
-                    className="aspect-[3/5] w-[82vw] max-w-[21rem] shrink-0 snap-start animate-pulse rounded-[1.25rem] bg-darb-beige/10 sm:w-auto sm:max-w-none sm:rounded-[1.5rem]"
+                    className="aspect-[3/5] min-w-0 animate-pulse rounded-[1.25rem] bg-darb-beige/10 sm:rounded-[1.5rem]"
                   />
                 )
               )}
@@ -1214,14 +1222,14 @@ function Home() {
             </div>
           ) : bestSellerProducts.length >
             0 ? (
-            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
               {bestSellerProducts
                 .slice(0, 8)
                 .map(
                   (
                     product
                   ) => (
-                    <div key={product._id || product.slug} className="w-[82vw] max-w-[21rem] shrink-0 snap-start sm:w-auto sm:max-w-none">
+                    <div key={product._id || product.slug} className="min-w-0">
                       <ProductCard product={product} />
                     </div>
                   )

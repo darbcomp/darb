@@ -23,7 +23,22 @@ const bundleSchema = new mongoose.Schema(
       required: [true, "Bundle name is required"],
       trim: true,
     },
+    title: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicTitle: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicDescription: {
       type: String,
       trim: true,
       default: "",

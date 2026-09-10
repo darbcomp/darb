@@ -142,7 +142,7 @@ const serializeOffer = (value) => {
 
   return {
     ...offer,
-    title: offer?.name || "",
+    title: offer?.title || offer?.name || "",
     scope: offer?.offerType || "sitewide",
     startsAt: offer?.startAt || null,
     endsAt: offer?.endAt || null,
@@ -173,7 +173,10 @@ const buildOfferPayload = async (body = {}) => {
 
   return {
     name,
+    title: String(body.title || name).trim(),
+    arabicTitle: String(body.arabicTitle || "").trim(),
     description: String(body.description || "").trim(),
+    arabicDescription: String(body.arabicDescription || "").trim(),
     offerType,
     discountType,
     discountValue: parseNumber(body.discountValue, 0),

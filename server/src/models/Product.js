@@ -39,8 +39,11 @@ const productSchema = new mongoose.Schema({
   },
   categories: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }], default: [], index: true },
   inspiredBy: { type: String, trim: true, default: "" },
+  arabicInspiredBy: { type: String, trim: true, default: "" },
   shortDescription: { type: String, trim: true, default: "" },
+  arabicShortDescription: { type: String, trim: true, default: "" },
   description: { type: String, trim: true, default: "" },
+  arabicDescription: { type: String, trim: true, default: "" },
   price: { type: Number, required: [true, "Product price is required"], min: 0, default: 0 },
   compareAtPrice: { type: Number, min: 0, default: 0 },
   costPrice: { type: Number, min: 0, default: 0, select: false },
@@ -49,9 +52,13 @@ const productSchema = new mongoose.Schema({
   concentration: { type: String, trim: true, default: "" },
   scentFamily: { type: String, trim: true, default: "" },
   scentFamilies: { type: [String], default: [] },
+  arabicScentFamilies: { type: [String], default: [] },
   bestFor: { type: [String], default: [] },
+  arabicBestFor: { type: [String], default: [] },
   keyNotes: { type: [String], default: [] },
+  arabicKeyNotes: { type: [String], default: [] },
   scentNotes: { type: scentNotesSchema, default: () => ({ top: [], middle: [], base: [] }) },
+  arabicScentNotes: { type: scentNotesSchema, default: () => ({ top: [], middle: [], base: [] }) },
   images: {
     type: [productImageSchema],
     default: [],
@@ -78,6 +85,9 @@ productSchema.pre("validate", function () {
   this.scentFamilies = [...new Set((this.scentFamilies || []).map((v) => String(v).trim()).filter(Boolean))];
   this.bestFor = [...new Set((this.bestFor || []).map((v) => String(v).trim()).filter(Boolean))];
   this.keyNotes = [...new Set((this.keyNotes || []).map((v) => String(v).trim()).filter(Boolean))];
+  this.arabicScentFamilies = [...new Set((this.arabicScentFamilies || []).map((v) => String(v).trim()).filter(Boolean))];
+  this.arabicBestFor = [...new Set((this.arabicBestFor || []).map((v) => String(v).trim()).filter(Boolean))];
+  this.arabicKeyNotes = [...new Set((this.arabicKeyNotes || []).map((v) => String(v).trim()).filter(Boolean))];
   if (!this.scentFamily && this.scentFamilies.length) this.scentFamily = this.scentFamilies.join(" • ");
   if ((!this.scentFamilies || !this.scentFamilies.length) && this.scentFamily) {
     this.scentFamilies = String(this.scentFamily).split(/\s*[•,]\s*/).map((v) => v.trim()).filter(Boolean);
@@ -85,7 +95,7 @@ productSchema.pre("validate", function () {
   if (this.images?.length && !this.images.some((image) => image.isMain)) this.images[0].isMain = true;
 });
 
-productSchema.index({ name: "text", arabicName: "text", inspiredBy: "text", description: "text", tags: "text", scentFamilies: "text", bestFor: "text", keyNotes: "text" });
+productSchema.index({ name: "text", arabicName: "text", inspiredBy: "text", arabicInspiredBy: "text", description: "text", arabicDescription: "text", tags: "text", scentFamilies: "text", arabicScentFamilies: "text", bestFor: "text", arabicBestFor: "text", keyNotes: "text", arabicKeyNotes: "text" });
 productSchema.index({ category: 1, isActive: 1 });
 productSchema.index({ categories: 1, isActive: 1 });
 productSchema.index({ productType: 1, isActive: 1 });

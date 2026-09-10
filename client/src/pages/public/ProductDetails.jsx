@@ -10,9 +10,11 @@ import ReviewCarousel from "../../components/common/ReviewCarousel";
 import ProductCard from "../../components/product/ProductCard";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
+import { useLanguage } from "../../context/LanguageContext";
 import { flyProductImageToCart } from "../../utils/flyToCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 import { getActiveProductVariants, getStockLabel } from "../../utils/productVariants";
+import { localizeProduct } from "../../utils/localizedContent";
 
 const initialWaitlistForm = { name: "", phone: "", email: "", note: "" };
 const uniqueText = (values = []) => [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
@@ -20,6 +22,7 @@ const uniqueText = (values = []) => [...new Set(values.map((value) => String(val
 function ProductDetailsView({ slug }) {
   const { user } = useAuth();
   const { addToCart } = useCart();
+  const { language } = useLanguage();
   const mobileGalleryRef = useRef(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -30,7 +33,11 @@ function ProductDetailsView({ slug }) {
   const [waitlistError, setWaitlistError] = useState("");
 
   const productQuery = useQuery({ queryKey: ["product", slug], queryFn: () => getProductBySlug(slug), retry: 1, staleTime: 60_000 });
-  const product = productQuery.data?.data;
+  const sourceProduct = productQuery.data?.data;
+  const product = useMemo(
+    () => localizeProduct(sourceProduct, language),
+    [sourceProduct, language]
+  );
   const images = useMemo(() => [...(product?.images || [])].sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain))), [product]);
   const safeImageIndex = Math.min(selectedImageIndex, Math.max(images.length - 1, 0));
   const selectedImage = images[safeImageIndex] || images[0];
@@ -103,7 +110,7 @@ function ProductDetailsView({ slug }) {
   const handleAddToCart = (event) => {
     if (!canPurchase) return;
     const count = Math.min(quantity, selectedStock);
-    addToCart(product, count, selectedVariant?.isLegacy ? null : selectedVariant);
+    addToCart(sourceProduct, count, selectedVariant?.isLegacy ? null : selectedVariant);
     flyProductImageToCart({ imageUrl: selectedImage?.url, origin: event.currentTarget });
     setCartMessage(`${count} ${count === 1 ? "bottle" : "bottles"} added to your cart.`);
   };

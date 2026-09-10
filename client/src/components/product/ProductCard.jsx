@@ -2,12 +2,16 @@ import { ShoppingBag } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useCart } from "../../context/useCart";
+import { useLanguage } from "../../context/LanguageContext";
 import { flyProductImageToCart } from "../../utils/flyToCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 import { getActiveProductVariants } from "../../utils/productVariants";
+import { localizeProduct } from "../../utils/localizedContent";
 
-function ProductCard({ product }) {
+function ProductCard({ product: sourceProduct }) {
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const product = localizeProduct(sourceProduct, language);
   const {
     addToCart,
     items,
@@ -31,10 +35,12 @@ function ProductCard({ product }) {
     "Darb";
 
   const secondaryLabel =
-    product.arabicName ||
-    (product.inspiredBy
-      ? `Inspired by ${product.inspiredBy}`
-      : "");
+    language === "ar"
+      ? sourceProduct?.name || ""
+      : product.arabicName ||
+        (product.inspiredBy
+          ? `Inspired by ${product.inspiredBy}`
+          : "");
 
   const activeVariants = getActiveProductVariants(product);
   const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
@@ -85,7 +91,7 @@ function ProductCard({ product }) {
       return;
     }
 
-    addToCart(product, 1, quickVariant.isLegacy ? null : quickVariant);
+    addToCart(sourceProduct, 1, quickVariant.isLegacy ? null : quickVariant);
 
     flyProductImageToCart({
       imageUrl: mainImage?.url,

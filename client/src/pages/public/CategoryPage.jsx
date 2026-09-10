@@ -30,6 +30,8 @@ import {
 } from "../../api/productApi";
 
 import ProductCard from "../../components/product/ProductCard";
+import { useLanguage } from "../../context/LanguageContext";
+import { localizeCategory } from "../../utils/localizedContent";
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 3000;
@@ -144,6 +146,7 @@ function CategoryPage() {
   const {
     slug,
   } = useParams();
+  const { language } = useLanguage();
 
   const [
     searchParams,
@@ -292,8 +295,10 @@ function CategoryPage() {
     });
 
   const category =
-    categoryQuery.data
-      ?.data;
+    localizeCategory(
+      categoryQuery.data?.data,
+      language
+    );
 
   const categoryName =
     category?.name ||

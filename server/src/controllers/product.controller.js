@@ -83,8 +83,8 @@ const getSearchSuggestions = async (req, res) => {
         { "scentNotes.middle": expression }, { "scentNotes.base": expression },
         { category: { $in: categoryIds } }, { categories: { $in: categoryIds } },
       ],
-    }).select("name slug shortDescription price compareAtPrice stock images category categories variants size sizeMl")
-      .populate("category", "name slug").populate("categories", "name slug").limit(8).lean();
+    }).select("name arabicName slug shortDescription arabicShortDescription price compareAtPrice stock images category categories variants size sizeMl")
+      .populate("category", "name arabicName slug").populate("categories", "name arabicName slug").limit(8).lean();
     return res.status(200).json({ success: true, data: { products, categories } });
   } catch {
     return res.status(500).json({ success: false, message: "Search is temporarily unavailable." });
@@ -335,6 +335,14 @@ const buildProductPayload = async (
   const scentFamilies = parseStringArray(body.scentFamilies ?? body.scentFamily ?? existingProduct?.scentFamilies ?? existingProduct?.scentFamily);
   const bestFor = parseStringArray(body.bestFor ?? existingProduct?.bestFor);
   const keyNotes = parseStringArray(body.keyNotes ?? existingProduct?.keyNotes);
+  const arabicScentFamilies = parseStringArray(body.arabicScentFamilies ?? existingProduct?.arabicScentFamilies);
+  const arabicBestFor = parseStringArray(body.arabicBestFor ?? existingProduct?.arabicBestFor);
+  const arabicKeyNotes = parseStringArray(body.arabicKeyNotes ?? existingProduct?.arabicKeyNotes);
+  const arabicScentNotes = parseMaybeJSON(body.arabicScentNotes, {
+    top: parseStringArray(body.arabicTopNotes),
+    middle: parseStringArray(body.arabicMiddleNotes),
+    base: parseStringArray(body.arabicBaseNotes),
+  });
   const tags = parseStringArray(body.tags);
 
   const isPlaceholder = parseBoolean(
@@ -384,8 +392,11 @@ const buildProductPayload = async (
       slug: category.slug,
     },
     inspiredBy: body.inspiredBy !== undefined ? body.inspiredBy?.trim() || "" : existingProduct?.inspiredBy || "",
+    arabicInspiredBy: body.arabicInspiredBy !== undefined ? body.arabicInspiredBy?.trim() || "" : existingProduct?.arabicInspiredBy || "",
     shortDescription: body.shortDescription?.trim() || "",
+    arabicShortDescription: body.arabicShortDescription?.trim() || existingProduct?.arabicShortDescription || "",
     description: body.description?.trim() || "",
+    arabicDescription: body.arabicDescription?.trim() || existingProduct?.arabicDescription || "",
     price: primaryVariant?.price || price,
     compareAtPrice: primaryVariant?.compareAtPrice || parseNumber(body.compareAtPrice, 0),
     costPrice: parseNumber(body.costPrice, 0),
@@ -399,12 +410,20 @@ const buildProductPayload = async (
       "",
     scentFamily: scentFamilies.join(" • ") || body.scentFamily?.trim() || "",
     scentFamilies,
+    arabicScentFamilies,
     bestFor,
+    arabicBestFor,
     keyNotes,
+    arabicKeyNotes,
     scentNotes: {
       top: Array.isArray(scentNotes?.top) ? scentNotes.top : [],
       middle: Array.isArray(scentNotes?.middle) ? scentNotes.middle : [],
       base: Array.isArray(scentNotes?.base) ? scentNotes.base : [],
+    },
+    arabicScentNotes: {
+      top: Array.isArray(arabicScentNotes?.top) ? arabicScentNotes.top : [],
+      middle: Array.isArray(arabicScentNotes?.middle) ? arabicScentNotes.middle : [],
+      base: Array.isArray(arabicScentNotes?.base) ? arabicScentNotes.base : [],
     },
     images,
     variants: cleanVariants,
@@ -660,8 +679,8 @@ const getProducts = async (req, res) => {
 
     const [products, total] = await Promise.all([
       Product.find(filter)
-        .populate("category", "name slug")
-        .populate("categories", "name slug")
+        .populate("category", "name arabicName slug")
+        .populate("categories", "name arabicName slug")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -706,8 +725,8 @@ const getFeaturedProducts = async (req, res) => {
       isActive: true,
       isFeatured: true,
     })
-      .populate("category", "name slug")
-      .populate("categories", "name slug")
+      .populate("category", "name arabicName slug")
+      .populate("categories", "name arabicName slug")
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
@@ -738,8 +757,8 @@ const getProductBySlug = async (req, res) => {
       slug: req.params.slug,
       isActive: true,
     })
-      .populate("category", "name slug description")
-      .populate("categories", "name slug description")
+      .populate("category", "name arabicName slug description arabicDescription")
+      .populate("categories", "name arabicName slug description arabicDescription")
       .lean();
 
     if (!product) {
@@ -786,8 +805,8 @@ const getAdminProducts = async (req, res) => {
     const [products, total] = await Promise.all([
       Product.find(filter)
         .select("+costPrice")
-        .populate("category", "name slug")
-        .populate("categories", "name slug")
+        .populate("category", "name arabicName slug")
+        .populate("categories", "name arabicName slug")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -825,8 +844,8 @@ const getAdminProductById = async (req, res) => {
 
     const product = await Product.findById(req.params.id)
       .select("+costPrice")
-      .populate("category", "name slug")
-      .populate("categories", "name slug")
+      .populate("category", "name arabicName slug")
+      .populate("categories", "name arabicName slug")
       .lean();
 
     if (!product) {
@@ -891,8 +910,8 @@ const createProduct = async (req, res) => {
 
     const populatedProduct = await Product.findById(product._id)
       .select("+costPrice")
-      .populate("category", "name slug")
-      .populate("categories", "name slug");
+      .populate("category", "name arabicName slug")
+      .populate("categories", "name arabicName slug");
 
     return res.status(201).json({
       success: true,
@@ -963,8 +982,8 @@ const updateProduct = async (req, res) => {
 
     const populatedProduct = await Product.findById(product._id)
       .select("+costPrice")
-      .populate("category", "name slug")
-      .populate("categories", "name slug");
+      .populate("category", "name arabicName slug")
+      .populate("categories", "name arabicName slug");
 
     return res.status(200).json({
       success: true,

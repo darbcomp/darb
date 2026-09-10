@@ -7,7 +7,22 @@ const offerSchema = new mongoose.Schema(
       required: [true, "Offer name is required"],
       trim: true,
     },
+    title: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicTitle: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    arabicDescription: {
       type: String,
       trim: true,
       default: "",

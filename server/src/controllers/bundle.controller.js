@@ -232,7 +232,7 @@ const serializeBundle = (value) => {
   return {
     ...bundle,
 
-    title: bundle?.name || "",
+    title: bundle?.title || bundle?.name || "",
 
     categories: bundle?.allowedCategories || [],
 
@@ -325,9 +325,14 @@ const buildBundlePayload = async (body = {}, current = null, file = null) => {
 
   return {
     name,
+    title: String(body.title || current?.title || name).trim(),
+    arabicTitle: String(body.arabicTitle ?? current?.arabicTitle ?? "").trim(),
 
     description: String(
       body.description || ""
+    ).trim(),
+    arabicDescription: String(
+      body.arabicDescription ?? current?.arabicDescription ?? ""
     ).trim(),
     image,
     freeDelivery: parseBoolean(body.freeDelivery, current?.freeDelivery || false),

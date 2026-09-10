@@ -18,12 +18,16 @@ import {
 
 const emptyForm = {
   name: "",
+  arabicName: "",
   slug: "",
   description: "",
+  arabicDescription: "",
   sortOrder: "0",
   isActive: true,
   seoTitle: "",
   seoDescription: "",
+  arabicSeoTitle: "",
+  arabicSeoDescription: "",
   imageUrl: "",
   imageAlt: "",
 };
@@ -85,12 +89,16 @@ const fallbackCategories = [
 
 const categoryToForm = (category) => ({
   name: category.name || "",
+  arabicName: category.arabicName || "",
   slug: category.slug || "",
   description: category.description || "",
+  arabicDescription: category.arabicDescription || "",
   sortOrder: category.sortOrder || "0",
   isActive: Boolean(category.isActive),
   seoTitle: category.seoTitle || "",
   seoDescription: category.seoDescription || "",
+  arabicSeoTitle: category.arabicSeoTitle || "",
+  arabicSeoDescription: category.arabicSeoDescription || "",
   imageUrl: category.image?.url || "",
   imageAlt: category.image?.alt || "",
 });
@@ -99,12 +107,16 @@ const createCategoryFormData = (form, imageFile) => {
   const formData = new FormData();
 
   formData.append("name", form.name);
+  formData.append("arabicName", form.arabicName);
   formData.append("slug", form.slug);
   formData.append("description", form.description);
+  formData.append("arabicDescription", form.arabicDescription);
   formData.append("sortOrder", form.sortOrder);
   formData.append("isActive", String(form.isActive));
   formData.append("seoTitle", form.seoTitle);
   formData.append("seoDescription", form.seoDescription);
+  formData.append("arabicSeoTitle", form.arabicSeoTitle);
+  formData.append("arabicSeoDescription", form.arabicSeoDescription);
   formData.append("imageUrl", form.imageUrl);
   formData.append("imageAlt", form.imageAlt);
 
@@ -361,6 +373,20 @@ function AdminCategories() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Arabic Name
+                </label>
+                <input
+                  name="arabicName"
+                  value={form.arabicName}
+                  onChange={handleChange}
+                  dir="rtl"
+                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="اسم القسم بالعربية"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Slug
                 </label>
 
@@ -415,6 +441,21 @@ function AdminCategories() {
                   rows={4}
                   className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="Category story or short intro"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  Description — Arabic
+                </label>
+                <textarea
+                  name="arabicDescription"
+                  value={form.arabicDescription}
+                  onChange={handleChange}
+                  rows={4}
+                  dir="rtl"
+                  className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="وصف القسم بالعربية"
                 />
               </div>
 
@@ -501,6 +542,20 @@ function AdminCategories() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  SEO Title — Arabic
+                </label>
+                <input
+                  name="arabicSeoTitle"
+                  value={form.arabicSeoTitle}
+                  onChange={handleChange}
+                  dir="rtl"
+                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="عنوان SEO بالعربية"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
                   SEO Description
                 </label>
 
@@ -510,6 +565,19 @@ function AdminCategories() {
                   onChange={handleChange}
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="SEO description"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">
+                  SEO Description — Arabic
+                </label>
+                <input
+                  name="arabicSeoDescription"
+                  value={form.arabicSeoDescription}
+                  onChange={handleChange}
+                  dir="rtl"
+                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  placeholder="وصف SEO بالعربية"
                 />
               </div>
             </div>
