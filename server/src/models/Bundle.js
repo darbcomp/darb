@@ -28,6 +28,12 @@ const bundleSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    image: {
+      url: { type: String, default: "" },
+      publicId: { type: String, default: "", select: false },
+      alt: { type: String, default: "" },
+    },
+    freeDelivery: { type: Boolean, default: false },
     bundleType: {
       type: String,
       enum: ["any_products", "specific_products", "category_products"],

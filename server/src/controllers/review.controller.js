@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const Review = require("../models/Review");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const { cloudinary } = require("../config/cloudinary");
+const { processProductImage } = require("../utils/imageProcessor");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -11,6 +13,16 @@ const cleanText = (value) =>
   typeof value === "string"
     ? value.trim()
     : "";
+
+const uploadReviewImage = async (file) => {
+  if (!file) return { type: "none", url: "", publicId: "", posterUrl: "", alt: "" };
+  if (!file.mimetype?.startsWith("image/")) throw new Error("Review media must be one JPG, PNG, or WEBP image.");
+  const processed = await processProductImage(file.buffer);
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({ folder: "darb/reviews", resource_type: "image", format: "webp" }, (error, result) => error ? reject(error) : resolve({ type: "image", url: result.secure_url, publicId: result.public_id, posterUrl: "", alt: "Darb review" }));
+    stream.end(processed.buffer);
+  });
+};
 
 const parseRating = (value) => {
   const rating = Number(value);
@@ -179,6 +191,7 @@ const serializePublicReview = (
       review.reviewDate,
 
     createdAt: review.createdAt,
+    media: review.media || { type: "none", url: "" },
   };
 };
 
@@ -570,6 +583,7 @@ const createCustomerReview = async (
       });
     }
 
+    const media = await uploadReviewImage(req.file);
     const review =
       await Review.create({
         customer: req.user._id,
@@ -601,6 +615,7 @@ const createCustomerReview = async (
         isVerifiedPurchase: true,
 
         reviewDate: new Date(),
+        media,
       });
 
     return res.status(201).json({
@@ -919,6 +934,7 @@ const createAdminReview = async (
       });
     }
 
+    const media = await uploadReviewImage(req.file);
     const review =
       await Review.create({
         customer: null,
@@ -964,6 +980,7 @@ const createAdminReview = async (
           "approved"
             ? req.user._id
             : null,
+        media,
       });
 
     return res.status(201).json({
@@ -1002,10 +1019,7 @@ const updateAdminReview = async (
       });
     }
 
-    const review =
-      await Review.findById(
-        req.params.id
-      );
+    const review = await Review.findById(req.params.id).select("+media.publicId");
 
     if (!review) {
       return res.status(404).json({
@@ -1208,6 +1222,16 @@ const updateAdminReview = async (
       real order verification only.
     */
 
+    if (req.file) {
+      const previousPublicId = review.media?.publicId;
+      review.media = await uploadReviewImage(req.file);
+      if (previousPublicId) await cloudinary.uploader.destroy(previousPublicId).catch(() => {});
+    } else if (String(req.body.removeImage).toLowerCase() === "true" && review.media?.type === "image") {
+      const previousPublicId = review.media.publicId;
+      review.media = { type: "none", url: "", publicId: "", posterUrl: "", alt: "" };
+      if (previousPublicId) await cloudinary.uploader.destroy(previousPublicId).catch(() => {});
+    }
+
     await review.save();
 
     const populated =
@@ -1264,10 +1288,7 @@ const deleteAdminReview = async (
       });
     }
 
-    const review =
-      await Review.findById(
-        req.params.id
-      );
+    const review = await Review.findById(req.params.id).select("+media.publicId");
 
     if (!review) {
       return res.status(404).json({
@@ -1278,6 +1299,7 @@ const deleteAdminReview = async (
     }
 
     await review.deleteOne();
+    if (review.media?.type === "image" && review.media.publicId) await cloudinary.uploader.destroy(review.media.publicId).catch(() => {});
 
     return res.status(200).json({
       success: true,

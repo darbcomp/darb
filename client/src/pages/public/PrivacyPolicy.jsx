@@ -98,6 +98,7 @@ function PrivacyPolicy() {
             may take place through that provider. Darb does not need to display
             or expose sensitive payment information publicly on the storefront.
           </p>
+          <p>For InstaPay or Vodafone Cash, Darb stores the sender name and securely hosted screenshot proof needed for manual payment review. Private storage identifiers are not exposed in public order responses.</p>
         </PolicySection>
 
         <PolicySection
@@ -136,6 +137,7 @@ function PrivacyPolicy() {
             addresses, and internal order information are not shown publicly
             as part of a review.
           </p>
+          <p>If you choose to upload a review image, it may appear publicly with the approved review. Darb-controlled video testimonials may also be displayed.</p>
         </PolicySection>
 
         <PolicySection
@@ -185,14 +187,19 @@ function PrivacyPolicy() {
           </p>
         </PolicySection>
 
+        <PolicySection number="10" title="Optional Personalization & Marketing">
+          <p>A birthday or date of birth is collected only if you voluntarily provide it and may be used to personalize your Darb experience, offers, or gifts. It is not displayed publicly.</p>
+          <p>Email marketing is optional and only used when you select the marketing consent checkbox. Essential order and account messages do not depend on marketing consent.</p>
+          <p>Meta Pixel or TikTok Pixel may be used only when configured, enabled, and the necessary tracking consent exists. When IDs are absent, disabled, or consent is absent, those pixels do not fire.</p>
+        </PolicySection>
+
         <PolicySection
-          number="10"
+          number="11"
           title="Questions About Your Information"
         >
           <p>
             If you have questions about information connected to your Darb
-            account or order, you can contact the Darb team through the Contact
-            page.
+            account or order, contact Darb at darbcomp@gmail.com or through the Contact page. Darb operates in Egypt and does not publish a customer-service physical address.
           </p>
         </PolicySection>
       </div>

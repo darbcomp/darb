@@ -146,6 +146,14 @@ const getItemCategoryId = (
       item.category
   );
 
+const getItemCategoryIds = (item) => {
+  const categories = Array.isArray(item.productDoc?.categories) ? item.productDoc.categories : [];
+  return [...new Set([getItemCategoryId(item), ...categories.map((category) => toId(category?._id || category))].filter(Boolean))];
+};
+
+const itemMatchesCategories = (item, categoryIds = []) =>
+  getItemCategoryIds(item).some((categoryId) => categoryIds.includes(categoryId));
+
 const getItemSubtotal = (
   items = []
 ) =>
@@ -300,11 +308,7 @@ const getOfferEligibleItems = (
   ) {
     return items.filter(
       (item) =>
-        categoryIds.includes(
-          getItemCategoryId(
-            item
-          )
-        )
+        itemMatchesCategories(item, categoryIds)
     );
   }
 
@@ -607,11 +611,7 @@ const getBundleEligibleItems = (
     ) {
       return items.filter(
         (item) =>
-          allowedCategoryIds.includes(
-            getItemCategoryId(
-              item
-            )
-          )
+          itemMatchesCategories(item, allowedCategoryIds)
       );
     }
 
@@ -624,11 +624,7 @@ const getBundleEligibleItems = (
   ) {
     return items.filter(
       (item) =>
-        allowedCategoryIds.includes(
-          getItemCategoryId(
-            item
-          )
-        )
+        itemMatchesCategories(item, allowedCategoryIds)
     );
   }
 
@@ -1059,7 +1055,8 @@ const calculateBundleDiscounts =
 
       if (
         calculated.amount <= 0 &&
-        !calculated.freeShipping
+        !calculated.freeShipping &&
+        !bundle.freeDelivery
       ) {
         continue;
       }
@@ -1086,7 +1083,7 @@ const calculateBundleDiscounts =
           calculated.amount,
 
         freeShipping:
-          calculated.freeShipping,
+          calculated.freeShipping || Boolean(bundle.freeDelivery),
 
         priority:
           Number(
@@ -1194,11 +1191,7 @@ const couponEligibleItems = (
     eligibleItems =
       eligibleItems.filter(
         (item) =>
-          allowedCategoryIds.includes(
-            getItemCategoryId(
-              item
-            )
-          )
+          itemMatchesCategories(item, allowedCategoryIds)
       );
   }
 
@@ -1222,11 +1215,7 @@ const couponEligibleItems = (
     eligibleItems =
       eligibleItems.filter(
         (item) =>
-          !excludedCategoryIds.includes(
-            getItemCategoryId(
-              item
-            )
-          )
+          !itemMatchesCategories(item, excludedCategoryIds)
       );
   }
 
@@ -1570,6 +1559,19 @@ const calculateCartPricing =
             "Coupon is valid, but the automatic discount is better and cannot be combined with it.";
         }
       }
+    }
+
+    // Launch rule: a cart receives one promotional benefit only.
+    const singleBenefitPool = couponResult.discount
+      ? [couponResult.discount]
+      : automaticDiscounts;
+    selectedDiscounts = singleBenefitPool
+      .slice()
+      .sort((a, b) => discountValueIncludingShipping([b], baseDeliveryFee) - discountValueIncludingShipping([a], baseDeliveryFee))
+      .slice(0, 1);
+    if (couponResult.discount) {
+      couponStatus = "valid";
+      couponMessage = "Coupon selected as this order's single promotional benefit.";
     }
 
     const discountTotal =

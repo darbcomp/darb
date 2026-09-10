@@ -4,6 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, ImagePlus, Trash2 } from "lucide-react";
 import { createOrder, previewOrder } from "../../api/orderApi";
 import { getPublicSettings } from "../../api/settingsApi";
+import { getMyRewards } from "../../api/rewardApi";
+import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024;
@@ -25,12 +27,18 @@ const initialFormData = {
     notes: "",
     paymentMethod: "cash_on_delivery",
     couponCode: "",
+    transferSenderName: "",
+    isGift: false,
+    giftMessage: "",
+    birthday: "",
+    entitlementId: "",
+    marketingConsent: false,
 };
 const defaultSettings = {
     delivery: {
-        defaultFee: 0,
+        defaultFee: 135,
         freeDeliveryThreshold: 0,
-        estimatedDeliveryText: "Delivery timing will be confirmed after placing the order.",
+        estimatedDeliveryText: "3–5 business days",
     },
     paymentMethods: {
         cashOnDelivery: {
@@ -41,18 +49,18 @@ const defaultSettings = {
             requireProof: false,
         },
         instapay: {
-            enabled: false,
+            enabled: true,
             label: "InstaPay",
             instructions: "Transfer the exact order total, then upload a screenshot of the successful transaction.",
-            recipient: "01099589674",
+            recipient: "+20 10 99589674",
             requireProof: true,
         },
         vodafoneCash: {
-            enabled: false,
+            enabled: true,
             label: "Vodafone Cash",
-            instructions: "",
-            recipient: "",
-            requireProof: false,
+            instructions: "Transfer the full order total, then upload a screenshot of the successful transaction.",
+            recipient: "+20 10 99589674",
+            requireProof: true,
         },
         paymobCard: {
             enabled: false,
@@ -90,6 +98,7 @@ const paymentMethodMap = [
     },
 ];
 function Checkout() {
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { items, isEmpty, subtotal, productSavings, itemCount, clearCart } = useCart();
     const [formData, setFormData] = useState(initialFormData);
@@ -126,14 +135,17 @@ function Checkout() {
         queryFn: getPublicSettings,
         retry: 1,
     });
+    const rewardsQuery = useQuery({ queryKey: ["my-rewards"], queryFn: getMyRewards, enabled: Boolean(user) });
     /* =========================
        ORDER PREVIEW
     ========================== */
     const previewQuery = useQuery({
-        queryKey: ["checkout-preview", checkoutItems, appliedCouponCode],
+        queryKey: ["checkout-preview", checkoutItems, appliedCouponCode, formData.entitlementId, formData.governorate],
         queryFn: () => previewOrder({
             items: checkoutItems,
             couponCode: appliedCouponCode,
+            shippingAddress: { governorate: formData.governorate },
+            entitlementId: formData.entitlementId,
         }),
         enabled: !isEmpty && checkoutItems.length > 0,
         retry: 1,
@@ -159,7 +171,7 @@ function Checkout() {
                 requireProof: Boolean(settingsMethod?.requireProof),
             };
         })
-            .filter((method) => method.enabled);
+            .filter((method) => method.enabled && method.key !== "paymob_card");
         if (methods.length === 0) {
             return [
                 {
@@ -255,10 +267,10 @@ function Checkout() {
        FORM CHANGE
     ========================== */
     const handleChange = (event) => {
-        const { name, value, } = event.target;
+        const { name, value, type, checked } = event.target;
         setFormData((current) => ({
             ...current,
-            [name]: value,
+            [name]: type === "checkbox" ? checked : value,
         }));
     };
     const handlePaymentProofChange = (event) => {
@@ -296,6 +308,7 @@ function Checkout() {
        COUPON
     ========================== */
     const handleApplyCoupon = () => {
+        setFormData((current) => ({ ...current, entitlementId: "" }));
         setAppliedCouponCode(formData.couponCode
             .trim()
             .toUpperCase());
@@ -340,6 +353,9 @@ function Checkout() {
             !paymentProof) {
             return "Please upload the payment transaction screenshot.";
         }
+        if (selectedPaymentMethod?.requireProof && !formData.transferSenderName.trim()) {
+            return "Sender name is required for transfer payments.";
+        }
         return "";
     };
     /* =========================
@@ -365,6 +381,12 @@ function Checkout() {
             couponCode: appliedCouponCode,
             paymentMethod: selectedPaymentMethodKey,
             customerNotes: formData.notes.trim(),
+            paymentSenderName: formData.transferSenderName.trim(),
+            isGift: formData.isGift,
+            giftMessage: formData.isGift ? formData.giftMessage.trim() : "",
+            birthday: formData.birthday || null,
+            entitlementId: formData.entitlementId || "",
+            marketingConsent: formData.marketingConsent,
         };
         if (selectedPaymentMethod?.requireProof) {
             const payload = new FormData();
@@ -505,6 +527,12 @@ function Checkout() {
 
                 <input name="email" value={formData.email} onChange={handleChange} type="email" className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="example@email.com"/>
               </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">Birthday (optional)</label>
+                <input name="birthday" value={formData.birthday} onChange={handleChange} type="date" className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" />
+                <p className="mt-2 text-xs text-darb-muted">Darb might have something waiting for you.</p>
+              </div>
             </div>
           </div>
 
@@ -597,8 +625,33 @@ function Checkout() {
             defaultSettings
                 .delivery
                 .estimatedDeliveryText}
+              <p className="mt-2 text-xs">Egypt delivery only. You may inspect the package at delivery. Wrong or damaged/leaking items require photo or video proof and should be reported within 2 days or 1 day respectively.</p>
             </div>
           </div>
+
+          <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+            <label className="flex cursor-pointer items-center gap-3 font-semibold text-darb-green">
+              <input type="checkbox" name="isGift" checked={formData.isGift} onChange={handleChange} />
+              This is a gift
+            </label>
+            {formData.isGift && (
+              <div className="mt-5">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">Gift-card message (optional)</label>
+                <textarea name="giftMessage" value={formData.giftMessage} onChange={handleChange} maxLength={500} rows={3} className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Leave blank for an empty gift card" />
+              </div>
+            )}
+          </div>
+
+          {user && (rewardsQuery.data?.data?.available || []).length > 0 && (
+            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-beige p-6 shadow-soft">
+              <h2 className="font-display text-3xl text-darb-green">Choose one reward</h2>
+              <p className="mt-2 text-sm text-darb-muted">Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.</p>
+              <div className="mt-5 space-y-2">
+                <label className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange}/> Use the best available store promotion</label>
+                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }}/> <span><strong>{reward.label}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-muted">Minimum {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
+              </div>
+            </div>
+          )}
 
           {/* =========================
             PAYMENT METHOD
@@ -670,6 +723,10 @@ function Checkout() {
               </div>)}
 
             {selectedPaymentMethod?.requireProof && (<div className="mt-5 rounded-3xl border border-darb-gold/25 bg-darb-cream/60 p-5">
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-sm font-semibold text-darb-green">Sender name *</span>
+                  <input name="transferSenderName" value={formData.transferSenderName} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green" placeholder="Name used for the transfer" />
+                </label>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-darb-green">
@@ -719,6 +776,11 @@ function Checkout() {
           {error && (<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>)}
+
+          <label className="flex items-start gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 text-sm leading-6 text-darb-muted">
+            <input type="checkbox" name="marketingConsent" checked={formData.marketingConsent} onChange={handleChange} className="mt-1" />
+            Send me occasional Darb news, launches, and offers.
+          </label>
         </div>
 
         {/* =========================

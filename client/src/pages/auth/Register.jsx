@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import SpinWheel from "../../components/rewards/SpinWheel";
 
 function Register() {
   const { customerRegister } = useAuth();
@@ -11,17 +12,19 @@ function Register() {
     email: "",
     phone: "",
     password: "",
+    marketingConsent: false,
   });
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showWheel, setShowWheel] = useState(false);
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
 
     setFormData((current) => ({
       ...current,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -32,7 +35,7 @@ function Register() {
 
     try {
       await customerRegister(formData);
-      navigate("/account/orders", { replace: true });
+      setShowWheel(true);
     } catch (err) {
       setError(err.friendlyMessage || "Registration failed.");
     } finally {
@@ -73,6 +76,11 @@ function Register() {
               required
             />
           </div>
+
+          <label className="flex items-start gap-3 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
+            <input type="checkbox" name="marketingConsent" checked={formData.marketingConsent} onChange={handleChange} className="mt-1" />
+            Send me occasional Darb news, launches, and offers.
+          </label>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -132,6 +140,7 @@ function Register() {
           </Link>
         </p>
       </div>
+      {showWheel && <SpinWheel onClose={() => navigate("/account", { replace: true })} />}
     </section>
   );
 }

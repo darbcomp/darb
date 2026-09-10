@@ -1,11 +1,13 @@
 import { ShoppingBag } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useCart } from "../../context/useCart";
 import { flyProductImageToCart } from "../../utils/flyToCart";
 import { formatCurrency } from "../../utils/formatCurrency";
+import { getActiveProductVariants } from "../../utils/productVariants";
 
 function ProductCard({ product }) {
+  const navigate = useNavigate();
   const {
     addToCart,
     items,
@@ -29,19 +31,12 @@ function ProductCard({ product }) {
     product.categorySnapshot?.name ||
     "Darb";
 
-  const size =
-    product.sizeLabel ||
-    (product.sizeMl
-      ? `${product.sizeMl} ML`
-      : "50 ML");
-
-  const price = Number(
-    product.price
-  );
-
-  const stock = Number(
-    product.stock
-  );
+  const activeVariants = getActiveProductVariants(product);
+  const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
+  const size = quickVariant?.label || `${activeVariants.length} sizes`;
+  const displayVariant = quickVariant || activeVariants.find((variant) => Number(variant.price) > 0) || activeVariants[0];
+  const price = Number(displayVariant?.price || product.price);
+  const stock = quickVariant ? Number(quickVariant.stock) : Math.max(...activeVariants.map((variant) => Number(variant.stock) || 0), 0);
 
   const hasDiscount =
     Number(product.compareAtPrice) >
@@ -58,7 +53,7 @@ function ProductCard({ product }) {
 
   const cartItemId = `${
     product._id || product.slug
-  }_default`;
+  }_${quickVariant?.variantId || "default"}`;
 
   const cartQuantity =
     items.find(
@@ -74,6 +69,10 @@ function ProductCard({ product }) {
   const handleAddToCart = (
     event
   ) => {
+    if (!quickVariant) {
+      navigate(`/product/${product.slug}`);
+      return;
+    }
     if (
       !canPurchase ||
       atCartLimit
@@ -81,7 +80,7 @@ function ProductCard({ product }) {
       return;
     }
 
-    addToCart(product, 1);
+    addToCart(product, 1, quickVariant.isLegacy ? null : quickVariant);
 
     flyProductImageToCart({
       imageUrl: mainImage?.url,
@@ -97,7 +96,7 @@ function ProductCard({ product }) {
         overflow-hidden
         rounded-[1.25rem]
         border border-darb-gold/20
-        bg-white
+        bg-[#E9DDC9]
         shadow-soft
         transition duration-300
 
@@ -254,7 +253,9 @@ function ProductCard({ product }) {
             aria-hidden="true"
           />
 
-          {atCartLimit
+          {!quickVariant
+            ? "Select Options"
+            : atCartLimit
             ? "Max in Cart"
             : canPurchase
               ? "Add to Cart"

@@ -1,4 +1,8 @@
 import InfoPageShell from "../../components/common/InfoPageShell";
+import { Link } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { claimPolicyReward } from "../../api/rewardApi";
+import { useAuth } from "../../context/AuthContext";
 
 function Section({
   number,
@@ -27,6 +31,8 @@ function Section({
 }
 
 function TermsConditions() {
+  const { isAuthenticated } = useAuth();
+  const rewardMutation = useMutation({ mutationFn: claimPolicyReward });
   return (
     <InfoPageShell
       eyebrow="Darb"
@@ -77,7 +83,7 @@ function TermsConditions() {
           </p>
 
           <p>
-            Darb may contact the
+            An order is accepted when Darb confirms it. Darb may contact the
             customer if an order
             requires clarification
             or if an issue affects
@@ -90,10 +96,7 @@ function TermsConditions() {
           title="Payments"
         >
           <p>
-            Only payment methods
-            currently displayed
-            during checkout are
-            available for an order.
+            Launch payment methods are Cash on Delivery, InstaPay and Vodafone Cash. Transfer orders remain Pending until Darb approves the submitted payment proof.
             Payment status is
             recorded separately
             from the order delivery
@@ -106,12 +109,7 @@ function TermsConditions() {
           title="Shipping"
         >
           <p>
-            Delivery timing, fees
-            and any free-delivery
-            conditions are shown
-            through the storefront
-            based on Darb's current
-            delivery settings.
+            Darb ships only within Egypt. Delivery is normally 3–5 business days; the final fee is shown at checkout. Customers may inspect the package at delivery.
           </p>
         </Section>
 
@@ -132,8 +130,25 @@ function TermsConditions() {
           </p>
         </Section>
 
+        <Section number="07" title="Cancellation">
+          <p>Pending and Confirmed orders may be cancelled through Darb support. Once an order is Shipped or handed to the courier, cancellation is no longer available. Refunds, where applicable, are handled manually via InstaPay with a target of three days.</p>
+        </Section>
+
+        <Section number="08" title="Rewards & Promotions">
+          <p>Only one promotional benefit can apply to an order. Rewards are account-bound, subject to their displayed eligibility and expiry, and cannot be exchanged for cash.</p>
+          <div className="pt-6 text-center opacity-70 transition hover:opacity-100">
+            <p className="font-display text-lg text-darb-green">You followed the quieter path.</p>
+            {isAuthenticated ? (
+              <button type="button" disabled={rewardMutation.isPending || rewardMutation.isSuccess} onClick={() => rewardMutation.mutate()} className="mt-2 text-xs underline decoration-darb-gold underline-offset-4">
+                {rewardMutation.isSuccess ? "A 10% path reward is now in your account for 7 days." : rewardMutation.isPending ? "Opening the path..." : "Claim the hidden path"}
+              </button>
+            ) : <Link to="/login" className="mt-2 inline-block text-xs underline decoration-darb-gold underline-offset-4">Sign in to follow it</Link>}
+            {rewardMutation.isError && <p className="mt-2 text-xs text-darb-muted">{rewardMutation.error?.friendlyMessage || "This path has already been followed."}</p>}
+          </div>
+        </Section>
+
         <Section
-          number="07"
+          number="09"
           title="Accounts"
         >
           <p>
@@ -149,7 +164,7 @@ function TermsConditions() {
         </Section>
 
         <Section
-          number="08"
+          number="10"
           title="Questions"
         >
           <p>

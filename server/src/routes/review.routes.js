@@ -20,6 +20,7 @@ const {
 const {
   requireAdmin,
 } = require("../middleware/admin.middleware");
+const { uploadReviewImage } = require("../middleware/upload.middleware");
 
 const router = express.Router();
 
@@ -51,6 +52,7 @@ router.get(
 router.post(
   "/",
   protect,
+  uploadReviewImage,
   createCustomerReview
 );
 
@@ -69,6 +71,7 @@ router.post(
   "/admin",
   protect,
   requireAdmin,
+  uploadReviewImage,
   createAdminReview
 );
 
@@ -76,6 +79,7 @@ router.patch(
   "/admin/:id",
   protect,
   requireAdmin,
+  uploadReviewImage,
   updateAdminReview
 );
 

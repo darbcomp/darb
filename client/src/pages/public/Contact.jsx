@@ -140,8 +140,14 @@ function Contact() {
     settingsQuery.data ||
     {};
 
-  const contact =
-    settings.contact || {};
+  const configuredContact = settings.contact || {};
+  const contact = {
+    ...configuredContact,
+    whatsapp: configuredContact.whatsapp || "+20 10 99589674",
+    email: configuredContact.email || "darbcomp@gmail.com",
+    instagram: configuredContact.instagram || "https://www.instagram.com/darb1.0",
+    tiktok: configuredContact.tiktok || "https://www.tiktok.com/@darb1.0",
+  };
 
   const hasContact =
     contact.phone ||
@@ -194,7 +200,7 @@ function Contact() {
           <ContactCard
             icon={MessageCircle}
             label="WhatsApp"
-            value={contact.whatsapp}
+            value="Chat with Darb"
             href={
               whatsappDigits
                 ? `https://wa.me/${whatsappDigits}`

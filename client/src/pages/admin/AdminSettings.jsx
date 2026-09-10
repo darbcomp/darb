@@ -19,7 +19,7 @@ import {
 ========================= */
 
 const INSTAPAY_RECIPIENT =
-  "01099589674";
+  "+20 10 99589674";
 
 const INSTAPAY_INSTRUCTIONS =
   "Transfer the exact order total to the InstaPay number, then upload a screenshot of the successful transaction.";
@@ -36,21 +36,22 @@ const defaultForm = {
 
   contact: {
     phone: "",
-    whatsapp: "",
-    email: "",
-    instagram: "",
+    whatsapp: "+20 10 99589674",
+    email: "darbcomp@gmail.com",
+    instagram: "https://www.instagram.com/darb1.0",
     facebook: "",
-    tiktok: "",
+    tiktok: "https://www.tiktok.com/@darb1.0",
   },
 
   delivery: {
-    defaultFee: "0",
+    defaultFee: "135",
 
     freeDeliveryThreshold:
       "0",
 
     estimatedDeliveryText:
-      "Delivery timing will be confirmed after placing the order.",
+      "3–5 business days",
+    governorateFees: { cairo: "80", giza: "80", alexandria: "125", other: "135" },
   },
 
   paymentMethods: {
@@ -69,7 +70,7 @@ const defaultForm = {
     },
 
     instapay: {
-      enabled: false,
+      enabled: true,
 
       label: "InstaPay",
 
@@ -83,16 +84,16 @@ const defaultForm = {
     },
 
     vodafoneCash: {
-      enabled: false,
+      enabled: true,
 
       label:
         "Vodafone Cash",
 
-      instructions: "",
+      instructions: "Transfer the exact order total to the Vodafone Cash number, then upload a screenshot of the successful transaction.",
 
-      recipient: "",
+      recipient: INSTAPAY_RECIPIENT,
 
-      requireProof: false,
+      requireProof: true,
     },
 
     paymobCard: {
@@ -134,6 +135,10 @@ const defaultForm = {
 
     metaDescription:
       "Darb is more than perfume — it is a journey, a memory in every step.",
+  },
+  marketingPixels: {
+    meta: { enabled: false, id: "" },
+    tiktok: { enabled: false, id: "" },
   },
 };
 
@@ -232,6 +237,12 @@ const normalizeSettings = (
         ?.estimatedDeliveryText ||
       defaultForm.delivery
         .estimatedDeliveryText,
+    governorateFees: {
+      cairo: String(settings.delivery?.governorateFees?.cairo ?? "80"),
+      giza: String(settings.delivery?.governorateFees?.giza ?? "80"),
+      alexandria: String(settings.delivery?.governorateFees?.alexandria ?? "125"),
+      other: String(settings.delivery?.governorateFees?.other ?? "135"),
+    },
   },
 
   paymentMethods: {
@@ -338,6 +349,10 @@ const normalizeSettings = (
       defaultForm.seo
         .metaDescription,
   },
+  marketingPixels: {
+    meta: { enabled: Boolean(settings.marketingPixels?.meta?.enabled), id: settings.marketingPixels?.meta?.id || "" },
+    tiktok: { enabled: Boolean(settings.marketingPixels?.tiktok?.enabled), id: settings.marketingPixels?.tiktok?.id || "" },
+  },
 });
 
 /* =========================
@@ -365,6 +380,12 @@ const buildPayload = (
     estimatedDeliveryText:
       form.delivery
         .estimatedDeliveryText,
+    governorateFees: {
+      cairo: Number(form.delivery.governorateFees.cairo) || 80,
+      giza: Number(form.delivery.governorateFees.giza) || 80,
+      alexandria: Number(form.delivery.governorateFees.alexandria) || 125,
+      other: Number(form.delivery.governorateFees.other) || 135,
+    },
   },
 
   paymentMethods: {
@@ -470,6 +491,7 @@ function TextInput({
   onChange,
   type = "text",
   placeholder = "",
+  disabled = false,
 }) {
   return (
     <div>
@@ -484,6 +506,7 @@ function TextInput({
         placeholder={
           placeholder
         }
+        disabled={disabled}
         className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
       />
     </div>
@@ -1233,16 +1256,17 @@ function AdminSettings() {
                       .freeDeliveryThreshold
                   }
                   onChange={(
-                    event
-                  ) =>
-                    updateNestedField(
-                      "delivery",
-                      "freeDeliveryThreshold",
-                      event.target
-                        .value
-                    )
-                  }
+                    ) => updateNestedField("delivery", "freeDeliveryThreshold", "0")}
+                  disabled
                 />
+
+                {[
+                  ["cairo", "Cairo Fee"], ["giza", "Giza Fee"],
+                  ["alexandria", "Alexandria Fee"], ["other", "Other Governorates Fee"],
+                ].map(([key, label]) => (
+                  <TextInput key={key} label={label} type="number" value={form.delivery.governorateFees[key]}
+                    onChange={(event) => setEditedForm((current) => ({ ...(current || normalizedServerForm), delivery: { ...(current || normalizedServerForm).delivery, governorateFees: { ...(current || normalizedServerForm).delivery.governorateFees, [key]: event.target.value } } }))} />
+                ))}
 
                 <div className="md:col-span-2">
                   <TextArea
@@ -1504,59 +1528,6 @@ function AdminSettings() {
                   showProof
                 />
 
-                {/* CARD */}
-
-                <PaymentCard
-                  title="Card Payment"
-                  enabled={
-                    form
-                      .paymentMethods
-                      .paymobCard
-                      .enabled
-                  }
-                  onEnabledChange={(
-                    event
-                  ) =>
-                    updatePaymentField(
-                      "paymobCard",
-                      "enabled",
-                      event.target
-                        .checked
-                    )
-                  }
-                  label={
-                    form
-                      .paymentMethods
-                      .paymobCard
-                      .label
-                  }
-                  onLabelChange={(
-                    event
-                  ) =>
-                    updatePaymentField(
-                      "paymobCard",
-                      "label",
-                      event.target
-                        .value
-                    )
-                  }
-                  instructions={
-                    form
-                      .paymentMethods
-                      .paymobCard
-                      .instructions
-                  }
-                  onInstructionsChange={(
-                    event
-                  ) =>
-                    updatePaymentField(
-                      "paymobCard",
-                      "instructions",
-                      event.target
-                        .value
-                    )
-                  }
-                />
               </div>
             </SectionCard>
 
@@ -1579,25 +1550,6 @@ function AdminSettings() {
                     updateNestedField(
                       "orderSettings",
                       "allowGuestCheckout",
-                      event.target
-                        .checked
-                    )
-                  }
-                />
-
-                <ToggleField
-                  label="Auto Confirm Paid Orders"
-                  checked={
-                    form
-                      .orderSettings
-                      .autoConfirmPaidOrders
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    updateNestedField(
-                      "orderSettings",
-                      "autoConfirmPaidOrders",
                       event.target
                         .checked
                     )
@@ -1722,6 +1674,18 @@ function AdminSettings() {
                   }
                 />
               </div>
+            </SectionCard>
+
+            {/* SEO */}
+
+            <SectionCard title="Marketing Pixels">
+              <p className="mb-4 text-sm leading-6 text-darb-muted">Dormant until an ID is present, the channel is enabled, and the visitor has granted tracking consent.</p>
+              {[["meta", "Meta Pixel"], ["tiktok", "TikTok Pixel"]].map(([channel, label]) => (
+                <div key={channel} className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                  <TextInput label={`${label} ID`} value={form.marketingPixels[channel].id} onChange={(event) => updateNestedField("marketingPixels", channel, { ...form.marketingPixels[channel], id: event.target.value })} />
+                  <ToggleField label="Enabled" checked={form.marketingPixels[channel].enabled} onChange={(event) => updateNestedField("marketingPixels", channel, { ...form.marketingPixels[channel], enabled: event.target.checked })} />
+                </div>
+              ))}
             </SectionCard>
 
             {/* SEO */}

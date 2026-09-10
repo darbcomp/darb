@@ -41,3 +41,8 @@ export const getProductBySlug = async (slug) => {
 
   return data;
 };
+
+export const getSearchSuggestions = async (query) => {
+  const { data } = await api.get("/products/search/suggestions", { params: { q: query } });
+  return data;
+};

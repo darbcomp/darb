@@ -24,6 +24,7 @@ import {
 import {
   formatCurrency,
 } from "../../utils/formatCurrency";
+import { buildOrderWhatsAppUrl } from "../../utils/whatsapp";
 
 const MAX_PAYMENT_PROOF_SIZE =
   10 * 1024 * 1024;
@@ -295,9 +296,7 @@ function GuestPaymentProofPanel({
     };
 
   if (
-    paymentProofData
-      ?.paymentMethod !==
-    "instapay"
+    !["instapay", "vodafone_cash"].includes(paymentProofData?.paymentMethod)
   ) {
     return null;
   }
@@ -307,7 +306,7 @@ function GuestPaymentProofPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-darb-gold">
-            InstaPay Proof
+            {paymentProofData?.paymentMethod === "vodafone_cash" ? "Vodafone Cash Proof" : "InstaPay Proof"}
           </p>
 
           <p className="mt-2 text-sm font-semibold text-darb-green">
@@ -763,6 +762,9 @@ function TrackOrder() {
                       }
                     />
                   )}
+                  <a href={buildOrderWhatsAppUrl(displayOrder.orderNumber, ["pending", "confirmed"].includes(displayOrder.orderStatus) ? "cancellation or order support" : "return, exchange, or order support")} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-darb-green/25 px-4 py-2 text-sm font-semibold text-darb-green">
+                    WhatsApp support
+                  </a>
 
                   {displayOrder.paymentStatus && (
                     <StatusBadge

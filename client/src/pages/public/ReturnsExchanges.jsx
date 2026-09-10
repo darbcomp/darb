@@ -78,16 +78,11 @@ function ReturnsExchanges() {
           Please Note
         </p>
 
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-darb-beige/65">
-          Return and exchange
-          eligibility can depend
-          on the order, item
-          condition, and the nature
-          of the request. Darb will
-          confirm the available
-          options before any return
-          or exchange is arranged.
-        </p>
+        <div className="mt-4 max-w-3xl space-y-3 text-sm leading-7 text-darb-beige/65">
+          <p>Wrong products must be reported within 2 days; damaged or leaking products within 1 day. Photo or video proof is required. For Darb-fault cases, Darb covers shipping and the customer may choose a refund or exchange.</p>
+          <p>The normal exchange window is 10 days. Genuine-problem returns may be requested within 5 days, subject to the shorter wrong/damaged reporting windows. For a non-fault rejection or exchange, the customer pays shipping.</p>
+          <p>Refunds are handled manually via InstaPay with a processing target of 3 days. Contact Darb through WhatsApp; no automatic refunds are issued through the account.</p>
+        </div>
       </div>
     </InfoPageShell>
   );

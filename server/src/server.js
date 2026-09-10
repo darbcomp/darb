@@ -26,6 +26,7 @@ const waitlistRoutes = require("./routes/waitlist.routes");
 const reviewRoutes = require("./routes/review.routes");
 const adminRoutes = require("./routes/admin.routes");
 const settingsRoutes = require("./routes/settings.routes");
+const rewardRoutes = require("./routes/reward.routes");
 
 dotenv.config();
 
@@ -141,6 +142,7 @@ app.use(
   "/api/settings",
   settingsRoutes
 );
+app.use("/api/rewards", rewardRoutes);
 
 /* =========================
    Error Handling

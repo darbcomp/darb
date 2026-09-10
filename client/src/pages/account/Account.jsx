@@ -16,10 +16,13 @@ import {
 import {
   useState,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   useAuth,
 } from "../../context/AuthContext";
+import { getMyRewards } from "../../api/rewardApi";
+import SpinWheel from "../../components/rewards/SpinWheel";
 
 function Account() {
   const {
@@ -34,6 +37,9 @@ function Account() {
     isLoggingOut,
     setIsLoggingOut,
   ] = useState(false);
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const rewardsQuery = useQuery({ queryKey: ["my-rewards"], queryFn: getMyRewards });
+  const rewards = rewardsQuery.data?.data;
 
   /* =========================
      ADMIN SAFETY
@@ -427,6 +433,16 @@ function Account() {
           ========================== */}
 
           <div className="space-y-5">
+            <section className="rounded-[2rem] border border-darb-gold/25 bg-darb-beige p-6 shadow-soft sm:p-8">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">Rewards</p>
+              <h2 className="mt-2 font-display text-3xl text-darb-green">Your available paths</h2>
+              {rewards?.spinAvailable && <button type="button" onClick={() => setWheelOpen(true)} className="mt-5 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige">Reveal your signup reward</button>}
+              <div className="mt-4 space-y-2">
+                {(rewards?.available || []).map((reward) => <div key={reward._id} className="rounded-2xl bg-white/60 px-4 py-3 text-sm"><strong className="text-darb-green">{reward.label}</strong>{reward.expiresAt && <p className="mt-1 text-xs text-darb-muted">Expires {new Date(reward.expiresAt).toLocaleDateString("en-EG")}</p>}</div>)}
+                {!rewardsQuery.isLoading && !rewards?.spinAvailable && !rewards?.available?.length && <p className="text-sm text-darb-muted">No unused rewards right now.</p>}
+                {(rewards?.history || []).filter((reward) => reward.status !== "available").slice(0, 5).map((reward) => <div key={reward._id} className="rounded-2xl border border-darb-gold/15 px-4 py-3 text-sm opacity-70"><strong className="text-darb-green">{reward.label}</strong><p className="mt-1 text-xs uppercase tracking-wide text-darb-muted">{reward.status}</p></div>)}
+              </div>
+            </section>
             {/* My Orders */}
 
             <Link
@@ -629,6 +645,7 @@ function Account() {
           </div>
         </div>
       </section>
+      {wheelOpen && <SpinWheel onClose={() => setWheelOpen(false)} />}
     </main>
   );
 }

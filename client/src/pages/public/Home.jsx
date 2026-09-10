@@ -35,6 +35,7 @@ import {
 } from "../../api/reviewApi";
 
 import ProductCard from "../../components/product/ProductCard";
+import { getPublicBundles } from "../../api/bundleApi";
 import { useAuth } from "../../context/AuthContext";
 
 const categoryVisuals = {
@@ -58,6 +59,7 @@ const initialReviewForm = {
   rating: 5,
   productId: "",
   text: "",
+  imageFile: null,
 };
 
 const reviewPrompts = [
@@ -128,6 +130,14 @@ function CategoryCard({
   );
 }
 
+function BundleCard({ bundle }) {
+  const price = Number(bundle.fixedBundlePrice || (bundle.discountType === "fixed_bundle_price" ? bundle.discountValue : 0));
+  return <article className="min-w-[82%] snap-start overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-[#E9DDC9] shadow-soft sm:min-w-[46%] lg:min-w-[31%]">
+    <div className="aspect-[16/10] overflow-hidden bg-darb-green">{bundle.image?.url ? <img src={bundle.image.url} alt={bundle.image.alt || bundle.name} loading="lazy" className="h-full w-full object-cover"/> : <div className="grid h-full place-items-center font-display text-4xl text-darb-gold">Darb</div>}</div>
+    <div className="p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">Curated path</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.name}</h3>{price > 0 && <p className="mt-3 font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.freeDelivery && <span className="mt-3 inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">Free delivery</span>}<Link to="/shop" className="mt-5 inline-flex rounded-full border border-darb-green/25 px-5 py-2 text-sm font-semibold text-darb-green">Build this bundle</Link></div>
+  </article>;
+}
+
 function RatingStars({
   rating = 0,
   size = 17,
@@ -195,7 +205,7 @@ function ReviewCard({
         flex-col
         rounded-[1.75rem]
         border border-darb-gold/25
-        bg-white
+        bg-[#E9DDC9]
         p-6
         shadow-soft
         sm:min-w-[46%]
@@ -219,6 +229,13 @@ function ReviewCard({
       <p className="mt-6 flex-1 text-[15px] leading-7 text-darb-black/80">
         {review.text}
       </p>
+
+      {review.media?.type === "image" && review.media.url && (
+        <img src={review.media.url} alt={review.media.alt || "Customer review"} loading="lazy" className="mt-5 aspect-[4/3] w-full rounded-2xl object-cover" />
+      )}
+      {review.media?.type === "video" && review.media.url && (
+        <video src={review.media.url} poster={review.media.posterUrl || undefined} controls preload="metadata" playsInline className="mt-5 aspect-video w-full rounded-2xl bg-black object-cover" aria-label="Customer review video" />
+      )}
 
       <div className="mt-7 border-t border-darb-gold/20 pt-5">
         <p className="font-display text-xl text-darb-green">
@@ -328,6 +345,8 @@ function Home() {
 
   const reviewTrackRef =
     useRef(null);
+  const bundleTrackRef = useRef(null);
+  const reviewAutoMovementEnabled = false;
 
   const [
     reviewMarqueePaused,
@@ -388,6 +407,7 @@ function Home() {
       queryFn:
         getCategories,
     });
+  const bundlesQuery = useQuery({ queryKey: ["public-bundles"], queryFn: getPublicBundles, retry: 1 });
 
   const bestSellersQuery =
     useQuery({
@@ -439,6 +459,7 @@ function Home() {
   const categories =
     categoriesQuery.data
       ?.data || [];
+  const bundles = bundlesQuery.data?.data || [];
 
   const bestSellerProducts =
     bestSellersQuery.data
@@ -565,7 +586,8 @@ function Home() {
       !container ||
       reduceReviewMotion ||
       reviewMarqueePaused ||
-      reviews.length === 0
+      reviews.length === 0 ||
+      !reviewAutoMovementEnabled
     ) {
       return undefined;
     }
@@ -641,6 +663,7 @@ function Home() {
   }, [
     reduceReviewMotion,
     reviewMarqueePaused,
+    reviewAutoMovementEnabled,
     reviews.length,
   ]);
 
@@ -769,12 +792,13 @@ function Home() {
     const {
       name,
       value,
+      files,
     } = event.target;
 
     setReviewForm(
       (current) => ({
         ...current,
-        [name]: value,
+        [name]: files?.[0] || value,
       })
     );
 
@@ -846,23 +870,13 @@ function Home() {
       return;
     }
 
-    reviewMutation.mutate({
-      displayName:
-        reviewForm.displayName.trim() ||
-        user?.name ||
-        "Darb Customer",
-
-      rating: Number(
-        reviewForm.rating
-      ),
-
-      productId:
-        reviewForm.productId ||
-        "",
-
-      text:
-        reviewForm.text.trim(),
-    });
+    const payload = new FormData();
+    payload.append("displayName", reviewForm.displayName.trim() || user?.name || "Darb Customer");
+    payload.append("rating", Number(reviewForm.rating));
+    payload.append("productId", reviewForm.productId || "");
+    payload.append("text", reviewForm.text.trim());
+    if (reviewForm.imageFile) payload.append("image", reviewForm.imageFile);
+    reviewMutation.mutate(payload);
   };
 
   const selectedProduct =
@@ -876,10 +890,7 @@ function Home() {
         )
     );
 
-  const reviewCloneCount =
-    reviews.length === 1
-      ? 4
-      : 2;
+  const reviewCloneCount = 0;
 
   return (
     <div className="bg-darb-cream">
@@ -1053,9 +1064,14 @@ function Home() {
         </div>
       </section>
 
-      {/* =========================
-          CATEGORIES
-      ========================== */}
+      {bundles.length > 0 && <section className="bg-darb-cream py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex items-end justify-between gap-4 px-5 sm:px-6 lg:px-8"><div><p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold">Bundles</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">Paths chosen together.</h2></div><div className="hidden gap-2 md:flex"><button type="button" onClick={() => bundleTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Previous bundles"><ArrowLeft size={18}/></button><button type="button" onClick={() => bundleTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Next bundles"><ArrowRight size={18}/></button></div></div>
+          <div ref={bundleTrackRef} className="darb-horizontal-scroll mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-3 sm:px-6 lg:px-8">{bundles.map((bundle) => <BundleCard key={bundle._id} bundle={bundle}/>)}</div>
+        </div>
+      </section>}
+
+      {/* CATEGORIES */}
 
       <section
         id="categories"
@@ -1250,6 +1266,7 @@ function Home() {
                 left along the Darb
                 journey.
               </p>
+              <div className="mt-5 hidden gap-2 md:flex"><button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Previous reviews"><ArrowLeft size={18}/></button><button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Next reviews"><ArrowRight size={18}/></button></div>
             </div>
           </div>
 
@@ -1752,6 +1769,12 @@ function Home() {
                       history appear
                       here.
                     </p>
+                  </div>
+
+                  <div className="mt-5">
+                    <label className="mb-2 block text-sm font-semibold text-darb-green">Photo (optional)</label>
+                    <input type="file" name="imageFile" accept="image/jpeg,image/png,image/webp,image/avif" onChange={handleReviewChange} className="w-full rounded-2xl border border-darb-gold/30 bg-white px-4 py-3 text-sm" />
+                    <p className="mt-2 text-xs text-darb-muted">Images only. Videos are not accepted through this form.</p>
                   </div>
 
                   <div className="mt-8 flex justify-end">

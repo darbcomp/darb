@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   Link,
@@ -26,6 +27,7 @@ import {
 } from "../../context/AuthContext";
 
 import { useCart } from "../../context/useCart";
+import { getSearchSuggestions } from "../../api/productApi";
 
 
 const categories = [
@@ -162,6 +164,20 @@ function Navbar() {
     searchTerm,
     setSearchTerm,
   ] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 220);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  const searchQuery = useQuery({
+    queryKey: ["search-suggestions", debouncedSearch],
+    queryFn: () => getSearchSuggestions(debouncedSearch),
+    enabled: searchOpen && debouncedSearch.length >= 2,
+    staleTime: 30_000,
+  });
+  const searchResults = searchQuery.data?.data || { products: [], categories: [] };
 
   const isAdmin =
     isAuthenticated &&
@@ -245,6 +261,15 @@ function Navbar() {
     mobileMenuOpen,
     searchOpen,
   ]);
+
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [searchOpen]);
 
   /* =========================
      HELPERS
@@ -1351,6 +1376,29 @@ function Navbar() {
                   className="w-full rounded-full border border-darb-gold/35 bg-white py-4 pl-14 pr-5 text-darb-black outline-none transition placeholder:text-darb-muted/70 focus:border-darb-green"
                 />
               </div>
+
+              {debouncedSearch.length >= 2 && (
+                <div className="mt-3 max-h-[42vh] overflow-y-auto rounded-3xl border border-darb-gold/20 bg-white p-2" aria-live="polite">
+                  {searchQuery.isFetching && <p className="px-4 py-3 text-sm text-darb-muted">Searching...</p>}
+                  {!searchQuery.isFetching && searchResults.products.length === 0 && searchResults.categories.length === 0 && (
+                    <p className="px-4 py-3 text-sm text-darb-muted">No matching paths found.</p>
+                  )}
+                  {searchResults.categories.map((category) => (
+                    <Link key={category._id} to={`/category/${category.slug}`} onClick={closeSearch} className="block rounded-2xl px-4 py-3 text-sm font-semibold text-darb-green hover:bg-darb-cream">
+                      Category · {category.name}
+                    </Link>
+                  ))}
+                  {searchResults.products.map((product) => (
+                    <Link key={product._id} to={`/product/${product.slug}`} onClick={closeSearch} className="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-darb-cream">
+                      {product.images?.[0]?.url && <img src={product.images[0].url} alt="" className="h-12 w-12 rounded-xl object-cover" />}
+                      <span><span className="block text-sm font-semibold text-darb-green">{product.name}</span><span className="line-clamp-1 text-xs text-darb-muted">{product.shortDescription || product.category?.name}</span></span>
+                    </Link>
+                  ))}
+                  {(searchResults.products.length > 0 || searchResults.categories.length > 0) && (
+                    <button type="submit" className="mt-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold text-darb-green hover:bg-darb-cream">View all results for “{debouncedSearch}”</button>
+                  )}
+                </div>
+              )}
 
               <button
                 type="submit"

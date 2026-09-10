@@ -64,15 +64,7 @@ function ShippingDelivery() {
   const currency =
     settings.currency || "EGP";
 
-  const defaultFee =
-    Number(
-      delivery.defaultFee
-    ) || 0;
-
-  const freeThreshold =
-    Number(
-      delivery.freeDeliveryThreshold
-    ) || 0;
+  const fees = delivery.governorateFees || { cairo: 80, giza: 80, alexandria: 125, other: 135 };
 
   return (
     <InfoPageShell
@@ -86,8 +78,7 @@ function ShippingDelivery() {
           title="Delivery Timing"
         >
           <p>
-            {delivery.estimatedDeliveryText ||
-              "Delivery timing is confirmed after placing your order."}
+            {delivery.estimatedDeliveryText || "3–5 business days"} throughout Egypt.
           </p>
         </InfoCard>
 
@@ -96,26 +87,16 @@ function ShippingDelivery() {
           title="Delivery Fee"
         >
           <p>
-            {defaultFee > 0
-              ? `The standard delivery fee is ${formatMoney(
-                  defaultFee,
-                  currency
-                )}.`
-              : "Any applicable delivery fee is shown during checkout before your order is placed."}
+            Cairo {formatMoney(fees.cairo, currency)}, Giza {formatMoney(fees.giza, currency)}, Alexandria {formatMoney(fees.alexandria, currency)}, and all other governorates {formatMoney(fees.other, currency)}.
           </p>
         </InfoCard>
 
         <InfoCard
           icon={PackageCheck}
-          title="Free Delivery"
+          title="Package Inspection"
         >
           <p>
-            {freeThreshold > 0
-              ? `Orders reaching ${formatMoney(
-                  freeThreshold,
-                  currency
-                )} qualify for free delivery.`
-              : "If a free-delivery offer applies to your order, it will be reflected automatically at checkout."}
+            You may inspect the package at delivery. If a correct, undamaged order is rejected, the customer pays shipping; Darb covers shipping for a wrong or damaged item.
           </p>
         </InfoCard>
       </div>
@@ -132,12 +113,8 @@ function ShippingDelivery() {
         </h2>
 
         <p className="mt-4 max-w-2xl text-sm leading-7 text-darb-beige/65">
-          Delivery fees and
-          available payment
-          methods can change based
-          on the current Darb store
-          settings and any active
-          offers.
+          Darb ships only inside Egypt. There is no general free-shipping threshold; a specific active bundle or reward may still provide free delivery.
+          Cash on Delivery is available throughout Egypt with no extra COD charge. Delivery is currently handled through Egyptian Post; timing remains an estimate rather than a courier guarantee.
         </p>
       </div>
     </InfoPageShell>

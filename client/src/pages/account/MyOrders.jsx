@@ -24,6 +24,7 @@ import {
 import {
   formatCurrency,
 } from "../../utils/formatCurrency";
+import { buildOrderWhatsAppUrl } from "../../utils/whatsapp";
 
 const MAX_PAYMENT_PROOF_SIZE =
   10 * 1024 * 1024;
@@ -260,8 +261,7 @@ function PaymentProofPanel({
     };
 
   if (
-    order.paymentMethod !==
-    "instapay"
+    !["instapay", "vodafone_cash"].includes(order.paymentMethod)
   ) {
     return null;
   }
@@ -271,7 +271,7 @@ function PaymentProofPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-darb-gold">
-            InstaPay Proof
+            {order.paymentMethod === "vodafone_cash" ? "Vodafone Cash Proof" : "InstaPay Proof"}
           </p>
 
           <p className="mt-2 text-sm font-semibold text-darb-green">
@@ -590,11 +590,14 @@ function MyOrders() {
                       </div>
 
                       <div className="flex flex-wrap items-start gap-3 lg:justify-end">
-                        <StatusBadge
-                          status={
-                            order.orderStatus
-                          }
-                        />
+                          <StatusBadge
+                            status={
+                              order.orderStatus
+                            }
+                          />
+                          <a href={buildOrderWhatsAppUrl(order.orderNumber, ["pending", "confirmed"].includes(order.orderStatus) ? "cancellation or order support" : "return, exchange, or order support")} target="_blank" rel="noreferrer" className="rounded-full border border-darb-green/25 px-3 py-1 text-xs font-semibold text-darb-green">
+                            WhatsApp support
+                          </a>
 
                         <StatusBadge
                           status={

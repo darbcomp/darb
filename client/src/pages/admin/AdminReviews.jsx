@@ -35,6 +35,8 @@ const emptyForm = {
   fragranceName: "",
   reviewDate: todayInputValue(),
   status: "approved",
+  imageFile: null,
+  removeImage: false,
 };
 
 const statusOptions = [
@@ -401,6 +403,8 @@ function AdminReviews() {
       status:
         review.status ||
         "approved",
+      imageFile: null,
+      removeImage: false,
     });
 
     setFormError("");
@@ -417,12 +421,12 @@ function AdminReviews() {
   const handleFormChange = (
     event
   ) => {
-    const { name, value } =
+    const { name, value, files, type, checked } =
       event.target;
 
     setForm((current) => ({
       ...current,
-      [name]: value,
+      [name]: files?.[0] || (type === "checkbox" ? checked : value),
     }));
   };
 
@@ -467,7 +471,7 @@ function AdminReviews() {
 
     setFormError("");
 
-    const payload = {
+    const values = {
       displayName:
         form.displayName.trim(),
 
@@ -490,6 +494,10 @@ function AdminReviews() {
 
       status: form.status,
     };
+    const payload = new FormData();
+    Object.entries(values).forEach(([key, value]) => payload.append(key, value));
+    if (form.imageFile) payload.append("image", form.imageFile);
+    if (form.removeImage) payload.append("removeImage", "true");
 
     if (editingReview) {
       editMutation.mutate({
@@ -919,6 +927,15 @@ function AdminReviews() {
                   placeholder="Write the review..."
                   className="w-full rounded-3xl border border-darb-gold/30 px-5 py-4 outline-none transition focus:border-darb-green"
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">Review photo (optional)</label>
+                <input type="file" name="imageFile" accept="image/jpeg,image/png,image/webp,image/avif" onChange={handleFormChange} className="w-full rounded-2xl border border-darb-gold/30 px-4 py-3 text-sm" />
+                {editingReview?.media?.type === "image" && editingReview.media.url && (
+                  <label className="mt-3 flex items-center gap-2 text-sm text-darb-muted"><input type="checkbox" name="removeImage" checked={form.removeImage} onChange={handleFormChange} /> Remove current photo</label>
+                )}
+                <p className="mt-2 text-xs text-darb-muted">Images only; public video reviews are added through Darb's controlled media workflow.</p>
               </div>
             </div>
 

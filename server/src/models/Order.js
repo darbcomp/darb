@@ -72,7 +72,7 @@ const discountSnapshotSchema = new mongoose.Schema(
   {
     sourceType: {
       type: String,
-      enum: ["offer", "bundle", "coupon", "manual"],
+      enum: ["offer", "bundle", "coupon", "entitlement", "manual"],
       required: true,
     },
     sourceId: {
@@ -292,6 +292,24 @@ const orderSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    senderName: { type: String, trim: true, default: "" },
+    gift: {
+      isGift: { type: Boolean, default: false },
+      message: { type: String, trim: true, maxlength: 500, default: "" },
+    },
+    promotion: {
+      entitlement: { type: mongoose.Schema.Types.ObjectId, ref: "Entitlement", default: null },
+      key: { type: String, default: "" },
+      label: { type: String, default: "" },
+      origin: { type: String, default: "" },
+      freeTester: { type: Boolean, default: false },
+    },
+    marketingConsent: {
+      granted: { type: Boolean, default: false },
+      grantedAt: { type: Date, default: null },
+      source: { type: String, default: "checkout" },
+    },
+    birthday: { type: Date, default: null, select: false },
     adminNotes: {
       type: String,
       trim: true,

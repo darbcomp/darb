@@ -23,6 +23,10 @@ const {
   incrementDiscountUsage,
   decrementDiscountUsage,
 } = require("../utils/calculateCart");
+const { findProductVariant } = require("../utils/productVariants");
+const { getGovernorateDeliveryFee } = require("../utils/shipping");
+const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
+const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, findAvailableEntitlementByCode } = require("../services/entitlement.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -31,7 +35,6 @@ const ORDER_NUMBER_BASE = 1000;
 const orderStatuses = [
   "pending",
   "confirmed",
-  "processing",
   "shipped",
   "delivered",
   "cancelled",
@@ -52,12 +55,12 @@ const fallbackPaymentMethods = {
     requireProof: false,
   },
   instapay: {
-    enabled: false,
+    enabled: true,
     requireProof: true,
   },
   vodafoneCash: {
-    enabled: false,
-    requireProof: false,
+    enabled: true,
+    requireProof: true,
   },
   paymobCard: {
     enabled: false,
@@ -100,8 +103,13 @@ const getSettings = async (session = null) => {
   return {
     delivery: {
       defaultFee: Number(settings?.delivery?.defaultFee) || 0,
-      freeDeliveryThreshold:
-        Number(settings?.delivery?.freeDeliveryThreshold) || 0,
+      freeDeliveryThreshold: 0,
+      governorateFees: {
+        cairo: Number(settings?.delivery?.governorateFees?.cairo) || 80,
+        giza: Number(settings?.delivery?.governorateFees?.giza) || 80,
+        alexandria: Number(settings?.delivery?.governorateFees?.alexandria) || 125,
+        other: Number(settings?.delivery?.governorateFees?.other) || 135,
+      },
     },
     paymentMethods: settings?.paymentMethods || fallbackPaymentMethods,
     orderSettings: {
@@ -114,16 +122,8 @@ const getSettings = async (session = null) => {
   };
 };
 
-const getBaseDeliveryFee = (subtotal, settings) => {
-  const defaultFee = Number(settings.delivery.defaultFee) || 0;
-  const freeDeliveryThreshold =
-    Number(settings.delivery.freeDeliveryThreshold) || 0;
-
-  if (freeDeliveryThreshold > 0 && subtotal >= freeDeliveryThreshold) {
-    return 0;
-  }
-
-  return defaultFee;
+const getBaseDeliveryFee = (_subtotal, settings, governorate = "") => {
+  return getGovernorateDeliveryFee(governorate, settings.delivery.governorateFees);
 };
 
 const getPaymentMethodConfig = (paymentMethod, settings) => {
@@ -138,6 +138,7 @@ const getPaymentMethodConfig = (paymentMethod, settings) => {
 
 const ensurePaymentMethodAllowed = (paymentMethod, settings) => {
   const method = paymentMethod || "cash_on_delivery";
+  if (method === "paymob_card") throw new Error("Card payment is not available at launch.");
   const settingsKey = paymentMethodKeys[method];
 
   if (!settingsKey) {
@@ -154,7 +155,7 @@ const ensurePaymentMethodAllowed = (paymentMethod, settings) => {
   return method;
 };
 
-const buildProductSnapshot = (product) => {
+const buildProductSnapshot = (product, variant = null) => {
   const image = getMainImage(product);
 
   return {
@@ -165,21 +166,27 @@ const buildProductSnapshot = (product) => {
       product.category?.name || product.categorySnapshot?.name || "",
     categorySlug:
       product.category?.slug || product.categorySnapshot?.slug || "",
-    sizeLabel: product.sizeLabel || "",
-    sizeMl: product.sizeMl || 0,
+    sizeLabel: variant?.label || product.sizeLabel || "",
+    sizeMl: variant?.sizeMl || product.sizeMl || 0,
   };
 };
 
 const buildSafeOrderItem = ({ product, quantity, variant }) => {
-  const unitPrice = Number(product.price) || 0;
+  const unitPrice = Number(variant.price) || 0;
 
   return {
     product: product._id,
     productDoc: product,
-    productSnapshot: buildProductSnapshot(product),
-    variant: variant || undefined,
+    productSnapshot: buildProductSnapshot(product, variant),
+    variant: {
+      variantId: variant.variantId,
+      label: variant.label,
+      sizeMl: variant.sizeMl,
+      sku: variant.sku,
+    },
     quantity,
     unitPrice,
+    compareAtPrice: Number(variant.compareAtPrice) || 0,
     lineTotal: unitPrice * quantity,
   };
 };
@@ -200,6 +207,7 @@ const findProductForOrderItem = async (item, session = null) => {
   }
 
   query.populate("category", "name slug");
+  query.populate("categories", "name slug");
 
   if (session) {
     query.session(session);
@@ -234,11 +242,17 @@ const validateOrderItems = async (items = [], session = null) => {
       throw new Error(`${product.name} is not available for purchase.`);
     }
 
-    if (Number(product.price) <= 0) {
+    const requestedVariantId = item.variantId || item.variant?.variantId || item.variant?._id || "";
+    const variant = findProductVariant(product, requestedVariantId);
+    if (!variant) {
+      throw new Error(`${product.name} requires a valid size selection.`);
+    }
+
+    if (Number(variant.price) <= 0) {
       throw new Error(`${product.name} does not have a valid price yet.`);
     }
 
-    if (Number(product.stock) < quantity) {
+    if (Number(variant.stock) < quantity) {
       throw new Error(`${product.name} does not have enough stock.`);
     }
 
@@ -246,7 +260,7 @@ const validateOrderItems = async (items = [], session = null) => {
       buildSafeOrderItem({
         product,
         quantity,
-        variant: item.variant,
+        variant,
       })
     );
   }
@@ -257,19 +271,24 @@ const validateOrderItems = async (items = [], session = null) => {
 const getSubtotal = (items = []) =>
   items.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0);
 
-const buildPricingForItems = async ({ items, couponCode, session = null }) => {
+const buildPricingForItems = async ({ items, couponCode, entitlementId = "", userId = null, governorate = "", session = null }) => {
   const subtotal = getSubtotal(items);
   const settings = await getSettings(session);
-  const baseDeliveryFee = getBaseDeliveryFee(subtotal, settings);
+  const baseDeliveryFee = getBaseDeliveryFee(subtotal, settings, governorate);
 
-  const pricing = await calculateCartPricing({
+  const codedEntitlement = !entitlementId
+    ? await findAvailableEntitlementByCode(userId, couponCode, session)
+    : null;
+  const selectedEntitlementId = entitlementId || codedEntitlement?._id;
+  let pricing = await calculateCartPricing({
     items,
-    couponCode,
+    couponCode: codedEntitlement ? "" : couponCode,
     baseDeliveryFee,
     session,
   });
-
-  return { pricing, settings };
+  const applied = await applySelectedEntitlement({ pricing, items, entitlementId: selectedEntitlementId, userId, session });
+  pricing = applied.pricing;
+  return { pricing, settings, entitlement: applied.entitlement, freeTester: applied.freeTester };
 };
 
 const serializePreviewItems = (items = []) =>
@@ -279,6 +298,7 @@ const serializePreviewItems = (items = []) =>
     variant: item.variant,
     quantity: item.quantity,
     unitPrice: item.unitPrice,
+    compareAtPrice: item.compareAtPrice,
     lineTotal: item.lineTotal,
   }));
 
@@ -356,6 +376,7 @@ const sanitizePaymentProof = (paymentProof) => {
     uploadedAt: paymentProof.uploadedAt || null,
     reviewedAt: paymentProof.reviewedAt || null,
     rejectionReason: paymentProof.rejectionReason || "",
+    senderName: paymentProof.senderName || "",
   };
 };
 
@@ -366,6 +387,7 @@ const sanitizeOrderForClient = (order) => {
 
   const plain = typeof order.toObject === "function" ? order.toObject() : { ...order };
   plain.paymentProof = sanitizePaymentProof(plain.paymentProof);
+  delete plain.birthday;
   return plain;
 };
 
@@ -439,15 +461,10 @@ const enforceCouponPerCustomerLimit = async ({
 
 const reserveStock = async (items, session) => {
   for (const item of items) {
+    const operation = buildReserveStockOperation(item);
     const result = await Product.updateOne(
-      {
-        _id: item.product,
-        isActive: true,
-        stock: { $gte: Number(item.quantity) },
-      },
-      {
-        $inc: { stock: -Number(item.quantity) },
-      },
+      operation.filter,
+      operation.update,
       { session }
     );
 
@@ -461,9 +478,10 @@ const reserveStock = async (items, session) => {
 
 const restoreStock = async (items, session) => {
   for (const item of items) {
+    const operation = buildRestoreStockOperation(item);
     await Product.updateOne(
-      { _id: item.product },
-      { $inc: { stock: Number(item.quantity) || 0 } },
+      operation.filter,
+      operation.update,
       { session }
     );
   }
@@ -483,6 +501,9 @@ const previewOrder = async (req, res) => {
     const { pricing } = await buildPricingForItems({
       items,
       couponCode: req.body.couponCode,
+      entitlementId: req.body.entitlementId,
+      userId: req.user?._id || null,
+      governorate: req.body.shippingAddress?.governorate,
     });
 
     return res.status(200).json({
@@ -538,6 +559,10 @@ const createOrder = async (req, res) => {
       );
     }
 
+    if (requiresProof && !String(body.paymentSenderName || "").trim()) {
+      throw new Error("Sender name is required for transfer payments.");
+    }
+
     if (!requiresProof && req.file) {
       throw new Error(
         "A payment screenshot is not required for the selected payment method."
@@ -577,9 +602,12 @@ const createOrder = async (req, res) => {
     await session.withTransaction(async () => {
       const validatedItems = await validateOrderItems(body.items, session);
 
-      const { pricing, settings } = await buildPricingForItems({
+      const { pricing, settings, entitlement, freeTester } = await buildPricingForItems({
         items: validatedItems,
         couponCode,
+        entitlementId: body.entitlementId,
+        userId: req.user?._id || null,
+        governorate: shippingAddress.governorate,
         session,
       });
 
@@ -658,6 +686,27 @@ const createOrder = async (req, res) => {
         },
         orderStatus: "pending",
         customerNotes: customerNotes?.trim() || "",
+        gift: {
+          isGift: Boolean(body.isGift || body.gift?.isGift),
+          message: String(body.giftMessage || body.gift?.message || "").trim().slice(0, 500),
+        },
+        promotion: entitlement ? {
+          entitlement: entitlement._id,
+          key: entitlement.key,
+          label: entitlement.label,
+          origin: entitlement.origin,
+          freeTester,
+        } : {
+          label: pricing.discounts[0]?.name || "",
+          origin: pricing.discounts[0]?.sourceType || "",
+          freeTester: false,
+        },
+        marketingConsent: {
+          granted: Boolean(body.marketingConsent),
+          grantedAt: body.marketingConsent ? new Date() : null,
+          source: "checkout",
+        },
+        birthday: body.birthday ? new Date(body.birthday) : null,
         statusHistory: [
           {
             status: "pending",
@@ -669,7 +718,13 @@ const createOrder = async (req, res) => {
         ],
       });
 
+      if (uploadedPaymentProof) {
+        order.paymentProof.senderName = String(body.paymentSenderName || "").trim();
+      }
+
       await order.save({ session });
+
+      await consumeEntitlement(entitlement?._id, req.user?._id, order._id, session);
 
       await incrementDiscountUsage({
         discounts: pricing.discounts,
@@ -984,12 +1039,7 @@ const reviewAdminPaymentProof = async (req, res) => {
         order.paymentProof.rejectionReason = "";
         order.paymentStatus = "paid";
 
-        const settings = await getSettings(session);
-
-        if (
-          settings.orderSettings.autoConfirmPaidOrders &&
-          order.orderStatus === "pending"
-        ) {
+        if (order.orderStatus === "pending") {
           order.orderStatus = "confirmed";
           order.statusHistory.push({
             status: "confirmed",
@@ -1100,8 +1150,23 @@ const updateAdminOrderStatus = async (req, res) => {
       const isNewCancellation =
         orderStatus === "cancelled" && order.orderStatus !== "cancelled";
 
+      if (orderStatus && orderStatus !== order.orderStatus) {
+        const allowedTransitions = {
+          pending: ["confirmed", "cancelled"],
+          confirmed: ["shipped", "cancelled"],
+          processing: ["shipped", "cancelled"],
+          shipped: ["delivered"],
+          delivered: [],
+          cancelled: [],
+        };
+        if (!allowedTransitions[order.orderStatus]?.includes(orderStatus)) {
+          throw new Error(`Order cannot move from ${order.orderStatus} to ${orderStatus}.`);
+        }
+      }
+
       if (isNewCancellation) {
         await restoreStock(order.items, session);
+        await restoreEntitlement(order, session);
         await decrementDiscountUsage({
           discounts: order.discounts,
           session,

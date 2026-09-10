@@ -89,6 +89,11 @@ const productSchema = new mongoose.Schema(
       name: { type: String, default: "" },
       slug: { type: String, default: "" },
     },
+    categories: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
+      default: [],
+      index: true,
+    },
     shortDescription: {
       type: String,
       trim: true,
@@ -216,6 +221,7 @@ productSchema.pre("validate", function () {
 
 productSchema.index({ name: "text", description: "text", tags: "text" });
 productSchema.index({ category: 1, isActive: 1 });
+productSchema.index({ categories: 1, isActive: 1 });
 productSchema.index({ price: 1 });
 
 module.exports = mongoose.model("Product", productSchema);

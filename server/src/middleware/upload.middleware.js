@@ -38,10 +38,14 @@ const paymentProofUpload = createImageUpload(10 * 1024 * 1024);
 const uploadProductImages = upload.array("images", 3);
 const uploadCategoryImage = upload.single("image");
 const uploadPaymentProof = paymentProofUpload.single("paymentProof");
+const uploadBundleImage = upload.single("image");
+const uploadReviewImage = upload.single("image");
 
 module.exports = {
   upload,
   uploadProductImages,
   uploadCategoryImage,
   uploadPaymentProof,
+  uploadBundleImage,
+  uploadReviewImage,
 };

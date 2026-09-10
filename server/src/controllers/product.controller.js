@@ -74,6 +74,31 @@ const getPagination = (query = {}) => {
   };
 };
 
+const getSearchSuggestions = async (req, res) => {
+  try {
+    const term = String(req.query.q || "").trim();
+    if (term.length < 2) return res.status(200).json({ success: true, data: { products: [], categories: [] } });
+    const expression = new RegExp(escapeRegex(term), "i");
+    const categories = await Category.find({ isActive: true, $or: [{ name: expression }, { description: expression }] })
+      .select("name slug description image").sort({ sortOrder: 1, name: 1 }).limit(5).lean();
+    const categoryIds = categories.map((category) => category._id);
+    const products = await Product.find({
+      isActive: true,
+      isPlaceholder: { $ne: true },
+      $or: [
+        { name: expression }, { shortDescription: expression }, { description: expression },
+        { scentFamily: expression }, { tags: expression }, { "scentNotes.top": expression },
+        { "scentNotes.middle": expression }, { "scentNotes.base": expression },
+        { category: { $in: categoryIds } }, { categories: { $in: categoryIds } },
+      ],
+    }).select("name slug shortDescription price compareAtPrice stock images category categories variants size sizeMl")
+      .populate("category", "name slug").populate("categories", "name slug").limit(8).lean();
+    return res.status(200).json({ success: true, data: { products, categories } });
+  } catch {
+    return res.status(500).json({ success: false, message: "Search is temporarily unavailable." });
+  }
+};
+
 const resolveCategory = async (categoryValue) => {
   if (!categoryValue) {
     throw new Error("Product category is required.");
@@ -321,18 +346,15 @@ const buildProductPayload = async (
     throw new Error("Product name is required.");
   }
 
-  const categoryValue =
-    body.category || body.categorySlug || body.categoryName;
-
-  const category = categoryValue
-    ? await resolveCategory(categoryValue)
-    : existingProduct?.category
-      ? await Category.findById(existingProduct.category)
-      : null;
-
-  if (!category) {
-    throw new Error("Product category is required.");
-  }
+  const categoryValue = body.categories || body.category || body.categorySlug || body.categoryName;
+  const categories = await resolveCategories(
+    categoryValue,
+    existingProduct?.categories?.length ? existingProduct.categories : existingProduct?.category
+  );
+  const requestedPrimary = String(body.category || body.primaryCategory || "");
+  const category = categories.find((entry) =>
+    [String(entry._id), entry.slug, entry.name].includes(requestedPrimary)
+  ) || categories[0];
 
   const requestedSlug = body.slug?.trim();
   const productSlug = requestedSlug
@@ -380,7 +402,7 @@ const buildProductPayload = async (
     base: parseStringArray(body.baseNotes),
   });
 
-  const variants = parseMaybeJSON(body.variants, []);
+  const variants = parseMaybeJSON(body.variants, existingProduct?.variants || []);
   const tags = parseStringArray(body.tags);
 
   const isPlaceholder = parseBoolean(
@@ -395,7 +417,21 @@ const buildProductPayload = async (
 
   const price = parseNumber(body.price, existingProduct?.price || 0);
 
-  if (isActive && !isPlaceholder && price <= 0) {
+  const cleanVariants = Array.isArray(variants) ? variants.map((variant) => ({
+    ...(variant?._id ? { _id: variant._id } : {}),
+    label: String(variant?.label || "").trim(),
+    sizeMl: parseNumber(variant?.sizeMl, 0),
+    sku: String(variant?.sku || "").trim(),
+    price: parseNumber(variant?.price, 0),
+    compareAtPrice: parseNumber(variant?.compareAtPrice, 0),
+    stock: Math.max(parseNumber(variant?.stock, 0), 0),
+    isActive: parseBoolean(variant?.isActive, true),
+  })) : [];
+  const primaryVariant = cleanVariants
+    .filter((variant) => variant.isActive && variant.price > 0)
+    .sort((a, b) => a.price - b.price)[0];
+
+  if (isActive && !isPlaceholder && !cleanVariants.some((variant) => variant.isActive && variant.price > 0) && price <= 0) {
     await destroyCloudinaryImages(uploadedImages);
     throw new Error("Active real products must have a valid price.");
   }
@@ -405,14 +441,15 @@ const buildProductPayload = async (
     slug: productSlug,
     sku: body.sku?.trim() || "",
     category: category._id,
+    categories: categories.map((entry) => entry._id),
     categorySnapshot: {
       name: category.name,
       slug: category.slug,
     },
     shortDescription: body.shortDescription?.trim() || "",
     description: body.description?.trim() || "",
-    price,
-    compareAtPrice: parseNumber(body.compareAtPrice, 0),
+    price: primaryVariant?.price || price,
+    compareAtPrice: primaryVariant?.compareAtPrice || parseNumber(body.compareAtPrice, 0),
     costPrice: parseNumber(body.costPrice, 0),
     sizeLabel:
       body.sizeLabel?.trim() || existingProduct?.sizeLabel || "50 ML",
@@ -428,8 +465,10 @@ const buildProductPayload = async (
       base: Array.isArray(scentNotes?.base) ? scentNotes.base : [],
     },
     images,
-    variants: Array.isArray(variants) ? variants : [],
-    stock: parseNumber(body.stock, 0),
+    variants: cleanVariants,
+    stock: cleanVariants.length
+      ? cleanVariants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
+      : parseNumber(body.stock, 0),
     lowStockThreshold: parseNumber(body.lowStockThreshold, 3),
     tags,
     isActive,
@@ -467,9 +506,12 @@ const buildPublicProductFilter = async (query = {}) => {
 
       const categoryIds = categories.map((category) => category._id);
 
-      filter.category = categoryIds.length
-        ? { $in: categoryIds }
-        : null;
+      filter.$and = [
+        ...(filter.$and || []),
+        categoryIds.length
+          ? { $or: [{ categories: { $in: categoryIds } }, { category: { $in: categoryIds } }] }
+          : { _id: null },
+      ];
     }
   }
 
@@ -504,11 +546,21 @@ const buildPublicProductFilter = async (query = {}) => {
     const wantsOutOfStock = availability.includes("out");
 
     if (wantsInStock && !wantsOutOfStock) {
-      filter.stock = { $gt: 0 };
+      filter.$and = [...(filter.$and || []), {
+        $or: [
+          { stock: { $gt: 0 } },
+          { variants: { $elemMatch: { isActive: true, stock: { $gt: 0 } } } },
+        ],
+      }];
     }
 
     if (wantsOutOfStock && !wantsInStock) {
-      filter.stock = { $lte: 0 };
+      filter.$and = [...(filter.$and || []), {
+        $and: [
+          { stock: { $lte: 0 } },
+          { variants: { $not: { $elemMatch: { isActive: true, stock: { $gt: 0 } } } } },
+        ],
+      }];
     }
   }
 
@@ -597,7 +649,10 @@ const buildAdminProductFilter = async (query = {}) => {
       slug: query.category,
     }).select("_id");
 
-    filter.category = category?._id || null;
+    filter.$and = [
+      ...(filter.$and || []),
+      category ? { $or: [{ categories: category._id }, { category: category._id }] } : { _id: null },
+    ];
   }
 
   if (query.search?.trim()) {
@@ -641,6 +696,7 @@ const getProducts = async (req, res) => {
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("category", "name slug")
+        .populate("categories", "name slug")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -686,6 +742,7 @@ const getFeaturedProducts = async (req, res) => {
       isFeatured: true,
     })
       .populate("category", "name slug")
+      .populate("categories", "name slug")
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
@@ -717,6 +774,7 @@ const getProductBySlug = async (req, res) => {
       isActive: true,
     })
       .populate("category", "name slug description")
+      .populate("categories", "name slug description")
       .lean();
 
     if (!product) {
@@ -764,6 +822,7 @@ const getAdminProducts = async (req, res) => {
       Product.find(filter)
         .select("+costPrice")
         .populate("category", "name slug")
+        .populate("categories", "name slug")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -802,6 +861,7 @@ const getAdminProductById = async (req, res) => {
     const product = await Product.findById(req.params.id)
       .select("+costPrice")
       .populate("category", "name slug")
+      .populate("categories", "name slug")
       .lean();
 
     if (!product) {
@@ -866,7 +926,8 @@ const createProduct = async (req, res) => {
 
     const populatedProduct = await Product.findById(product._id)
       .select("+costPrice")
-      .populate("category", "name slug");
+      .populate("category", "name slug")
+      .populate("categories", "name slug");
 
     return res.status(201).json({
       success: true,
@@ -937,7 +998,8 @@ const updateProduct = async (req, res) => {
 
     const populatedProduct = await Product.findById(product._id)
       .select("+costPrice")
-      .populate("category", "name slug");
+      .populate("category", "name slug")
+      .populate("categories", "name slug");
 
     return res.status(200).json({
       success: true,
@@ -1069,6 +1131,7 @@ const deleteProductImage = async (req, res) => {
 };
 
 module.exports = {
+  getSearchSuggestions,
   getProducts,
   getFeaturedProducts,
   getProductBySlug,
@@ -1078,4 +1141,19 @@ module.exports = {
   updateProduct,
   deleteProduct,
   deleteProductImage,
+};
+
+const resolveCategories = async (value, fallbackCategory = null) => {
+  const requested = parseStringArray(value);
+  if (!requested.length && fallbackCategory) {
+    const fallbacks = Array.isArray(fallbackCategory) ? fallbackCategory : [fallbackCategory];
+    requested.push(...fallbacks.map(String));
+  }
+  const resolved = [];
+  for (const item of requested) {
+    const category = await resolveCategory(item);
+    if (!resolved.some((entry) => String(entry._id) === String(category._id))) resolved.push(category);
+  }
+  if (!resolved.length) throw new Error("At least one product category is required.");
+  return resolved;
 };

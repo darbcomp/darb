@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   getCurrentUser,
@@ -17,7 +18,7 @@ export function AuthProvider({ children }) {
     try {
       const response = await getCurrentUser();
       setUser(response?.data?.user || null);
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setIsAuthLoading(false);
@@ -25,6 +26,8 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    // Authentication bootstrapping intentionally synchronizes remote session state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkAuth();
   }, []);
 
@@ -49,7 +52,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await logoutCustomer();
-    } catch (error) {
+    } catch {
       // Even if backend logout fails, clear frontend auth state.
     } finally {
       setUser(null);

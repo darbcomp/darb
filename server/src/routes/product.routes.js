@@ -10,6 +10,7 @@ const {
   updateProduct,
   deleteProduct,
   deleteProductImage,
+  getSearchSuggestions,
 } = require("../controllers/product.controller");
 
 const { protect } = require("../middleware/auth.middleware");
@@ -41,6 +42,7 @@ router.delete("/admin/:id", protect, requireAdmin, deleteProduct);
 router.delete("/admin/:id/image", protect, requireAdmin, deleteProductImage);
 
 router.get("/featured", getFeaturedProducts);
+router.get("/search/suggestions", getSearchSuggestions);
 router.get("/", getProducts);
 router.get("/:slug", getProductBySlug);
 

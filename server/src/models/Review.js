@@ -44,6 +44,13 @@ const reviewSchema = new mongoose.Schema(
       minlength: 5,
       maxlength: 1200,
     },
+    media: {
+      type: { type: String, enum: ["none", "image", "video"], default: "none" },
+      url: { type: String, trim: true, default: "" },
+      publicId: { type: String, default: "", select: false },
+      posterUrl: { type: String, trim: true, default: "" },
+      alt: { type: String, trim: true, default: "" },
+    },
 
     fragranceName: {
       type: String,

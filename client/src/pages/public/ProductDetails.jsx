@@ -43,6 +43,7 @@ import {
   formatCurrency,
 } from "../../utils/formatCurrency";
 import { flyProductImageToCart } from "../../utils/flyToCart";
+import { getActiveProductVariants, getStockLabel } from "../../utils/productVariants";
 
 const initialWaitlistForm = {
   name: "",
@@ -73,6 +74,8 @@ function ProductDetails() {
     quantity,
     setQuantity,
   ] = useState(1);
+
+  const [selectedVariantId, setSelectedVariantId] = useState("");
 
   const [
     cartMessage,
@@ -117,6 +120,15 @@ function ProductDetails() {
 
   const product =
     productQuery.data?.data;
+
+  const activeVariants = useMemo(() => getActiveProductVariants(product), [product]);
+
+  const selectedVariant = activeVariants.find((variant) =>
+    String(variant.variantId || "") === String(selectedVariantId || "")
+  ) || activeVariants[0];
+  const displayPrice = Number(selectedVariant?.price) || 0;
+  const displayCompareAtPrice = Number(selectedVariant?.compareAtPrice) || 0;
+  const selectedStock = Number(selectedVariant?.stock) || 0;
 
   /* =========================
      IMAGES
@@ -190,11 +202,7 @@ function ProductDetails() {
       ?.slug ||
     "";
 
-  const sizeLabel =
-    product?.sizeLabel ||
-    (product?.sizeMl
-      ? `${product.sizeMl} ML`
-      : "50 ML");
+  const sizeLabel = selectedVariant?.label || product?.sizeLabel || "";
 
   const concentration =
     product?.concentration ||
@@ -206,16 +214,14 @@ function ProductDetails() {
 
   const canPurchase =
     product &&
-    product.price > 0 &&
-    product.stock > 0 &&
+    displayPrice > 0 &&
+    selectedStock > 0 &&
     product.isActive &&
     !product.isPlaceholder;
 
   const lowStock =
     canPurchase &&
-    product.stock <=
-      (product.lowStockThreshold ||
-        3);
+    selectedStock <= 3;
 
   const unavailableReason =
     useMemo(() => {
@@ -236,21 +242,19 @@ function ProductDetails() {
       }
 
       if (
-        !product.price ||
-        product.price <= 0
+        !displayPrice || displayPrice <= 0
       ) {
         return "The final price for this scent has not been confirmed yet.";
       }
 
       if (
-        !product.stock ||
-        product.stock <= 0
+        selectedStock <= 0
       ) {
         return "This scent is currently out of stock.";
       }
 
       return "";
-    }, [product]);
+    }, [product, displayPrice, selectedStock]);
 
   /* =========================
      RELATED PRODUCTS
@@ -358,11 +362,7 @@ function ProductDetails() {
             );
           }
 
-          const maxStock =
-            product?.stock >
-            0
-              ? product.stock
-              : 1;
+          const maxStock = selectedStock > 0 ? selectedStock : 1;
 
           return Math.min(
             current + 1,
@@ -384,7 +384,8 @@ function ProductDetails() {
 
       addToCart(
         product,
-        quantity
+        Math.min(quantity, selectedStock),
+        selectedVariant?.isLegacy ? null : selectedVariant
       );
 
       flyProductImageToCart({
@@ -395,8 +396,8 @@ function ProductDetails() {
       });
 
       setCartMessage(
-        `${quantity} ${
-          quantity === 1
+        `${Math.min(quantity, selectedStock)} ${
+          Math.min(quantity, selectedStock) === 1
             ? "bottle"
             : "bottles"
         } added to your cart.`
@@ -522,7 +523,7 @@ function ProductDetails() {
           "product_page",
 
         note:
-          waitlistForm.note.trim(),
+          [selectedVariant?.label ? `Requested size: ${selectedVariant.label}` : "", waitlistForm.note.trim()].filter(Boolean).join(" — "),
       });
     };
 
@@ -805,11 +806,11 @@ function ProductDetails() {
             {/* Price */}
 
             <div className="mt-7 flex flex-wrap items-end gap-3">
-              {product.price >
+              {displayPrice >
               0 ? (
                 <p className="font-display text-4xl text-darb-green">
                   {formatCurrency(
-                    product.price
+                    displayPrice
                   )}
                 </p>
               ) : (
@@ -819,17 +820,31 @@ function ProductDetails() {
                 </p>
               )}
 
-              {product.compareAtPrice >
-                product.price &&
-                product.price >
+              {displayCompareAtPrice > displayPrice &&
+                displayPrice >
                   0 && (
                   <p className="pb-1 text-base text-darb-muted line-through">
                     {formatCurrency(
-                      product.compareAtPrice
+                      displayCompareAtPrice
                     )}
                   </p>
                 )}
             </div>
+
+            {activeVariants.length > 1 && (
+              <div className="mt-6">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-muted">Choose size</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {activeVariants.map((variant) => (
+                    <button key={variant.variantId} type="button"
+                      onClick={() => { setSelectedVariantId(variant.variantId); setQuantity(1); setCartMessage(""); }}
+                      className={`rounded-full border px-5 py-2.5 text-sm font-semibold transition ${String(selectedVariant?.variantId) === String(variant.variantId) ? "border-darb-green bg-darb-green text-darb-beige" : "border-darb-gold/30 bg-white text-darb-green"}`}>
+                      {variant.label || variant.sku}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* =========================
                 PRODUCT ESSENTIALS
@@ -865,10 +880,8 @@ function ProductDetails() {
                 label="Availability"
                 value={
                   canPurchase
-                    ? lowStock
-                      ? `Only ${product.stock} left`
-                      : "In stock"
-                    : "Out of stock"
+                    ? getStockLabel(selectedStock)
+                    : "Out of Stock"
                 }
                 borderLeft={
                   Boolean(
@@ -905,7 +918,7 @@ function ProductDetails() {
                     }`}
                   >
                     {lowStock
-                      ? `Low stock — ${product.stock} remaining`
+                      ? `Only ${selectedStock} left`
                       : "Ready to order"}
                   </p>
                 </div>
@@ -953,8 +966,7 @@ function ProductDetails() {
                         )
                       }
                       disabled={
-                        quantity >=
-                        product.stock
+                        quantity >= selectedStock
                       }
                       className="flex h-12 w-12 items-center justify-center text-darb-green transition hover:text-darb-gold disabled:cursor-not-allowed disabled:opacity-30"
                       aria-label="Increase quantity"

@@ -39,7 +39,11 @@ const getInitialCartState = () => {
     }
 
     return {
-      items: parsedCart,
+      items: parsedCart.map((item) => ({
+        ...item,
+        cartItemId: item.cartItemId || `${item.productId || item.slug}_${item.variant?.variantId || "default"}`,
+        variant: item.variant || null,
+      })),
     };
   } catch {
     window.localStorage.removeItem(

@@ -6,7 +6,6 @@ import { formatCurrency } from "../../utils/formatCurrency";
 const orderStatuses = [
     "pending",
     "confirmed",
-    "processing",
     "shipped",
     "delivered",
     "cancelled",
@@ -21,7 +20,6 @@ const paymentMethods = [
     "cash_on_delivery",
     "instapay",
     "vodafone_cash",
-    "paymob_card",
 ];
 const paymentProofStatuses = [
     "submitted",
@@ -444,6 +442,8 @@ function AdminOrders() {
                         {order.shippingAddress?.notes && (<p className="mt-2 text-sm leading-7 text-darb-muted">
                             Notes: {order.shippingAddress.notes}
                           </p>)}
+                        {order.gift?.isGift && (<div className="mt-3 rounded-2xl bg-darb-cream/70 p-3 text-sm text-darb-green"><strong>Gift order</strong>{order.gift.message ? <p className="mt-1 text-darb-muted">{order.gift.message}</p> : <p className="mt-1 text-darb-muted">Blank gift card</p>}</div>)}
+                        {order.promotion?.freeTester && <div className="mt-3 rounded-2xl border border-darb-gold/30 bg-amber-50 p-3 text-sm text-darb-green"><strong>Fulfilment reward: add one extra tester</strong></div>}
                       </div>
 
                       {hasPaymentProof && (<div className="mt-5 rounded-2xl border border-darb-gold/20 bg-darb-cream/40 p-4">
@@ -459,6 +459,7 @@ function AdminOrders() {
                                 {order.paymentProof?.uploadedAt && (<span className="text-xs text-darb-muted">
                                     Uploaded {formatDateTime(order.paymentProof.uploadedAt)}
                                   </span>)}
+                                {order.paymentProof?.senderName && (<span className="text-xs font-semibold text-darb-green">Sender: {order.paymentProof.senderName}</span>)}
                               </div>
 
                               {proofIsRejected &&

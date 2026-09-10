@@ -12,7 +12,7 @@ const isDatabaseConnected = () =>
    DEFAULTS
 ========================= */
 
-const INSTAPAY_RECIPIENT = "01099589674";
+const INSTAPAY_RECIPIENT = "+20 10 99589674";
 
 const INSTAPAY_INSTRUCTIONS =
   "Transfer the exact order total to the InstaPay number, then upload a screenshot of the successful transaction.";
@@ -29,20 +29,21 @@ const defaultSettings = {
 
   contact: {
     phone: "",
-    whatsapp: "",
-    email: "",
-    instagram: "",
+    whatsapp: "+20 10 99589674",
+    email: "darbcomp@gmail.com",
+    instagram: "https://www.instagram.com/darb1.0",
     facebook: "",
-    tiktok: "",
+    tiktok: "https://www.tiktok.com/@darb1.0",
   },
 
   delivery: {
-    defaultFee: 0,
+    defaultFee: 135,
 
     freeDeliveryThreshold: 0,
 
-    estimatedDeliveryText:
-      "Delivery timing will be confirmed after placing the order.",
+    estimatedDeliveryText: "3–5 business days",
+    governorateFees: { cairo: 80, giza: 80, alexandria: 125, other: 135 },
+    shipsToCountry: "Egypt",
   },
 
   paymentMethods: {
@@ -65,7 +66,7 @@ const defaultSettings = {
         Keep disabled until the complete
         proof-upload flow is finished.
       */
-      enabled: false,
+      enabled: true,
 
       label: "InstaPay",
 
@@ -79,16 +80,17 @@ const defaultSettings = {
     },
 
     vodafoneCash: {
-      enabled: false,
+      enabled: true,
 
       label:
         "Vodafone Cash",
 
-      instructions: "",
+      instructions:
+        "Transfer the exact order total to the Vodafone Cash number, then upload a screenshot of the successful transaction.",
 
-      recipient: "",
+      recipient: INSTAPAY_RECIPIENT,
 
-      requireProof: false,
+      requireProof: true,
     },
 
     paymobCard: {
@@ -132,6 +134,10 @@ const defaultSettings = {
 
     metaDescription:
       "Darb is more than perfume — it is a journey, a memory in every step.",
+  },
+  marketingPixels: {
+    meta: { enabled: false, id: "" },
+    tiktok: { enabled: false, id: "" },
   },
 };
 
@@ -379,6 +385,24 @@ const migratePaymentSettingsIfNeeded =
       changed = true;
     }
 
+    if (Number(rawSettings.launchConfigVersion || 0) < 1) {
+      const vodafone = settings.paymentMethods?.vodafoneCash;
+      if (vodafone) {
+        vodafone.recipient = INSTAPAY_RECIPIENT;
+        vodafone.requireProof = true;
+        vodafone.instructions = defaultSettings.paymentMethods.vodafoneCash.instructions;
+        vodafone.enabled = true;
+      }
+      if (instaPay) instaPay.enabled = true;
+      settings.delivery.defaultFee = 135;
+      settings.delivery.freeDeliveryThreshold = 0;
+      settings.delivery.estimatedDeliveryText = "3–5 business days";
+      settings.delivery.governorateFees = defaultSettings.delivery.governorateFees;
+      if (!settings.contact.whatsapp) settings.contact.whatsapp = INSTAPAY_RECIPIENT;
+      settings.launchConfigVersion = 1;
+      changed = true;
+    }
+
     if (
       changed
     ) {
@@ -406,6 +430,8 @@ const getOrCreateSettings =
         await StoreSettings.create({
           singletonKey:
             "main",
+
+          launchConfigVersion: 1,
 
           ...defaultSettings,
         });
@@ -461,6 +487,7 @@ const buildSettingsPayload = (
   const currentSeo =
     currentSettings.seo ||
     {};
+  const currentPixels = currentSettings.marketingPixels || {};
 
   return {
     storeName: cleanString(
@@ -560,6 +587,13 @@ const buildSettingsPayload = (
               .delivery
               .estimatedDeliveryText
         ),
+      governorateFees: {
+        cairo: parseNumber(body.delivery?.governorateFees?.cairo, Number(currentDelivery.governorateFees?.cairo) || 80),
+        giza: parseNumber(body.delivery?.governorateFees?.giza, Number(currentDelivery.governorateFees?.giza) || 80),
+        alexandria: parseNumber(body.delivery?.governorateFees?.alexandria, Number(currentDelivery.governorateFees?.alexandria) || 125),
+        other: parseNumber(body.delivery?.governorateFees?.other, Number(currentDelivery.governorateFees?.other) || 135),
+      },
+      shipsToCountry: "Egypt",
     },
 
     /* =========================
@@ -719,6 +753,17 @@ const buildSettingsPayload = (
        SEO
     ========================= */
 
+    marketingPixels: {
+      meta: {
+        enabled: parseBoolean(body.marketingPixels?.meta?.enabled, currentPixels.meta?.enabled ?? false),
+        id: cleanString(body.marketingPixels?.meta?.id, currentPixels.meta?.id || ""),
+      },
+      tiktok: {
+        enabled: parseBoolean(body.marketingPixels?.tiktok?.enabled, currentPixels.tiktok?.enabled ?? false),
+        id: cleanString(body.marketingPixels?.tiktok?.id, currentPixels.tiktok?.id || ""),
+      },
+    },
+
     seo: {
       metaTitle: cleanString(
         body.seo?.metaTitle,
@@ -810,6 +855,7 @@ const getPublicSettings =
 
             seo:
               settings.seo,
+            marketingPixels: settings.marketingPixels || defaultSettings.marketingPixels,
           },
         });
     } catch (error) {

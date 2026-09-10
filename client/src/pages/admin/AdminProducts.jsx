@@ -36,6 +36,8 @@ const emptyForm = {
   slug: "",
   sku: "",
   category: "",
+  categories: [],
+  variants: [],
   shortDescription: "",
   description: "",
   price: "",
@@ -100,6 +102,19 @@ const productToForm = (product) => ({
   slug: product.slug || "",
   sku: product.sku || "",
   category: product.category?.slug || product.categorySnapshot?.slug || "",
+  categories: (product.categories?.length ? product.categories : [product.category])
+    .filter(Boolean)
+    .map((category) => category.slug || category._id || category),
+  variants: (product.variants || []).map((variant) => ({
+    _id: variant._id,
+    label: variant.label || "",
+    sizeMl: variant.sizeMl || "",
+    sku: variant.sku || "",
+    price: variant.price ?? "",
+    compareAtPrice: variant.compareAtPrice ?? "",
+    stock: variant.stock ?? "",
+    isActive: variant.isActive !== false,
+  })),
   shortDescription: product.shortDescription || "",
   description: product.description || "",
   price: product.price || "",
@@ -432,6 +447,7 @@ function AdminProducts() {
       category:
         categories[0]?.slug ||
         "",
+      categories: categories[0]?.slug ? [categories[0].slug] : [],
     });
 
     setExistingImages([]);
@@ -515,6 +531,32 @@ function AdminProducts() {
       })
     );
   };
+
+  const toggleCategory = (slug) => {
+    setForm((current) => {
+      const selected = current.categories.includes(slug)
+        ? current.categories.filter((item) => item !== slug)
+        : [...current.categories, slug];
+      return { ...current, categories: selected, category: selected.includes(current.category) ? current.category : selected[0] || "" };
+    });
+  };
+
+  const addVariant = () => setForm((current) => ({
+    ...current,
+    variants: [...current.variants, { label: "", sizeMl: "", sku: "", price: "", compareAtPrice: "", stock: "", isActive: true }],
+  }));
+
+  const updateVariant = (index, key, value) => setForm((current) => ({
+    ...current,
+    variants: current.variants.map((variant, variantIndex) =>
+      variantIndex === index ? { ...variant, [key]: value } : variant
+    ),
+  }));
+
+  const removeVariant = (index) => setForm((current) => ({
+    ...current,
+    variants: current.variants.filter((_, variantIndex) => variantIndex !== index),
+  }));
 
   const handleImageChange = (
     event
@@ -749,7 +791,7 @@ function AdminProducts() {
     }
 
     if (
-      !form.category
+      !form.categories.length
     ) {
       return "Category is required.";
     }
@@ -759,10 +801,8 @@ function AdminProducts() {
       !form.isPlaceholder
     ) {
       if (
-        !form.price ||
-        Number(
-          form.price
-        ) <= 0
+        (!form.variants.some((variant) => variant.isActive && Number(variant.price) > 0) &&
+          (!form.price || Number(form.price) <= 0))
       ) {
         return "Active real products need a valid price.";
       }
@@ -790,15 +830,7 @@ function AdminProducts() {
       const formData =
         new FormData();
 
-      const fields = {
-        ...form,
-
-        sizeLabel:
-          "50 ML",
-
-        sizeMl:
-          "50",
-      };
+      const fields = { ...form };
 
       Object.entries(
         fields
@@ -835,6 +867,9 @@ function AdminProducts() {
           )
         )
       );
+
+      formData.set("categories", JSON.stringify(form.categories));
+      formData.set("variants", JSON.stringify(form.variants));
 
       formData.append(
         "scentNotes",
@@ -1148,15 +1183,7 @@ function AdminProducts() {
               </h2>
 
               <p className="mt-2 text-sm text-darb-muted">
-                Darb perfumes use
-                a fixed 50 ML size
-                and a maximum of
-                three product
-                images. JPG, JPEG,
-                PNG, and WEBP are
-                accepted and
-                automatically
-                optimized.
+                Assign categories and purchasable sizes. Product images remain limited to three and use the existing optimized upload pipeline.
               </p>
             </div>
 
@@ -1223,46 +1250,19 @@ function AdminProducts() {
                 placeholder="DARB-001"
               />
 
-              <label>
+              <div>
                 <span className="mb-2 block text-sm font-semibold text-darb-green">
-                  Category *
+                  Categories *
                 </span>
-
-                <select
-                  name="category"
-                  value={
-                    form.category
-                  }
-                  onChange={
-                    handleFormChange
-                  }
-                  className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                >
-                  <option value="">
-                    Select category
-                  </option>
-
-                  {categories.map(
-                    (
-                      category
-                    ) => (
-                      <option
-                        key={
-                          category._id ||
-                          category.slug
-                        }
-                        value={
-                          category.slug
-                        }
-                      >
-                        {
-                          category.name
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
+                <div className="flex min-h-[50px] flex-wrap gap-2 rounded-2xl border border-darb-gold/30 bg-white p-2">
+                  {categories.map((category) => (
+                    <label key={category._id || category.slug} className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-sm text-darb-green">
+                      <input type="checkbox" checked={form.categories.includes(category.slug)} onChange={() => toggleCategory(category.slug)} />
+                      {category.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
 
               <Field
                 label="Price"
@@ -1337,15 +1337,17 @@ function AdminProducts() {
               <Field
                 label="Size"
                 name="sizeLabel"
-                value="50 ML"
-                readOnly
+                value={form.sizeLabel}
+                onChange={handleFormChange}
               />
 
               <Field
                 label="Size ML"
                 name="sizeMl"
-                value="50"
-                readOnly
+                value={form.sizeMl}
+                onChange={handleFormChange}
+                type="number"
+                min="0"
               />
 
               <Field
@@ -1455,6 +1457,30 @@ function AdminProducts() {
                   }
                   placeholder="musk, fresh, gift"
                 />
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/40 p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-2xl text-darb-green">Variants / Sizes</h3>
+                  <p className="mt-1 text-sm text-darb-muted">Leave empty to keep using the legacy product-level price and stock as one size.</p>
+                </div>
+                <button type="button" onClick={addVariant} className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-sm font-semibold text-darb-beige"><Plus size={16} /> Add variant</button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {form.variants.map((variant, index) => (
+                  <div key={variant._id || index} className="grid gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 md:grid-cols-4 xl:grid-cols-8">
+                    <Field label="Label" value={variant.label} onChange={(event) => updateVariant(index, "label", event.target.value)} placeholder="50 ML" />
+                    <Field label="Size ML" type="number" min="0" value={variant.sizeMl} onChange={(event) => updateVariant(index, "sizeMl", event.target.value)} />
+                    <Field label="SKU" value={variant.sku} onChange={(event) => updateVariant(index, "sku", event.target.value)} />
+                    <Field label="Price" type="number" min="0" value={variant.price} onChange={(event) => updateVariant(index, "price", event.target.value)} />
+                    <Field label="Compare at" type="number" min="0" value={variant.compareAtPrice} onChange={(event) => updateVariant(index, "compareAtPrice", event.target.value)} />
+                    <Field label="Stock" type="number" min="0" value={variant.stock} onChange={(event) => updateVariant(index, "stock", event.target.value)} />
+                    <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-darb-green"><input type="checkbox" checked={variant.isActive} onChange={(event) => updateVariant(index, "isActive", event.target.checked)} /> Active</label>
+                    <button type="button" onClick={() => removeVariant(index)} className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-red-200 text-red-700" aria-label="Remove variant"><Trash2 size={16} /></button>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -104,6 +104,16 @@ const userSchema = new mongoose.Schema(
       type: [addressSchema],
       default: [],
     },
+    spin: {
+      available: { type: Boolean, default: true },
+      claimedAt: { type: Date, default: null },
+      entitlement: { type: mongoose.Schema.Types.ObjectId, ref: "Entitlement", default: null },
+    },
+    marketingConsent: {
+      granted: { type: Boolean, default: false },
+      grantedAt: { type: Date, default: null },
+      source: { type: String, default: "" },
+    },
 
     isActive: {
       type: Boolean,
@@ -156,6 +166,8 @@ userSchema.methods.toSafeObject = function () {
     phone: this.phone || "",
     role: this.role,
     addresses: this.addresses || [],
+    spin: this.spin || { available: false },
+    marketingConsent: this.marketingConsent || { granted: false },
     isActive: this.isActive,
     lastLoginAt: this.lastLoginAt,
     createdAt: this.createdAt,

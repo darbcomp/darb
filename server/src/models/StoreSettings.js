@@ -63,6 +63,7 @@ const storeSettingsSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    launchConfigVersion: { type: Number, default: 0, select: false },
 
     storeName: {
       type: String,
@@ -153,6 +154,13 @@ const storeSettingsSchema = new mongoose.Schema(
         default:
           "Delivery timing will be confirmed after placing the order.",
       },
+      governorateFees: {
+        cairo: { type: Number, default: 80 },
+        giza: { type: Number, default: 80 },
+        alexandria: { type: Number, default: 125 },
+        other: { type: Number, default: 135 },
+      },
+      shipsToCountry: { type: String, trim: true, default: "Egypt" },
     },
 
     /* =========================
@@ -182,17 +190,12 @@ const storeSettingsSchema = new mongoose.Schema(
         type: paymentMethodSchema,
 
         default: () => ({
-          /*
-            Keep disabled until the full
-            payment-proof flow is finished
-            and tested.
-          */
-          enabled: false,
+          enabled: true,
 
           label: "InstaPay",
 
           recipient:
-            "01099589674",
+            "+20 10 99589674",
 
           instructions:
             "Transfer the exact order total to the InstaPay number, then upload a screenshot of the successful transaction.",
@@ -205,16 +208,17 @@ const storeSettingsSchema = new mongoose.Schema(
         type: paymentMethodSchema,
 
         default: () => ({
-          enabled: false,
+          enabled: true,
 
           label:
             "Vodafone Cash",
 
-          instructions: "",
+          instructions:
+            "Transfer the exact order total to the Vodafone Cash number, then upload a screenshot of the successful transaction.",
 
-          recipient: "",
+          recipient: "+20 10 99589674",
 
-          requireProof: false,
+          requireProof: true,
         }),
       },
 
@@ -292,6 +296,11 @@ const storeSettingsSchema = new mongoose.Schema(
         trim: true,
         default: "#F7F1E6",
       },
+    },
+
+    marketingPixels: {
+      meta: { enabled: { type: Boolean, default: false }, id: { type: String, trim: true, default: "" } },
+      tiktok: { enabled: { type: Boolean, default: false }, id: { type: String, trim: true, default: "" } },
     },
 
     /* =========================

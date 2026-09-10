@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
+const { createFirstOrderEntitlement } = require("../services/entitlement.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -27,6 +28,7 @@ const sendAuthResponse = (res, user, message = "Authenticated successfully") => 
         email: user.email || "",
         phone: user.phone || "",
         role: user.role,
+        spinAvailable: Boolean(user.spin?.available && !user.spin?.claimedAt),
       },
     },
   });
@@ -41,7 +43,7 @@ const registerCustomer = async (req, res) => {
       });
     }
 
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, marketingConsent = false } = req.body;
 
     if (!name || !password || (!email && !phone)) {
       return res.status(400).json({
@@ -77,6 +79,15 @@ const registerCustomer = async (req, res) => {
       phone: phone ? phone.trim() : undefined,
       password,
       role: "customer",
+      marketingConsent: {
+        granted: Boolean(marketingConsent),
+        grantedAt: marketingConsent ? new Date() : null,
+        source: marketingConsent ? "registration" : "",
+      },
+    });
+
+    await createFirstOrderEntitlement(user._id).catch((error) => {
+      console.error("First-order reward provisioning failed:", error.message);
     });
 
     return sendAuthResponse(res, user, "Account created successfully.");
@@ -191,6 +202,8 @@ const getMe = async (req, res) => {
         phone: req.user.phone || "",
         role: req.user.role,
         addresses: req.user.addresses || [],
+        spinAvailable: Boolean(req.user.spin?.available && !req.user.spin?.claimedAt),
+        marketingConsent: req.user.marketingConsent || { granted: false },
       },
     },
   });

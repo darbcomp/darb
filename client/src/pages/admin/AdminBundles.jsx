@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit, Gift, PackagePlus, Plus, Search, Trash2, X } from "lucide-react";
+import { Edit, PackagePlus, Plus, Search, Trash2, X } from "lucide-react";
 import {
   createAdminBundle,
   deleteAdminBundle,
@@ -27,8 +27,12 @@ const emptyForm = {
   endsAt: "",
   isActive: true,
   priority: "0",
-  allowCouponStacking: true,
+  allowCouponStacking: false,
   usageLimit: "",
+  freeDelivery: false,
+  image: null,
+  imageFile: null,
+  removeImage: false,
 };
 
 const bundleTypes = [
@@ -143,11 +147,15 @@ const bundleToForm = (bundle) => {
     priority: bundle.priority || "0",
     allowCouponStacking: Boolean(bundle.allowCouponStacking),
     usageLimit: bundle.usageLimit || "",
+    freeDelivery: Boolean(bundle.freeDelivery),
+    image: bundle.image || null,
+    imageFile: null,
+    removeImage: false,
   };
 };
 
 const createPayload = (form) => {
-  return {
+  const values = {
     name: form.name.trim(),
     title: form.title.trim(),
     description: form.description.trim(),
@@ -166,9 +174,16 @@ const createPayload = (form) => {
     endsAt: form.endsAt || null,
     isActive: Boolean(form.isActive),
     priority: Number(form.priority) || 0,
-    allowCouponStacking: Boolean(form.allowCouponStacking),
+    allowCouponStacking: false,
     usageLimit: Number(form.usageLimit) || 0,
+    freeDelivery: Boolean(form.freeDelivery),
+    removeImage: Boolean(form.removeImage),
   };
+  if (!form.imageFile && !form.removeImage) return values;
+  const payload = new FormData();
+  Object.entries(values).forEach(([key, value]) => payload.append(key, typeof value === "object" ? JSON.stringify(value) : String(value ?? "")));
+  if (form.imageFile) payload.append("image", form.imageFile);
+  return payload;
 };
 
 function ToggleField({ label, name, checked, onChange }) {
@@ -758,6 +773,13 @@ function AdminBundles() {
                 />
               </div>
 
+              <div className="md:col-span-2 xl:col-span-3 rounded-3xl border border-darb-gold/20 bg-darb-cream/60 p-5">
+                <label className="mb-2 block text-sm font-semibold text-darb-green">Bundle image</label>
+                {form.image?.url && !form.removeImage && <img src={form.image.url} alt={form.name} className="mb-4 h-36 w-36 rounded-2xl object-cover" />}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setForm((current) => ({ ...current, imageFile: event.target.files?.[0] || null, removeImage: false }))} className="text-sm text-darb-muted" />
+                {form.image?.url && <button type="button" onClick={() => setForm((current) => ({ ...current, imageFile: null, removeImage: true }))} className="ml-4 text-sm font-semibold text-red-600">Remove image</button>}
+              </div>
+
               <div className="md:col-span-2 xl:col-span-3">
                 <div className="rounded-3xl border border-darb-gold/20 bg-darb-cream/60 p-5">
                   <h3 className="font-display text-2xl text-darb-green">
@@ -822,12 +844,7 @@ function AdminBundles() {
                 onChange={handleFormChange}
               />
 
-              <ToggleField
-                label="Allow Coupon Stacking"
-                name="allowCouponStacking"
-                checked={form.allowCouponStacking}
-                onChange={handleFormChange}
-              />
+              <ToggleField label="Free Delivery" name="freeDelivery" checked={form.freeDelivery} onChange={handleFormChange} />
             </div>
 
             <div className="flex flex-wrap gap-3">

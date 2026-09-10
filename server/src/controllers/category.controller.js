@@ -204,12 +204,25 @@ const getAdminCategories = async (req, res) => {
     const productCounts = await Product.aggregate([
       {
         $match: {
-          category: { $in: categoryIds },
+          $or: [{ category: { $in: categoryIds } }, { categories: { $in: categoryIds } }],
         },
       },
       {
+        $project: {
+          categoryIds: {
+            $setUnion: [
+              { $cond: [{ $gt: [{ $size: { $ifNull: ["$categories", []] } }, 0] }, "$categories", []] },
+              { $cond: [{ $ne: ["$category", null] }, ["$category"], []] },
+            ],
+          },
+          isActive: 1,
+          isPlaceholder: 1,
+        },
+      },
+      { $unwind: "$categoryIds" },
+      {
         $group: {
-          _id: "$category",
+          _id: "$categoryIds",
           totalProducts: { $sum: 1 },
           activeProducts: {
             $sum: {
@@ -279,12 +292,12 @@ const getAdminCategoryById = async (req, res) => {
     const productStats = await Product.aggregate([
       {
         $match: {
-          category: category._id,
+          $or: [{ category: category._id }, { categories: category._id }],
         },
       },
       {
         $group: {
-          _id: "$category",
+          _id: null,
           totalProducts: { $sum: 1 },
           activeProducts: {
             $sum: {
@@ -449,7 +462,7 @@ const deleteCategory = async (req, res) => {
     }
 
     const productsCount = await Product.countDocuments({
-      category: category._id,
+      $or: [{ category: category._id }, { categories: category._id }],
     });
 
     if (req.query.hard === "true") {
