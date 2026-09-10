@@ -3,8 +3,7 @@ const mongoose = require("mongoose");
 const Review = require("../models/Review");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
-const { cloudinary } = require("../config/cloudinary");
-const { processProductImage } = require("../utils/imageProcessor");
+const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -16,12 +15,12 @@ const cleanText = (value) =>
 
 const uploadReviewImage = async (file) => {
   if (!file) return { type: "none", url: "", publicId: "", posterUrl: "", alt: "" };
-  if (!file.mimetype?.startsWith("image/")) throw new Error("Review media must be one JPG, PNG, or WEBP image.");
-  const processed = await processProductImage(file.buffer);
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream({ folder: "darb/reviews", resource_type: "image", format: "webp" }, (error, result) => error ? reject(error) : resolve({ type: "image", url: result.secure_url, publicId: result.public_id, posterUrl: "", alt: "Darb review" }));
-    stream.end(processed.buffer);
+  const result = await uploadOptimizedPublicImage(file, {
+    folder: "reviews",
+    baseName: "review",
+    alt: "Darb review",
   });
+  return { type: "image", url: result.url, publicId: result.publicId, posterUrl: "", alt: "Darb review" };
 };
 
 const parseRating = (value) => {
@@ -226,7 +225,24 @@ const getPublicReviews = async (
       status: "approved",
     };
 
-    const [reviews, total] =
+    const requestedProduct = cleanText(req.query.product || req.query.productId);
+    if (requestedProduct) {
+      if (mongoose.Types.ObjectId.isValid(requestedProduct)) {
+        filter.product = new mongoose.Types.ObjectId(requestedProduct);
+      } else {
+        const product = await Product.findOne({ slug: requestedProduct.toLowerCase() }).select("_id").lean();
+        if (!product) {
+          return res.status(200).json({
+            success: true,
+            data: [],
+            pagination: { page, limit, total: 0, pages: 0 },
+          });
+        }
+        filter.product = product._id;
+      }
+    }
+
+    const [reviews, total, ratingSummary] =
       await Promise.all([
         Review.find(filter)
           .populate(
@@ -244,6 +260,18 @@ const getPublicReviews = async (
         Review.countDocuments(
           filter
         ),
+        Review.aggregate([
+          { $match: filter },
+          {
+            $group: {
+              _id: null,
+              averageRating: {
+                $avg: "$rating",
+              },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
       ]);
 
     return res.status(200).json({
@@ -254,6 +282,14 @@ const getPublicReviews = async (
       data: reviews.map(
         serializePublicReview
       ),
+
+      summary: {
+        averageRating:
+          ratingSummary[0]
+            ?.averageRating || 0,
+        count:
+          ratingSummary[0]?.count || 0,
+      },
 
       pagination: {
         page,
@@ -584,6 +620,7 @@ const createCustomerReview = async (
     }
 
     const media = await uploadReviewImage(req.file);
+
     const review =
       await Review.create({
         customer: req.user._id,
@@ -934,7 +971,6 @@ const createAdminReview = async (
       });
     }
 
-    const media = await uploadReviewImage(req.file);
     const review =
       await Review.create({
         customer: null,
@@ -980,7 +1016,7 @@ const createAdminReview = async (
           "approved"
             ? req.user._id
             : null,
-        media,
+        media: { type: "none", url: "", publicId: "", posterUrl: "", alt: "" },
       });
 
     return res.status(201).json({
@@ -1222,16 +1258,6 @@ const updateAdminReview = async (
       real order verification only.
     */
 
-    if (req.file) {
-      const previousPublicId = review.media?.publicId;
-      review.media = await uploadReviewImage(req.file);
-      if (previousPublicId) await cloudinary.uploader.destroy(previousPublicId).catch(() => {});
-    } else if (String(req.body.removeImage).toLowerCase() === "true" && review.media?.type === "image") {
-      const previousPublicId = review.media.publicId;
-      review.media = { type: "none", url: "", publicId: "", posterUrl: "", alt: "" };
-      if (previousPublicId) await cloudinary.uploader.destroy(previousPublicId).catch(() => {});
-    }
-
     await review.save();
 
     const populated =
@@ -1299,7 +1325,7 @@ const deleteAdminReview = async (
     }
 
     await review.deleteOne();
-    if (review.media?.type === "image" && review.media.publicId) await cloudinary.uploader.destroy(review.media.publicId).catch(() => {});
+    if (review.media?.type === "image" && review.media.publicId) await deletePublicMedia(review.media.publicId).catch(() => {});
 
     return res.status(200).json({
       success: true,

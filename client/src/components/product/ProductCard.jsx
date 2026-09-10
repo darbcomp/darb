@@ -20,8 +20,7 @@ function ProductCard({ product }) {
       (a, b) =>
         Number(Boolean(b.isMain)) -
         Number(Boolean(a.isMain))
-    )
-    .slice(0, 3);
+    );
 
   const mainImage = images[0];
   const hoverImage = images[1];
@@ -96,7 +95,7 @@ function ProductCard({ product }) {
         overflow-hidden
         rounded-[1.25rem]
         border border-darb-gold/20
-        bg-[#E9DDC9]
+        bg-darb-surface
         shadow-soft
         transition duration-300
 
@@ -128,6 +127,8 @@ function ProductCard({ product }) {
                     : "md:group-hover:scale-105"
                 }
               `}
+              loading="lazy"
+              decoding="async"
             />
 
             {hoverImage?.url && (
@@ -147,6 +148,8 @@ function ProductCard({ product }) {
                   md:group-hover:scale-105
                   md:group-hover:opacity-100
                 "
+                loading="lazy"
+                decoding="async"
               />
             )}
           </>
@@ -164,9 +167,6 @@ function ProductCard({ product }) {
                 Darb
               </p>
 
-              <p className="mt-2 text-[8px] font-semibold uppercase tracking-[0.25em] text-darb-beige/65 sm:text-xs sm:tracking-[0.35em]">
-                Visual soon
-              </p>
             </div>
           </div>
         )}
@@ -209,16 +209,14 @@ function ProductCard({ product }) {
         </h3>
 
         <p className="mt-2 hidden line-clamp-2 min-h-[3rem] text-sm leading-6 text-darb-muted sm:block">
-          {product.shortDescription ||
-            product.description ||
-            "A scent waiting to begin its path."}
+          {product.shortDescription || product.description}
         </p>
 
         <div className="mt-auto pt-4 sm:pt-5">
           <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
             {price > 0
               ? formatCurrency(price)
-              : "Price soon"}
+              : "Unavailable"}
           </p>
 
           {hasDiscount && (

@@ -2,8 +2,7 @@ const mongoose = require("mongoose");
 const Bundle = require("../models/Bundle");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
-const { cloudinary } = require("../config/cloudinary");
-const { processProductImage } = require("../utils/imageProcessor");
+const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -250,11 +249,12 @@ const serializeBundle = (value) => {
 
 const uploadBundleImage = async (file, name) => {
   if (!file) return null;
-  const processed = await processProductImage(file.buffer);
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream({ folder: "darb/bundles", resource_type: "image", format: "webp", public_id: `${String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}` }, (error, result) => error ? reject(error) : resolve({ url: result.secure_url, publicId: result.public_id, alt: name }));
-    stream.end(processed.buffer);
+  const result = await uploadOptimizedPublicImage(file, {
+    folder: "bundles",
+    baseName: String(name || "bundle").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    alt: `${name || "Darb bundle"} — Darb`,
   });
+  return { url: result.url, publicId: result.publicId, alt: name || "Darb bundle" };
 };
 
 const buildBundlePayload = async (body = {}, current = null, file = null) => {
@@ -652,7 +652,7 @@ const updateBundle = async (
 
     await bundle.save();
     if (previousImagePublicId && previousImagePublicId !== bundle.image?.publicId) {
-      await cloudinary.uploader.destroy(previousImagePublicId).catch(() => {});
+      await deletePublicMedia(previousImagePublicId).catch(() => {});
     }
 
     const populated =
@@ -704,7 +704,7 @@ const deleteBundle = async (
       req.query.hard === "true"
     ) {
       await bundle.deleteOne();
-      if (bundle.image?.publicId) await cloudinary.uploader.destroy(bundle.image.publicId).catch(() => {});
+      if (bundle.image?.publicId) await deletePublicMedia(bundle.image.publicId).catch(() => {});
 
       return res.status(200).json({
         success: true,

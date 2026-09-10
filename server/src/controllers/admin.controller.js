@@ -7,6 +7,7 @@ const Coupon = require("../models/Coupon");
 const Bundle = require("../models/Bundle");
 const Offer = require("../models/Offer");
 const User = require("../models/User");
+const Review = require("../models/Review");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -26,6 +27,9 @@ const emptyDashboardData = {
     activeOffers: 0,
     activeBundles: 0,
     totalCustomers: 0,
+    paymentProofsToReview: 0,
+    lowStockVariants: 0,
+    pendingReviews: 0,
   },
   recentOrders: [],
   ordersByStatus: [],
@@ -60,6 +64,9 @@ const getAdminDashboard = async (req, res) => {
       activeOffers,
       activeBundles,
       totalCustomers,
+      paymentProofsToReview,
+      lowStockResult,
+      pendingReviews,
       revenueResult,
       recentOrders,
       ordersByStatus,
@@ -87,6 +94,35 @@ const getAdminDashboard = async (req, res) => {
       Bundle.countDocuments({ isActive: true }),
 
       User.countDocuments({ role: "customer" }),
+      Order.countDocuments({ "paymentProof.status": "submitted" }),
+      Product.aggregate([
+        { $match: { isActive: true, isPlaceholder: { $ne: true } } },
+        { $project: {
+          count: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ["$variants", []] } }, 0] },
+              {
+                $size: {
+                  $filter: {
+                    input: "$variants",
+                    as: "variant",
+                    cond: {
+                      $and: [
+                        { $eq: ["$$variant.isActive", true] },
+                        { $gt: ["$$variant.stock", 0] },
+                        { $lte: ["$$variant.stock", "$lowStockThreshold"] },
+                      ],
+                    },
+                  },
+                },
+              },
+              { $cond: [{ $and: [{ $gt: ["$stock", 0] }, { $lte: ["$stock", "$lowStockThreshold"] }] }, 1, 0] },
+            ],
+          },
+        } },
+        { $group: { _id: null, total: { $sum: "$count" } } },
+      ]),
+      Review.countDocuments({ status: "pending" }),
 
       Order.aggregate([
         {
@@ -256,6 +292,9 @@ const getAdminDashboard = async (req, res) => {
           activeOffers,
           activeBundles,
           totalCustomers,
+          paymentProofsToReview,
+          lowStockVariants: lowStockResult[0]?.total || 0,
+          pendingReviews,
         },
         recentOrders,
         ordersByStatus,

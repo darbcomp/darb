@@ -12,8 +12,8 @@ const {
 } = require("../services/orderEmail.service");
 
 const {
-  uploadPaymentProofToCloudinary,
-  deletePaymentProofFromCloudinary,
+  uploadPaymentProofToR2,
+  deletePaymentProofFromR2,
   getPaymentProofTemporaryUrl,
   PAYMENT_PROOF_URL_TTL_SECONDS,
 } = require("../services/paymentProof.service");
@@ -27,6 +27,7 @@ const { findProductVariant } = require("../utils/productVariants");
 const { getGovernorateDeliveryFee } = require("../utils/shipping");
 const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, findAvailableEntitlementByCode } = require("../services/entitlement.service");
+const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -271,13 +272,13 @@ const validateOrderItems = async (items = [], session = null) => {
 const getSubtotal = (items = []) =>
   items.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0);
 
-const buildPricingForItems = async ({ items, couponCode, entitlementId = "", userId = null, governorate = "", session = null }) => {
+const buildPricingForItems = async ({ items, couponCode, entitlementId = "", userId = null, customerPhone = "", governorate = "", session = null }) => {
   const subtotal = getSubtotal(items);
   const settings = await getSettings(session);
   const baseDeliveryFee = getBaseDeliveryFee(subtotal, settings, governorate);
 
   const codedEntitlement = !entitlementId
-    ? await findAvailableEntitlementByCode(userId, couponCode, session)
+    ? await findAvailableEntitlementByCode(userId, couponCode, session, customerPhone)
     : null;
   const selectedEntitlementId = entitlementId || codedEntitlement?._id;
   let pricing = await calculateCartPricing({
@@ -286,7 +287,7 @@ const buildPricingForItems = async ({ items, couponCode, entitlementId = "", use
     baseDeliveryFee,
     session,
   });
-  const applied = await applySelectedEntitlement({ pricing, items, entitlementId: selectedEntitlementId, userId, session });
+  const applied = await applySelectedEntitlement({ pricing, items, entitlementId: selectedEntitlementId, userId, guestPhone: customerPhone, session });
   pricing = applied.pricing;
   return { pricing, settings, entitlement: applied.entitlement, freeTester: applied.freeTester };
 };
@@ -503,6 +504,7 @@ const previewOrder = async (req, res) => {
       couponCode: req.body.couponCode,
       entitlementId: req.body.entitlementId,
       userId: req.user?._id || null,
+      customerPhone: req.body.customer?.phone || "",
       governorate: req.body.shippingAddress?.governorate,
     });
 
@@ -570,11 +572,11 @@ const createOrder = async (req, res) => {
     }
 
     if (req.file) {
-      uploadedPaymentProof = await uploadPaymentProofToCloudinary(req.file);
+      uploadedPaymentProof = await uploadPaymentProofToR2(req.file);
     }
   } catch (error) {
     if (uploadedPaymentProof) {
-      await deletePaymentProofFromCloudinary(uploadedPaymentProof);
+      await deletePaymentProofFromR2(uploadedPaymentProof);
     }
 
     return res.status(400).json({
@@ -607,6 +609,7 @@ const createOrder = async (req, res) => {
         couponCode,
         entitlementId: body.entitlementId,
         userId: req.user?._id || null,
+        customerPhone: customer.phone,
         governorate: shippingAddress.governorate,
         session,
       });
@@ -724,7 +727,7 @@ const createOrder = async (req, res) => {
 
       await order.save({ session });
 
-      await consumeEntitlement(entitlement?._id, req.user?._id, order._id, session);
+      await consumeEntitlement(entitlement?._id, req.user?._id, order._id, session, customer.phone);
 
       await incrementDiscountUsage({
         discounts: pricing.discounts,
@@ -754,7 +757,7 @@ const createOrder = async (req, res) => {
     });
   } catch (error) {
     if (uploadedPaymentProof && !transactionCommitted) {
-      await deletePaymentProofFromCloudinary(uploadedPaymentProof);
+      await deletePaymentProofFromR2(uploadedPaymentProof);
     }
 
     return res.status(400).json({
@@ -973,7 +976,7 @@ const getAdminPaymentProofUrl = async (req, res) => {
       });
     }
 
-    const url = getPaymentProofTemporaryUrl(order.paymentProof);
+    const url = await getPaymentProofTemporaryUrl(order.paymentProof);
 
     return res.status(200).json({
       success: true,
@@ -1058,6 +1061,9 @@ const reviewAdminPaymentProof = async (req, res) => {
       }
 
       await order.save({ session });
+      if (order.orderStatus === "confirmed") {
+        await ensureOrderSpinGrant(order, session);
+      }
       updatedOrder = order;
     });
 
@@ -1154,7 +1160,6 @@ const updateAdminOrderStatus = async (req, res) => {
         const allowedTransitions = {
           pending: ["confirmed", "cancelled"],
           confirmed: ["shipped", "cancelled"],
-          processing: ["shipped", "cancelled"],
           shipped: ["delivered"],
           delivered: [],
           cancelled: [],
@@ -1193,6 +1198,9 @@ const updateAdminOrderStatus = async (req, res) => {
       }
 
       await order.save({ session });
+      if (order.orderStatus === "confirmed") {
+        await ensureOrderSpinGrant(order, session);
+      }
       updatedOrder = order;
     });
 

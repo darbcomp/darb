@@ -41,3 +41,5 @@ coverage/
 # Uploads
 uploads/
 server/uploads/
+
+.darb-phase1-backup/

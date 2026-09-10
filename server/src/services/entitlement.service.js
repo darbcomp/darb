@@ -1,20 +1,26 @@
 const Entitlement = require("../models/Entitlement");
 const Order = require("../models/Order");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
-const createFirstOrderEntitlement = (userId, session = null) =>
-  Entitlement.findOneAndUpdate(
-    { user: userId, key: "first-order-10" },
-    { $setOnInsert: { type: "percentage", origin: "first_order", label: "10% off your first order", value: 10 } },
-    { upsert: true, new: true, ...(session ? { session } : {}) }
+const createFirstOrderEntitlement = (userId, session = null) => {
+  const options = { upsert: true, returnDocument: "after", setDefaultsOnInsert: true };
+  if (session) options.session = session;
+  return Entitlement.findOneAndUpdate(
+    { user: userId, origin: "first_order" },
+    { $setOnInsert: { key: "first-order-10", type: "percentage", origin: "first_order", label: "10% off your first order", value: 10 } },
+    options
   );
+};
 
 const refreshFirstOrderEntitlement = async (userId) => {
+  if (!userId) return null;
   const usedOrder = await Order.exists({ customer: userId, orderStatus: { $ne: "cancelled" } });
   if (usedOrder) return null;
   return createFirstOrderEntitlement(userId);
 };
 
 const getAvailableEntitlements = async (userId, session = null) => {
+  if (!userId) return [];
   await refreshFirstOrderEntitlement(userId);
   const query = Entitlement.find({
     user: userId,
@@ -25,11 +31,20 @@ const getAvailableEntitlements = async (userId, session = null) => {
   return query;
 };
 
-const findAvailableEntitlementByCode = (userId, code, session = null) => {
-  if (!userId || !String(code || "").trim()) return Promise.resolve(null);
+const ownerFilter = (userId, guestPhone) => {
+  if (userId) return { user: userId };
+  const phone = normalizeEgyptPhone(guestPhone || "");
+  if (!phone) return null;
+  return { user: null, ownerPhone: phone };
+};
+
+const findAvailableEntitlementByCode = (userId, code, session = null, guestPhone = "") => {
+  const cleanCode = String(code || "").trim().toUpperCase();
+  const owner = ownerFilter(userId, guestPhone);
+  if (!cleanCode || !owner) return Promise.resolve(null);
   const query = Entitlement.findOne({
-    user: userId,
-    code: String(code).trim().toUpperCase(),
+    ...owner,
+    code: cleanCode,
     status: "available",
     $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
   });
@@ -71,13 +86,19 @@ const priceEntitlement = (entitlement, items, subtotal, baseDeliveryFee) => {
   };
 };
 
-const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId, session = null }) => {
+const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId, guestPhone = "", session = null }) => {
   if (!entitlementId) return { pricing, entitlement: null, freeTester: false };
-  if (!userId) throw new Error("Sign in to use this reward.");
-  const query = Entitlement.findOne({ _id: entitlementId, user: userId, status: "available", $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] });
+  const owner = ownerFilter(userId, guestPhone);
+  if (!owner) throw new Error("Sign in or use the phone number tied to this guest reward.");
+  const query = Entitlement.findOne({
+    _id: entitlementId,
+    ...owner,
+    status: "available",
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+  });
   if (session) query.session(session);
   const entitlement = await query;
-  if (!entitlement) throw new Error("This reward is unavailable or expired.");
+  if (!entitlement) throw new Error("This reward is unavailable, expired, or belongs to different details.");
   const discount = priceEntitlement(entitlement, items, pricing.subtotal, pricing.baseDeliveryFee);
   if (!discount) throw new Error("This reward is not eligible for the current cart.");
   const deliveryFee = discount.freeShipping ? 0 : pricing.baseDeliveryFee;
@@ -97,10 +118,12 @@ const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId,
   };
 };
 
-const consumeEntitlement = async (entitlementId, userId, orderId, session) => {
+const consumeEntitlement = async (entitlementId, userId, orderId, session, guestPhone = "") => {
   if (!entitlementId) return;
+  const owner = ownerFilter(userId, guestPhone);
+  if (!owner) throw new Error("Reward ownership could not be verified.");
   const result = await Entitlement.updateOne(
-    { _id: entitlementId, user: userId, status: "available", $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+    { _id: entitlementId, ...owner, status: "available", $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
     { $set: { status: "used", usedAt: new Date(), usedOrder: orderId } },
     { session }
   );
@@ -117,4 +140,11 @@ const restoreEntitlement = (order, session) => {
   );
 };
 
-module.exports = { createFirstOrderEntitlement, getAvailableEntitlements, findAvailableEntitlementByCode, applySelectedEntitlement, consumeEntitlement, restoreEntitlement };
+module.exports = {
+  createFirstOrderEntitlement,
+  getAvailableEntitlements,
+  findAvailableEntitlementByCode,
+  applySelectedEntitlement,
+  consumeEntitlement,
+  restoreEntitlement,
+};

@@ -1,437 +1,130 @@
 require("dotenv").config();
-
 const fs = require("fs");
 const path = require("path");
+const { createHash } = require("crypto");
 const mongoose = require("mongoose");
-const { v2: cloudinary } = require("cloudinary");
-
 const Product = require("../models/Product");
-const Category = require("../models/Category");
-const slugify = require("../utils/slugify");
 const { seedCategories } = require("./seedCategories");
+const { products } = require("./catalog.data");
+const { processProductImage } = require("../utils/imageProcessor");
+const { putPublicObject } = require("../services/mediaStorage.service");
 
-const configureCloudinary = () => {
-  const {
-    CLOUDINARY_CLOUD_NAME,
-    CLOUDINARY_API_KEY,
-    CLOUDINARY_API_SECRET,
-  } = process.env;
-
-  if (
-    !CLOUDINARY_CLOUD_NAME ||
-    !CLOUDINARY_API_KEY ||
-    !CLOUDINARY_API_SECRET
-  ) {
-    throw new Error(
-      "Cloudinary credentials are missing from server/.env"
-    );
-  }
-
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET,
-    secure: true,
-  });
+const productRoot = path.resolve(__dirname, "../../../client/public/images/products");
+const groupFor = (product) => product.productType === "musk" ? "musk" : product.primaryCategory === "women" ? "female" : "male";
+const imageFilesFor = (product) => {
+  const dir = path.join(productRoot, groupFor(product), product.slug);
+  if (!fs.existsSync(dir)) throw new Error(`Missing product image folder: ${dir}`);
+  const files = fs.readdirSync(dir)
+    .filter((name) => /\.(jpe?g|png|webp)$/i.test(name))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  if (!files.length) throw new Error(`No product images found for ${product.name}: ${dir}`);
+  if (files.length > 10) throw new Error(`${product.name} has ${files.length} images; max is 10.`);
+  return { dir, files };
 };
 
-const productSeedData = [
-  // MEN
-  {
-    name: "Barq",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "barq.webp",
-  },
-  {
-    name: "Faris",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "faris.webp",
-  },
-  {
-    name: "Haibah",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "haibah.webp",
-  },
-  {
-    name: "Hawas",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "hawas.webp",
-  },
-  {
-    name: "Hazeem",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "hazeem.webp",
-  },
-  {
-    name: "Mazaq",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "mazaq.webp",
-  },
-  {
-    name: "Mog",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "mog.webp",
-  },
-  {
-    name: "Najm",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "najm.webp",
-  },
-  {
-    name: "Naseem",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "naseem.webp",
-  },
-  {
-    name: "Qandeel",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "qandeel.webp",
-  },
-  {
-    name: "Sahm",
-    categorySlug: "men",
-    imageFolder: "male",
-    imageFile: "sahm.webp",
-  },
-
-  // WOMEN
-  {
-    name: "Gharam",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "gharam.webp",
-  },
-  {
-    name: "Ghazal",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "ghazal.webp",
-  },
-  {
-    name: "Ghewaa",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "ghewaa.webp",
-  },
-  {
-    name: "Haneen",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "haneen.webp",
-  },
-  {
-    name: "Hawa",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "hawa.webp",
-  },
-  {
-    name: "Ishq",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "ishq.webp",
-  },
-  {
-    name: "Layla",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "layla.webp",
-  },
-  {
-    name: "Mahd",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "mahd.webp",
-  },
-  {
-    name: "Nagham",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "nagham.webp",
-  },
-  {
-    name: "Rahaf",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "rahaf.webp",
-  },
-  {
-    name: "Roh",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "roh.webp",
-  },
-  {
-    name: "Sahar",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "sahar.webp",
-  },
-  {
-    name: "Sehr",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "sehr.webp",
-  },
-  {
-    name: "Shaghaf",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "shaghaf.webp",
-  },
-  {
-    name: "Ward",
-    categorySlug: "women",
-    imageFolder: "female",
-    imageFile: "ward.webp",
-  },
-];
-
-const getProductImagePath = (product) => {
-  return path.resolve(
-    __dirname,
-    "../../../client/public/images/products",
-    product.imageFolder,
-    product.imageFile
-  );
-};
-
-const uploadProductImage = async ({
-  imagePath,
-  categorySlug,
-  productSlug,
-  productName,
-}) => {
-  if (!fs.existsSync(imagePath)) {
-    throw new Error(`Image file not found: ${imagePath}`);
-  }
-
-  const publicId = `darb/products/${categorySlug}/${productSlug}-01`;
-
-  const uploadResult = await cloudinary.uploader.upload(imagePath, {
-    public_id: publicId,
-    overwrite: true,
-    resource_type: "image",
-  });
-
-  return {
-    url: uploadResult.secure_url,
-    publicId: uploadResult.public_id,
-    alt: `${productName} by Darb`,
-    isMain: true,
-  };
-};
-
-const buildSku = (categorySlug, name) => {
-  const categoryCode =
-    categorySlug === "men"
-      ? "MEN"
-      : categorySlug === "women"
-        ? "WOMEN"
-        : categorySlug.toUpperCase();
-
-  const productCode = name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-
-  return `DARB-${categoryCode}-${productCode}`;
-};
-
-const seedRealProducts = async () => {
-  console.log("\nPreparing categories...\n");
-
-  await seedCategories();
-
-  console.log("\nUploading and seeding Darb products...\n");
-
-  for (const productData of productSeedData) {
-    const slug = slugify(productData.name);
-
-    const category = await Category.findOne({
-      slug: productData.categorySlug,
+const uploadImages = async (product) => {
+  const { dir, files } = imageFilesFor(product);
+  const images = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const filename = files[index];
+    const processed = await processProductImage(fs.readFileSync(path.join(dir, filename)));
+    const stem = path.parse(filename).name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+    const digest = createHash("sha256").update(processed.buffer).digest("hex").slice(0, 12);
+    const key = `products/${groupFor(product)}/${product.slug}/${stem}-${digest}.webp`;
+    const stored = await putPublicObject({ buffer: processed.buffer, key, contentType: processed.mimeType });
+    images.push({
+      url: stored.url,
+      publicId: key,
+      storageKey: key,
+      provider: "r2",
+      alt: `${product.name} — Darb${index ? ` ${index + 1}` : ""}`,
+      isMain: index === 0,
     });
-
-    if (!category) {
-      throw new Error(
-        `Category "${productData.categorySlug}" could not be found.`
-      );
-    }
-
-    const imagePath = getProductImagePath(productData);
-
-    console.log(`Uploading: ${productData.name}`);
-
-    const mainImage = await uploadProductImage({
-      imagePath,
-      categorySlug: productData.categorySlug,
-      productSlug: slug,
-      productName: productData.name,
-    });
-
-    const productPayload = {
-      name: productData.name,
-      slug,
-      sku: buildSku(productData.categorySlug, productData.name),
-
-      category: category._id,
-
-      categorySnapshot: {
-        name: category.name,
-        slug: category.slug,
-      },
-
-      shortDescription: "",
-      description: "",
-
-      price: 0,
-      compareAtPrice: 0,
-
-      sizeLabel: "50 ML",
-      sizeMl: 50,
-
-      concentration: "",
-      scentFamily: "",
-
-      scentNotes: {
-        top: [],
-        middle: [],
-        base: [],
-      },
-
-      stock: 0,
-      lowStockThreshold: 3,
-
-      tags: [
-        "Darb",
-        "Perfume",
-        "50ml",
-        category.name,
-      ],
-
-      images: [mainImage],
-
-      isActive: false,
-      isPlaceholder: false,
-      isFeatured: false,
-      isBestSeller: false,
-      isNewArrival: true,
-
-      metaTitle: `${productData.name} | Darb Perfumes`,
-      metaDescription: `${productData.name} by Darb. A 50ml fragrance created for your path.`,
-    };
-
-    const product = await Product.findOneAndUpdate(
-      { slug },
-      {
-        $set: productPayload,
-      },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      }
-    );
-
-    console.log(
-      `✅ ${product.name} — ${category.name} — 50 ML`
-    );
   }
-
-  const currentProductSlugs =
-    productSeedData.map(
-      (productData) =>
-        slugify(productData.name)
-    );
-
-  const legacyProducts =
-    await Product.updateMany(
-      {
-        sku: {
-          $in: [
-            /^DARB-MEN-/,
-            /^DARB-WOMEN-/,
-          ],
-        },
-        slug: {
-          $nin: currentProductSlugs,
-        },
-      },
-      {
-        $set: {
-          isActive: false,
-          isFeatured: false,
-          isBestSeller: false,
-          isNewArrival: false,
-        },
-      }
-    );
-
-  console.log(
-    `✅ ${legacyProducts.modifiedCount} legacy Darb product(s) deactivated.`
-  );
-
-  console.log(
-    `\n✅ ${productSeedData.length} real Darb products are ready.\n`
-  );
+  return images;
 };
 
-const runSeed = async () => {
+const skuFor = (product) => `DARB-${product.productType === "musk" ? "MUSK" : "PERF"}-${product.slug.toUpperCase()}-${product.sizeMl}`;
+
+const run = async () => {
   try {
-    console.log("\n================================");
-    console.log("DARB REAL PRODUCT SEED");
-    console.log("================================\n");
+    if (!process.env.MONGO_URI) throw new Error("MONGO_URI is missing from server/.env");
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log(`✅ MongoDB connected: ${mongoose.connection.name}`);
+    const categoryDocs = await seedCategories();
+    const categoryMap = new Map(categoryDocs.map((item) => [item.slug, item]));
 
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is missing from server/.env");
+    for (const item of products) {
+      const primary = categoryMap.get(item.primaryCategory);
+      const extras = item.alsoIn.map((slug) => categoryMap.get(slug)).filter(Boolean);
+      if (!primary) throw new Error(`Category not found for ${item.name}: ${item.primaryCategory}`);
+      const categoryIds = [primary, ...extras].map((category) => category._id);
+      const images = await uploadImages(item);
+      const sku = skuFor(item);
+      const tags = [...new Set([
+        item.name, item.arabicName, item.inspiredBy,
+        ...item.scentFamilies, ...item.bestFor, ...item.keyNotes,
+        ...item.scentNotes.top, ...item.scentNotes.middle, ...item.scentNotes.base,
+      ].filter(Boolean))];
+      const payload = {
+        name: item.name,
+        arabicName: item.arabicName,
+        slug: item.slug,
+        sku,
+        productType: item.productType,
+        category: primary._id,
+        categorySnapshot: { name: primary.name, slug: primary.slug },
+        categories: categoryIds,
+        inspiredBy: item.inspiredBy,
+        shortDescription: "",
+        description: item.description,
+        price: item.price,
+        compareAtPrice: 0,
+        sizeLabel: item.sizeLabel,
+        sizeMl: item.sizeMl,
+        concentration: item.concentration,
+        scentFamily: item.scentFamilies.join(" • "),
+        scentFamilies: item.scentFamilies,
+        bestFor: item.bestFor,
+        keyNotes: item.keyNotes,
+        scentNotes: item.scentNotes,
+        images,
+        variants: [{ label: item.sizeLabel, sizeMl: item.sizeMl, sku, price: item.price, compareAtPrice: 0, stock: item.stock, isActive: true }],
+        stock: item.stock,
+        lowStockThreshold: item.lowStockThreshold,
+        tags,
+        isActive: item.isActive,
+        isPlaceholder: item.isPlaceholder,
+        isFeatured: item.isFeatured,
+        isBestSeller: item.isBestSeller,
+        isNewArrival: item.isNewArrival,
+        metaTitle: `${item.name}${item.arabicName ? ` — ${item.arabicName}` : ""} | Darb`,
+        metaDescription: item.description ? item.description.slice(0, 155) : "",
+      };
+      await Product.findOneAndUpdate(
+        { slug: item.slug },
+        { $set: payload },
+        { returnDocument: "after", upsert: true, runValidators: true, setDefaultsOnInsert: true }
+      );
+      console.log(`✅ ${item.name}: ${images.length}/10 images, ${item.sizeLabel}, EGP ${item.price}${item.alsoIn.length ? ` + ${item.alsoIn.join(", ")}` : ""}`);
     }
 
-    configureCloudinary();
-
-    await mongoose.connect(process.env.MONGO_URI);
-
-    console.log("✅ MongoDB connected");
-    console.log(`Database: ${mongoose.connection.name}`);
-    console.log("✅ Cloudinary configured\n");
-
-    await seedRealProducts();
-
-    console.log("================================");
-    console.log("SEED COMPLETE");
-    console.log("================================");
-    console.log("Categories: 4");
-    console.log(`Products:   ${productSeedData.length}`);
-    console.log("Size:       50 ML");
-    console.log("Status:     Inactive until product details are completed");
-    console.log("Images:     1 current image per product");
-    console.log("Capacity:   3 images per product");
-    console.log("================================\n");
+    // Keep the seed idempotent and non-destructive: future products created in
+    // Admin must never be deactivated just because they are not in this launch file.
+    // Only known pre-canonical development aliases are deactivated if they still exist.
+    const legacy = await Product.updateMany(
+      { slug: { $in: ["mog", "roh"] } },
+      { $set: { isActive: false, isFeatured: false, isBestSeller: false, isNewArrival: false } }
+    );
+    console.log(`\n✅ ${products.length} Darb catalog products ready.`);
+    console.log(`ℹ️ ${legacy.modifiedCount || 0} obsolete development alias product(s) deactivated.`);
+    console.log("ℹ️ Musk entries stay inactive/placeholders until their missing owner copy is supplied.");
+    console.log("ℹ️ Concentration remains blank until the owner confirms it.");
   } catch (error) {
-    console.error("\n❌ Darb product seed failed\n");
-    console.error(error);
+    console.error("\n❌ Darb seed failed:", error.message);
     process.exitCode = 1;
   } finally {
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.disconnect();
-    }
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   }
 };
-
-if (require.main === module) {
-  runSeed();
-}
-
-module.exports = {
-  productSeedData,
-  seedRealProducts,
-};
+run();

@@ -1,22 +1,14 @@
 const mongoose = require("mongoose");
-const { randomUUID } = require("crypto");
 
 const Product = require("../models/Product");
 const Category = require("../models/Category");
-const { cloudinary } = require("../config/cloudinary");
 const slugify = require("../utils/slugify");
-const { processProductImage } = require("../utils/imageProcessor");
+const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 
-const MAX_PRODUCT_IMAGES = 3;
+const MAX_PRODUCT_IMAGES = 10;
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
-const isCloudinaryReady = () =>
-  Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-  );
 
 const parseMaybeJSON = (value, fallback) => {
   if (value === undefined || value === null || value === "") return fallback;
@@ -86,8 +78,8 @@ const getSearchSuggestions = async (req, res) => {
       isActive: true,
       isPlaceholder: { $ne: true },
       $or: [
-        { name: expression }, { shortDescription: expression }, { description: expression },
-        { scentFamily: expression }, { tags: expression }, { "scentNotes.top": expression },
+        { name: expression }, { arabicName: expression }, { inspiredBy: expression }, { shortDescription: expression }, { description: expression },
+        { scentFamily: expression }, { scentFamilies: expression }, { bestFor: expression }, { keyNotes: expression }, { tags: expression }, { "scentNotes.top": expression },
         { "scentNotes.middle": expression }, { "scentNotes.base": expression },
         { category: { $in: categoryIds } }, { categories: { $in: categoryIds } },
       ],
@@ -128,114 +120,47 @@ const resolveCategory = async (categoryValue) => {
   return category;
 };
 
-const destroyCloudinaryImage = async (publicId) => {
-  if (!publicId || !isCloudinaryReady()) return;
 
+const destroyStoredImage = async (key) => {
+  if (!key) return;
   try {
-    await cloudinary.uploader.destroy(publicId);
+    await deletePublicMedia(key);
   } catch (error) {
-    console.error(`Cloudinary cleanup failed for ${publicId}:`, error.message);
+    console.error(`R2 cleanup failed for ${key}:`, error.message);
   }
 };
 
-const destroyCloudinaryImages = async (images = []) => {
+const destroyStoredImages = async (images = []) => {
   await Promise.all(
     images
-      .filter((image) => image?.publicId)
-      .map((image) => destroyCloudinaryImage(image.publicId))
+      .map((image) => image?.storageKey || image?.publicId)
+      .filter(Boolean)
+      .map((key) => destroyStoredImage(key))
   );
 };
 
-const uploadBufferToCloudinary = (buffer, options = {}) =>
-  new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: options.folder || "darb/products",
-        public_id: options.publicId,
-        resource_type: "image",
-        format: "webp",
-        overwrite: false,
-      },
-      (error, result) => {
-        if (error) {
-          return reject(error);
-        }
-
-        return resolve(result);
-      }
-    );
-
-    uploadStream.end(buffer);
-  });
-
-const uploadFilesToCloudinary = async ({
-  files = [],
-  categorySlug,
-  productSlug,
-}) => {
-  if (!files.length) {
-    return [];
-  }
-
-  if (!isCloudinaryReady()) {
-    throw new Error(
-      "Cloudinary credentials are missing. Add Cloudinary credentials before uploading images."
-    );
-  }
-
+const uploadFilesToStorage = async ({ files = [], categorySlug, productSlug }) => {
+  if (!files.length) return [];
   const uploadedImages = [];
-
   try {
     for (const file of files) {
-      /*
-        Multer performs the first MIME-type check.
-
-        Sharp then decodes the actual file here,
-        so we are not trusting the browser's MIME
-        type alone.
-      */
-      const processedImage = await processProductImage(
-        file.buffer
-      );
-
-      /*
-        Sharp has now:
-        - validated the real image
-        - fixed orientation
-        - resized oversized images
-        - removed unnecessary metadata
-        - converted the image to optimized WEBP
-      */
-
-      const result = await uploadBufferToCloudinary(
-        processedImage.buffer,
-        {
-          folder: `darb/products/${categorySlug}`,
-          publicId: `${productSlug}-${randomUUID()}`,
-        }
-      );
-
+      const result = await uploadOptimizedPublicImage(file, {
+        folder: `products/${categorySlug}/${productSlug}`,
+        baseName: productSlug,
+        alt: `${productSlug} — Darb`,
+      });
       uploadedImages.push({
-        url: result.secure_url,
-        publicId: result.public_id,
-        alt:
-          file.originalname ||
-          "Darb product image",
+        url: result.url,
+        publicId: result.publicId,
+        storageKey: result.storageKey || result.publicId,
+        provider: "r2",
+        alt: file.originalname || "Darb product image",
         isMain: false,
       });
     }
-
     return uploadedImages;
   } catch (error) {
-    /*
-      If image 1 uploads successfully but image 2
-      fails, delete image 1 so Cloudinary does not
-      accumulate abandoned files.
-    */
-    await destroyCloudinaryImages(
-      uploadedImages
-    );
-
+    await destroyStoredImages(uploadedImages);
     throw error;
   }
 };
@@ -254,7 +179,9 @@ const selectExistingImages = ({
   if (keepExistingImages) {
     return currentImages.map((image) => ({
       url: image.url,
-      publicId: image.publicId || "",
+      publicId: image.publicId || image.storageKey || "",
+      storageKey: image.storageKey || image.publicId || "",
+      provider: image.provider || "r2",
       alt: image.alt || "",
       isMain: Boolean(image.isMain),
     }));
@@ -278,7 +205,9 @@ const selectExistingImages = ({
 
     selected.push({
       url: match.url,
-      publicId: match.publicId || "",
+      publicId: match.publicId || match.storageKey || "",
+      storageKey: match.storageKey || match.publicId || "",
+      provider: match.provider || "r2",
       alt: requestedImage.alt || match.alt || "",
       isMain: Boolean(requestedImage.isMain),
     });
@@ -379,7 +308,7 @@ const buildProductPayload = async (
     );
   }
 
-  const uploadedImages = await uploadFilesToCloudinary({
+  const uploadedImages = await uploadFilesToStorage({
     files,
     categorySlug: category.slug,
     productSlug,
@@ -403,6 +332,9 @@ const buildProductPayload = async (
   });
 
   const variants = parseMaybeJSON(body.variants, existingProduct?.variants || []);
+  const scentFamilies = parseStringArray(body.scentFamilies ?? body.scentFamily ?? existingProduct?.scentFamilies ?? existingProduct?.scentFamily);
+  const bestFor = parseStringArray(body.bestFor ?? existingProduct?.bestFor);
+  const keyNotes = parseStringArray(body.keyNotes ?? existingProduct?.keyNotes);
   const tags = parseStringArray(body.tags);
 
   const isPlaceholder = parseBoolean(
@@ -416,6 +348,9 @@ const buildProductPayload = async (
   );
 
   const price = parseNumber(body.price, existingProduct?.price || 0);
+  const productType = ["perfume", "musk"].includes(body.productType)
+    ? body.productType
+    : (existingProduct?.productType || "perfume");
 
   const cleanVariants = Array.isArray(variants) ? variants.map((variant) => ({
     ...(variant?._id ? { _id: variant._id } : {}),
@@ -432,33 +367,40 @@ const buildProductPayload = async (
     .sort((a, b) => a.price - b.price)[0];
 
   if (isActive && !isPlaceholder && !cleanVariants.some((variant) => variant.isActive && variant.price > 0) && price <= 0) {
-    await destroyCloudinaryImages(uploadedImages);
+    await destroyStoredImages(uploadedImages);
     throw new Error("Active real products must have a valid price.");
   }
 
   const payload = {
     name,
+    arabicName: body.arabicName !== undefined ? body.arabicName?.trim() || "" : existingProduct?.arabicName || "",
     slug: productSlug,
     sku: body.sku?.trim() || "",
+    productType,
     category: category._id,
     categories: categories.map((entry) => entry._id),
     categorySnapshot: {
       name: category.name,
       slug: category.slug,
     },
+    inspiredBy: body.inspiredBy !== undefined ? body.inspiredBy?.trim() || "" : existingProduct?.inspiredBy || "",
     shortDescription: body.shortDescription?.trim() || "",
     description: body.description?.trim() || "",
     price: primaryVariant?.price || price,
     compareAtPrice: primaryVariant?.compareAtPrice || parseNumber(body.compareAtPrice, 0),
     costPrice: parseNumber(body.costPrice, 0),
-    sizeLabel:
-      body.sizeLabel?.trim() || existingProduct?.sizeLabel || "50 ML",
-    sizeMl: parseNumber(body.sizeMl, existingProduct?.sizeMl || 50),
+    sizeLabel: body.sizeLabel !== undefined
+      ? body.sizeLabel?.trim() || ""
+      : existingProduct?.sizeLabel || "",
+    sizeMl: parseNumber(body.sizeMl, existingProduct?.sizeMl || 0),
     concentration:
       body.concentration?.trim() ||
       existingProduct?.concentration ||
-      "Eau de Parfum",
-    scentFamily: body.scentFamily?.trim() || "",
+      "",
+    scentFamily: scentFamilies.join(" • ") || body.scentFamily?.trim() || "",
+    scentFamilies,
+    bestFor,
+    keyNotes,
     scentNotes: {
       top: Array.isArray(scentNotes?.top) ? scentNotes.top : [],
       middle: Array.isArray(scentNotes?.middle) ? scentNotes.middle : [],
@@ -520,13 +462,28 @@ const buildPublicProductFilter = async (query = {}) => {
       escapeRegex(query.search.trim()),
       "i"
     );
+    const matchingCategories = await Category.find({
+      $or: [{ name: searchRegex }, { slug: searchRegex }],
+    }).select("_id").lean();
+    const matchingCategoryIds = matchingCategories.map((category) => category._id);
 
     filter.$or = [
       { name: searchRegex },
+      { arabicName: searchRegex },
+      { inspiredBy: searchRegex },
       { shortDescription: searchRegex },
       { description: searchRegex },
       { scentFamily: searchRegex },
+      { scentFamilies: searchRegex },
+      { bestFor: searchRegex },
+      { keyNotes: searchRegex },
+      { "scentNotes.top": searchRegex },
+      { "scentNotes.middle": searchRegex },
+      { "scentNotes.base": searchRegex },
       { tags: searchRegex },
+      ...(matchingCategoryIds.length
+        ? [{ category: { $in: matchingCategoryIds } }, { categories: { $in: matchingCategoryIds } }]
+        : []),
     ];
   }
 
@@ -663,10 +620,18 @@ const buildAdminProductFilter = async (query = {}) => {
 
     filter.$or = [
       { name: searchRegex },
+      { arabicName: searchRegex },
       { sku: searchRegex },
+      { inspiredBy: searchRegex },
       { shortDescription: searchRegex },
       { description: searchRegex },
       { scentFamily: searchRegex },
+      { scentFamilies: searchRegex },
+      { bestFor: searchRegex },
+      { keyNotes: searchRegex },
+      { "scentNotes.top": searchRegex },
+      { "scentNotes.middle": searchRegex },
+      { "scentNotes.base": searchRegex },
       { tags: searchRegex },
     ];
   }
@@ -935,7 +900,7 @@ const createProduct = async (req, res) => {
       data: populatedProduct,
     });
   } catch (error) {
-    await destroyCloudinaryImages(uploadedImages);
+    await destroyStoredImages(uploadedImages);
 
     return res.status(400).json({
       success: false,
@@ -994,7 +959,7 @@ const updateProduct = async (req, res) => {
 
     await product.save();
 
-    await destroyCloudinaryImages(built.removedImages);
+    await destroyStoredImages(built.removedImages);
 
     const populatedProduct = await Product.findById(product._id)
       .select("+costPrice")
@@ -1007,7 +972,7 @@ const updateProduct = async (req, res) => {
       data: populatedProduct,
     });
   } catch (error) {
-    await destroyCloudinaryImages(uploadedImages);
+    await destroyStoredImages(uploadedImages);
 
     return res.status(400).json({
       success: false,
@@ -1038,7 +1003,7 @@ const deleteProduct = async (req, res) => {
       const images = [...(product.images || [])];
 
       await product.deleteOne();
-      await destroyCloudinaryImages(images);
+      await destroyStoredImages(images);
 
       return res.status(200).json({
         success: true,
@@ -1115,7 +1080,7 @@ const deleteProductImage = async (req, res) => {
     }
 
     await product.save();
-    await destroyCloudinaryImage(imageToRemove.publicId);
+    await destroyStoredImage(imageToRemove.publicId);
 
     return res.status(200).json({
       success: true,

@@ -22,7 +22,7 @@ import {
 
 import { formatCurrency } from "../../utils/formatCurrency";
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 const ALLOWED_IMAGE_TYPES = [
@@ -33,11 +33,14 @@ const ALLOWED_IMAGE_TYPES = [
 
 const emptyForm = {
   name: "",
+  arabicName: "",
+  inspiredBy: "",
+  productType: "perfume",
   slug: "",
   sku: "",
   category: "",
   categories: [],
-  variants: [],
+  variants: [{ label: "50 ML", sizeMl: "50", sku: "", price: "1000", compareAtPrice: "", stock: "", isActive: true }],
   shortDescription: "",
   description: "",
   price: "",
@@ -45,8 +48,11 @@ const emptyForm = {
   costPrice: "",
   sizeLabel: "50 ML",
   sizeMl: "50",
-  concentration: "Eau de Parfum",
+  concentration: "",
   scentFamily: "",
+  scentFamilies: "",
+  bestFor: "",
+  keyNotes: "",
   topNotes: "",
   middleNotes: "",
   baseNotes: "",
@@ -99,6 +105,9 @@ const splitCommaText = (value = "") =>
 
 const productToForm = (product) => ({
   name: product.name || "",
+  arabicName: product.arabicName || "",
+  inspiredBy: product.inspiredBy || "",
+  productType: product.productType || "perfume",
   slug: product.slug || "",
   sku: product.sku || "",
   category: product.category?.slug || product.categorySnapshot?.slug || "",
@@ -120,10 +129,13 @@ const productToForm = (product) => ({
   price: product.price || "",
   compareAtPrice: product.compareAtPrice || "",
   costPrice: product.costPrice || "",
-  sizeLabel: product.sizeLabel || "50 ML",
-  sizeMl: product.sizeMl || "50",
-  concentration: product.concentration || "Eau de Parfum",
+  sizeLabel: product.sizeLabel || "",
+  sizeMl: product.sizeMl || "",
+  concentration: product.concentration || "",
   scentFamily: product.scentFamily || "",
+  scentFamilies: (product.scentFamilies || []).join(", "),
+  bestFor: (product.bestFor || []).join(", "),
+  keyNotes: (product.keyNotes || []).join(", "),
   topNotes: product.scentNotes?.top?.join(", ") || "",
   middleNotes: product.scentNotes?.middle?.join(", ") || "",
   baseNotes: product.scentNotes?.base?.join(", ") || "",
@@ -167,7 +179,7 @@ const normalizeExistingImages = (images = []) => {
 };
 
 const getReadiness = (product) => {
-  const notes =
+  const notes = (product.keyNotes?.length || 0) +
     (product.scentNotes?.top?.length || 0) +
     (product.scentNotes?.middle?.length || 0) +
     (product.scentNotes?.base?.length || 0);
@@ -182,26 +194,17 @@ const getReadiness = (product) => {
     missing.push("image");
   }
 
-  if ((product.images?.length || 0) < MAX_IMAGES) {
-    missing.push(
-      `${MAX_IMAGES - (product.images?.length || 0)} more image`
-    );
-  }
 
   if (!product.shortDescription && !product.description) {
     missing.push("description");
   }
 
-  if (!product.scentFamily) {
+  if (!product.scentFamilies?.length && !product.scentFamily) {
     missing.push("scent family");
   }
 
   if (!notes) {
     missing.push("scent notes");
-  }
-
-  if (!product.concentration) {
-    missing.push("concentration");
   }
 
   return missing;
@@ -250,6 +253,7 @@ function AdminProducts() {
   const [newMainIndex, setNewMainIndex] = useState(null);
 
   const [formError, setFormError] = useState("");
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
 
   const newImagePreviews = useMemo(
     () =>
@@ -532,6 +536,21 @@ function AdminProducts() {
     );
   };
 
+  const handlePrimaryCategoryChange = (event) => {
+    const primary = event.target.value;
+    setForm((current) => ({ ...current, category: primary, categories: [...new Set([primary, ...current.categories])].filter(Boolean) }));
+  };
+
+  const handleProductTypeChange = (event) => {
+    const productType = event.target.value;
+    setForm((current) => {
+      const hasUntouchedDefault = !editingProduct && current.variants.length === 1 && ["50 ML", "6 ML"].includes(current.variants[0].label) && Number(current.variants[0].price) === 1000 && !current.variants[0].sku && !current.variants[0].stock;
+      if (!hasUntouchedDefault) return { ...current, productType };
+      const sizeMl = productType === "musk" ? "6" : "50";
+      return { ...current, productType, sizeLabel: `${sizeMl} ML`, sizeMl, variants: [{ ...current.variants[0], label: `${sizeMl} ML`, sizeMl }] };
+    });
+  };
+
   const toggleCategory = (slug) => {
     setForm((current) => {
       const selected = current.categories.includes(slug)
@@ -565,7 +584,7 @@ function AdminProducts() {
       Array.from(
         event.target.files ||
           []
-      );
+      ).filter((file) => !imageFiles.some((existing) => existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified));
 
     if (!selected.length) {
       return;
@@ -614,7 +633,7 @@ function AdminProducts() {
       MAX_IMAGES
     ) {
       setFormError(
-        `Maximum ${MAX_IMAGES} images total. You currently have ${totalImageCount}/3.`
+        `Maximum ${MAX_IMAGES} images total. You currently have ${totalImageCount}/${MAX_IMAGES}.`
       );
 
       event.target.value =
@@ -649,6 +668,12 @@ function AdminProducts() {
 
     event.target.value =
       "";
+  };
+
+  const handleImageDrop = (event) => {
+    event.preventDefault();
+    setIsDraggingImages(false);
+    handleImageChange({ target: { files: event.dataTransfer.files, value: "" } });
   };
 
   const removeExistingImage = (
@@ -870,6 +895,9 @@ function AdminProducts() {
 
       formData.set("categories", JSON.stringify(form.categories));
       formData.set("variants", JSON.stringify(form.variants));
+      formData.set("scentFamilies", JSON.stringify(splitCommaText(form.scentFamilies)));
+      formData.set("bestFor", JSON.stringify(splitCommaText(form.bestFor)));
+      formData.set("keyNotes", JSON.stringify(splitCommaText(form.keyNotes)));
 
       formData.append(
         "scentNotes",
@@ -1021,10 +1049,7 @@ function AdminProducts() {
 
           <p className="mt-3 max-w-2xl text-darb-muted">
             Manage Darb perfumes,
-            their stock, scent
-            details, and the final
-            three-image product
-            gallery.
+            their collections, purchasable sizes, scent profiles, and media.
           </p>
         </div>
 
@@ -1183,7 +1208,7 @@ function AdminProducts() {
               </h2>
 
               <p className="mt-2 text-sm text-darb-muted">
-                Assign categories and purchasable sizes. Product images remain limited to three and use the existing optimized upload pipeline.
+                 Create a complete product while keeping media on Darb's optimized upload pipeline.
               </p>
             </div>
 
@@ -1213,9 +1238,10 @@ function AdminProducts() {
             }
             className="space-y-7"
           >
+            <SectionHeader title="Basic" description="Identity, product type and where this fragrance appears." />
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field
-                label="Product Name *"
+                label="English Name *"
                 name="name"
                 value={
                   form.name
@@ -1225,6 +1251,11 @@ function AdminProducts() {
                 }
                 placeholder="Example: Haibah"
               />
+
+              <Field label="Arabic Name" name="arabicName" value={form.arabicName} onChange={handleFormChange} placeholder="Arabic product name" dir="rtl" />
+              <Field label="Inspired By" name="inspiredBy" value={form.inspiredBy} onChange={handleFormChange} placeholder="Optional fragrance inspiration" />
+
+              <label><span className="mb-2 block text-sm font-semibold text-darb-green">Product Type</span><select name="productType" value={form.productType} onChange={handleProductTypeChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green"><option value="perfume">Perfume</option><option value="musk">Musk</option></select></label>
 
               <Field
                 label="Slug"
@@ -1250,12 +1281,17 @@ function AdminProducts() {
                 placeholder="DARB-001"
               />
 
-              <div>
+              <label>
+                <span className="mb-2 block text-sm font-semibold text-darb-green">Primary Collection *</span>
+                <select value={form.category} onChange={handlePrimaryCategoryChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green">{categories.map((category) => <option key={category._id || category.slug} value={category.slug}>{category.name}</option>)}</select>
+              </label>
+
+              <div className="md:col-span-2">
                 <span className="mb-2 block text-sm font-semibold text-darb-green">
-                  Categories *
+                  Also appears in
                 </span>
                 <div className="flex min-h-[50px] flex-wrap gap-2 rounded-2xl border border-darb-gold/30 bg-white p-2">
-                  {categories.map((category) => (
+                  {categories.filter((category) => category.slug !== form.category).map((category) => (
                     <label key={category._id || category.slug} className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-sm text-darb-green">
                       <input type="checkbox" checked={form.categories.includes(category.slug)} onChange={() => toggleCategory(category.slug)} />
                       {category.name}
@@ -1351,7 +1387,7 @@ function AdminProducts() {
               />
 
               <Field
-                label="Concentration"
+                label="Concentration (optional)"
                 name="concentration"
                 value={
                   form.concentration
@@ -1359,20 +1395,25 @@ function AdminProducts() {
                 onChange={
                   handleFormChange
                 }
-                placeholder="Eau de Parfum"
+                placeholder="Leave blank when not supplied"
               />
 
+              <div className="md:col-span-2 xl:col-span-3"><SectionHeader title="Scent profile" description="Use Top / Middle / Base for a pyramid, or Key Notes when only key notes are supplied. You do not need both." /></div>
+
               <Field
-                label="Scent Family"
-                name="scentFamily"
+                label="Scent Families"
+                name="scentFamilies"
                 value={
-                  form.scentFamily
+                  form.scentFamilies
                 }
                 onChange={
                   handleFormChange
                 }
                 placeholder="Woody, Musk, Amber..."
               />
+
+              <Field label="Best For" name="bestFor" value={form.bestFor} onChange={handleFormChange} placeholder="Evening, gifting, daily wear" />
+              <Field label="Key Notes" name="keyNotes" value={form.keyNotes} onChange={handleFormChange} placeholder="Use instead of a note pyramid when appropriate" />
 
               <Field
                 label="Top Notes"
@@ -1410,6 +1451,7 @@ function AdminProducts() {
                 placeholder="Musk, Amber, Oud"
               />
 
+              <div className="md:col-span-2 xl:col-span-3"><SectionHeader title="Story" description="Storefront summary and full fragrance description." /></div>
               <div className="md:col-span-2 xl:col-span-3">
                 <Field
                   label="Short Description"
@@ -1463,10 +1505,11 @@ function AdminProducts() {
             <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/40 p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-display text-2xl text-darb-green">Variants / Sizes</h3>
-                  <p className="mt-1 text-sm text-darb-muted">Leave empty to keep using the legacy product-level price and stock as one size.</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">Variants</p>
+                  <h3 className="mt-1 font-display text-2xl text-darb-green">Purchasable sizes</h3>
+                  <p className="mt-1 text-sm text-darb-muted">Set each size, SKU, price and stock independently.</p>
                 </div>
-                <button type="button" onClick={addVariant} className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-sm font-semibold text-darb-beige"><Plus size={16} /> Add variant</button>
+                <button type="button" onClick={addVariant} className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-sm font-semibold text-darb-beige"><Plus size={16} /> Add Size</button>
               </div>
               <div className="mt-4 space-y-3">
                 {form.variants.map((variant, index) => (
@@ -1478,7 +1521,7 @@ function AdminProducts() {
                     <Field label="Compare at" type="number" min="0" value={variant.compareAtPrice} onChange={(event) => updateVariant(index, "compareAtPrice", event.target.value)} />
                     <Field label="Stock" type="number" min="0" value={variant.stock} onChange={(event) => updateVariant(index, "stock", event.target.value)} />
                     <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-darb-green"><input type="checkbox" checked={variant.isActive} onChange={(event) => updateVariant(index, "isActive", event.target.checked)} /> Active</label>
-                    <button type="button" onClick={() => removeVariant(index)} className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-red-200 text-red-700" aria-label="Remove variant"><Trash2 size={16} /></button>
+                    <button type="button" onClick={() => removeVariant(index)} className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-red-200 text-red-700" aria-label={`Remove ${variant.label || `size ${index + 1}`}`}><Trash2 size={16} /></button>
                   </div>
                 ))}
               </div>
@@ -1496,7 +1539,7 @@ function AdminProducts() {
                     {
                       totalImageCount
                     }
-                    /3 images
+                    /{MAX_IMAGES} images
                     ready ·{" "}
                     {
                       remainingImageSlots
@@ -1510,27 +1553,15 @@ function AdminProducts() {
                   </p>
                 </div>
 
-                {remainingImageSlots >
-                  0 && (
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black">
-                    <ImagePlus
-                      size={17}
-                    />
-
-                    Add Images
-
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                      onChange={
-                        handleImageChange
-                      }
-                      className="hidden"
-                    />
-                  </label>
-                )}
               </div>
+
+              {remainingImageSlots > 0 && <label onDragEnter={(event) => { event.preventDefault(); setIsDraggingImages(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setIsDraggingImages(false)} onDrop={handleImageDrop} className={`mt-5 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-5 text-center transition ${isDraggingImages ? "border-darb-green bg-darb-green/5" : "border-darb-gold/45 bg-darb-cream hover:border-darb-green"}`}>
+                <ImagePlus size={30} className="text-darb-green" />
+                <span className="mt-3 font-display text-2xl text-darb-green">Drop product images here</span>
+                <span className="mt-1 text-sm text-darb-muted">or <span className="font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">Browse files</span></span>
+                <span className="mt-3 text-xs text-darb-muted">JPG / PNG / WEBP · up to {MAX_IMAGES}</span>
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handleImageChange} className="sr-only" />
+              </label>}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {existingImages.map(
@@ -1631,7 +1662,7 @@ function AdminProducts() {
                       PNG, and WEBP
                       are accepted,
                       with up to
-                      three images
+                      ten images
                       per product.
                     </p>
                   </div>
@@ -1639,6 +1670,7 @@ function AdminProducts() {
               </div>
             </div>
 
+            <SectionHeader title="Visibility" description="Choose where this product appears in the storefront." />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <ToggleField
                 label="Active"
@@ -1696,6 +1728,7 @@ function AdminProducts() {
               />
             </div>
 
+            <SectionHeader title="SEO" description="Optional search and sharing copy." />
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Meta Title"
@@ -1877,7 +1910,7 @@ function AdminProducts() {
                               .images
                               ?.length ||
                               0}
-                            /3
+                            /{MAX_IMAGES}
                           </span>
                         </div>
 
@@ -2074,6 +2107,7 @@ function Field({
   min,
   placeholder,
   readOnly = false,
+  dir,
 }) {
   return (
     <label>
@@ -2088,6 +2122,7 @@ function Field({
         type={type}
         min={min}
         readOnly={readOnly}
+        dir={dir}
         className={`w-full rounded-full border px-5 py-3 outline-none transition ${
           readOnly
             ? "cursor-not-allowed border-darb-gold/20 bg-darb-cream/80 text-darb-muted"
@@ -2099,6 +2134,10 @@ function Field({
       />
     </label>
   );
+}
+
+function SectionHeader({ title, description }) {
+  return <div className="border-b border-darb-gold/20 pb-3"><p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">{title}</p>{description && <p className="mt-1 text-sm text-darb-muted">{description}</p>}</div>;
 }
 
 function ImageEditorCard({
@@ -2121,6 +2160,8 @@ function ImageEditorCard({
         <img
           src={src}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover"
         />
 

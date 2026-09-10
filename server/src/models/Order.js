@@ -129,7 +129,7 @@ const paymentProofSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Cloudinary storage identifiers are intentionally hidden from normal queries.
+    // Private R2 object identifiers are intentionally hidden from normal queries.
     publicId: {
       type: String,
       default: "",
@@ -279,7 +279,6 @@ const orderSchema = new mongoose.Schema(
       enum: [
         "pending",
         "confirmed",
-        "processing",
         "shipped",
         "delivered",
         "cancelled",

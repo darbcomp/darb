@@ -1,19 +1,11 @@
 const mongoose = require("mongoose");
-const { Readable } = require("stream");
 const Category = require("../models/Category");
 const Product = require("../models/Product");
-const { cloudinary } = require("../config/cloudinary");
+const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const slugify = require("../utils/slugify");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
-const isCloudinaryReady = () => {
-  return Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-  );
-};
 
 const parseBoolean = (value, defaultValue = true) => {
   if (value === undefined || value === null || value === "") return defaultValue;
@@ -31,45 +23,17 @@ const parseNumber = (value, defaultValue = 0) => {
   return Number.isFinite(number) ? number : defaultValue;
 };
 
-const uploadBufferToCloudinary = (buffer, options = {}) => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: options.folder || "darb/categories",
-        resource_type: "image",
-      },
-      (error, result) => {
-        if (error) return reject(error);
 
-        return resolve(result);
-      }
-    );
-
-    const readableStream = new Readable();
-    readableStream._read = () => {};
-    readableStream.push(buffer);
-    readableStream.push(null);
-    readableStream.pipe(uploadStream);
-  });
-};
-
-const uploadCategoryImage = async (file) => {
+const uploadCategoryImage = async (file, name) => {
   if (!file) return null;
-
-  if (!isCloudinaryReady()) {
-    throw new Error(
-      "Cloudinary credentials are missing. Add Cloudinary credentials before uploading images."
-    );
-  }
-
-  const result = await uploadBufferToCloudinary(file.buffer);
-
-  return {
-    url: result.secure_url,
-    publicId: result.public_id,
-    alt: file.originalname || "Darb category image",
-  };
+  const result = await uploadOptimizedPublicImage(file, {
+    folder: "categories",
+    baseName: slugify(name || "category"),
+    alt: `${name || "Darb category"} — Darb`,
+  });
+  return { url: result.url, publicId: result.publicId, alt: file.originalname || name || "Darb category image" };
 };
+
 
 const buildCategoryPayload = async (body, file = null, existingCategory = null) => {
   const name = body.name?.trim() || existingCategory?.name;
@@ -93,11 +57,11 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
     payload.slug = slugify(name);
   }
 
-  const uploadedImage = await uploadCategoryImage(file);
+  const uploadedImage = await uploadCategoryImage(file, name);
 
   if (uploadedImage) {
-    if (existingCategory?.image?.publicId && isCloudinaryReady()) {
-      await cloudinary.uploader.destroy(existingCategory.image.publicId);
+    if (existingCategory?.image?.publicId) {
+      await deletePublicMedia(existingCategory.image.publicId).catch(() => {});
     }
 
     payload.image = {
@@ -474,8 +438,8 @@ const deleteCategory = async (req, res) => {
         });
       }
 
-      if (category.image?.publicId && isCloudinaryReady()) {
-        await cloudinary.uploader.destroy(category.image.publicId);
+      if (category.image?.publicId) {
+        await deletePublicMedia(category.image.publicId).catch(() => {});
       }
 
       await category.deleteOne();

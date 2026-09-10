@@ -1,6 +1,8 @@
 import InfoPageShell from "../../components/common/InfoPageShell";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { claimPolicyReward } from "../../api/rewardApi";
 import { useAuth } from "../../context/AuthContext";
 
@@ -30,9 +32,56 @@ function Section({
   );
 }
 
-function TermsConditions() {
+function PolicyReward() {
   const { isAuthenticated } = useAuth();
+  const [open, setOpen] = useState(false);
+  const closeRef = useRef(null);
+  const dialogRef = useRef(null);
   const rewardMutation = useMutation({ mutationFn: claimPolicyReward });
+  useEffect(() => {
+    if (!open) return undefined;
+    const previouslyFocused = document.activeElement;
+    closeRef.current?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") return setOpen(false);
+      if (event.key !== "Tab") return undefined;
+      const focusable = dialogRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return undefined;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+      return undefined;
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
+  return <>
+    <button type="button" onClick={() => setOpen(true)} className="ml-auto mt-5 block rounded-full px-2 py-1 text-sm text-darb-gold/55 transition hover:text-darb-gold focus:text-darb-gold" aria-label="Open a hidden Darb detail">◇</button>
+    {open && <div className="fixed inset-0 z-[100] grid place-items-center bg-darb-black/60 p-5" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="policy-reward-title" className="relative w-full max-w-md rounded-[1.75rem] border border-darb-gold/30 bg-darb-cream p-7 text-center shadow-2xl sm:p-9">
+        <button ref={closeRef} type="button" onClick={() => setOpen(false)} className="absolute right-4 top-4 rounded-full p-2 text-darb-green" aria-label="Close reward reveal"><X size={18} /></button>
+        <p className="text-2xl text-darb-gold" aria-hidden="true">◇</p>
+        <h2 id="policy-reward-title" className="mt-3 font-display text-3xl text-darb-green">A quieter path found you.</h2>
+        <p className="mt-3 text-sm text-darb-muted">You've uncovered 10% off.</p>
+        {isAuthenticated ? <button type="button" disabled={rewardMutation.isPending || rewardMutation.isSuccess} onClick={() => rewardMutation.mutate()} className="mt-6 min-h-12 w-full rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige disabled:opacity-60">{rewardMutation.isSuccess ? "Reward claimed" : rewardMutation.isPending ? "Claiming…" : "Claim reward"}</button> : <Link to="/login" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige">Sign in to claim</Link>}
+        <div className="mt-3 min-h-5 text-xs text-darb-muted" aria-live="polite">{rewardMutation.isSuccess && "Valid for 7 days and ready in your account."}{rewardMutation.isError && (rewardMutation.error?.friendlyMessage || "This reward is no longer available.")}</div>
+      </section>
+    </div>}
+  </>;
+}
+
+function TermsConditions() {
   return (
     <InfoPageShell
       eyebrow="Darb"
@@ -136,15 +185,7 @@ function TermsConditions() {
 
         <Section number="08" title="Rewards & Promotions">
           <p>Only one promotional benefit can apply to an order. Rewards are account-bound, subject to their displayed eligibility and expiry, and cannot be exchanged for cash.</p>
-          <div className="pt-6 text-center opacity-70 transition hover:opacity-100">
-            <p className="font-display text-lg text-darb-green">You followed the quieter path.</p>
-            {isAuthenticated ? (
-              <button type="button" disabled={rewardMutation.isPending || rewardMutation.isSuccess} onClick={() => rewardMutation.mutate()} className="mt-2 text-xs underline decoration-darb-gold underline-offset-4">
-                {rewardMutation.isSuccess ? "A 10% path reward is now in your account for 7 days." : rewardMutation.isPending ? "Opening the path..." : "Claim the hidden path"}
-              </button>
-            ) : <Link to="/login" className="mt-2 inline-block text-xs underline decoration-darb-gold underline-offset-4">Sign in to follow it</Link>}
-            {rewardMutation.isError && <p className="mt-2 text-xs text-darb-muted">{rewardMutation.error?.friendlyMessage || "This path has already been followed."}</p>}
-          </div>
+          <PolicyReward />
         </Section>
 
         <Section

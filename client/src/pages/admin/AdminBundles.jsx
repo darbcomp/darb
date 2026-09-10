@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit, PackagePlus, Plus, Search, Trash2, X } from "lucide-react";
+import { Edit, ImagePlus, PackagePlus, Plus, Search, Trash2, X } from "lucide-react";
 import {
   createAdminBundle,
   deleteAdminBundle,
@@ -216,6 +216,8 @@ function AdminBundles() {
   const [editingBundle, setEditingBundle] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const bundleImagePreview = useMemo(() => form.imageFile ? URL.createObjectURL(form.imageFile) : "", [form.imageFile]);
+  useEffect(() => () => { if (bundleImagePreview) URL.revokeObjectURL(bundleImagePreview); }, [bundleImagePreview]);
 
   const queryParams = useMemo(() => {
     const params = {
@@ -321,6 +323,20 @@ function AdminBundles() {
       ...current,
       [name]: type === "checkbox" ? checked : value,
     }));
+  };
+
+  const selectBundleImage = (file) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setFormError("Bundle image must be a JPG, PNG, or WEBP file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError("Bundle image must be 5 MB or smaller.");
+      return;
+    }
+    setFormError("");
+    setForm((current) => ({ ...current, imageFile: file, removeImage: false }));
   };
 
   const validateForm = () => {
@@ -773,11 +789,12 @@ function AdminBundles() {
                 />
               </div>
 
-              <div className="md:col-span-2 xl:col-span-3 rounded-3xl border border-darb-gold/20 bg-darb-cream/60 p-5">
-                <label className="mb-2 block text-sm font-semibold text-darb-green">Bundle image</label>
-                {form.image?.url && !form.removeImage && <img src={form.image.url} alt={form.name} className="mb-4 h-36 w-36 rounded-2xl object-cover" />}
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setForm((current) => ({ ...current, imageFile: event.target.files?.[0] || null, removeImage: false }))} className="text-sm text-darb-muted" />
-                {form.image?.url && <button type="button" onClick={() => setForm((current) => ({ ...current, imageFile: null, removeImage: true }))} className="ml-4 text-sm font-semibold text-red-600">Remove image</button>}
+              <div className="rounded-3xl border border-darb-gold/20 bg-darb-surface/70 p-5 md:col-span-2 xl:col-span-3">
+                <p className="text-sm font-semibold text-darb-green">Bundle image</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-[10rem_1fr] sm:items-center">
+                  {(bundleImagePreview || (form.image?.url && !form.removeImage)) && <div className="relative"><img src={bundleImagePreview || form.image.url} alt={form.name || "Bundle preview"} className="aspect-square w-40 rounded-2xl object-cover" /><button type="button" onClick={() => setForm((current) => ({ ...current, imageFile: null, removeImage: true }))} className="absolute right-2 top-2 rounded-full bg-darb-cream p-2 text-red-700 shadow" aria-label="Remove bundle image"><Trash2 size={15} /></button></div>}
+                  <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectBundleImage(event.dataTransfer.files?.[0]); }} className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-darb-gold/40 bg-darb-cream px-4 text-center transition hover:border-darb-green"><ImagePlus size={24} className="text-darb-green" /><span className="mt-2 font-semibold text-darb-green">Drop or browse</span><span className="mt-1 text-xs text-darb-muted">JPG / PNG / WEBP · 5 MB max</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { selectBundleImage(event.target.files?.[0]); event.target.value = ""; }} className="sr-only" /></label>
+                </div>
               </div>
 
               <div className="md:col-span-2 xl:col-span-3">

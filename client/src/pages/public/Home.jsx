@@ -39,8 +39,10 @@ import { getPublicBundles } from "../../api/bundleApi";
 import { useAuth } from "../../context/AuthContext";
 
 const categoryVisuals = {
-  men: "/images/home/category-for-him.webp",
-  women: "/images/home/category-for-her.webp",
+  men: "/images/categories/for-him.webp",
+  women: "/images/categories/for-her.webp",
+  unisex: "/images/categories/unisex.webp",
+  musk: "/images/categories/musk.webp",
 };
 
 const fallbackCategories = [
@@ -52,6 +54,8 @@ const fallbackCategories = [
     name: "Women",
     slug: "women",
   },
+  { name: "Unisex", slug: "unisex" },
+  { name: "Musk", slug: "musk" },
 ];
 
 const initialReviewForm = {
@@ -132,9 +136,10 @@ function CategoryCard({
 
 function BundleCard({ bundle }) {
   const price = Number(bundle.fixedBundlePrice || (bundle.discountType === "fixed_bundle_price" ? bundle.discountValue : 0));
-  return <article className="min-w-[82%] snap-start overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-[#E9DDC9] shadow-soft sm:min-w-[46%] lg:min-w-[31%]">
+  const detail = bundle.description || (bundle.requiredQuantity ? `Choose ${bundle.requiredQuantity} Darb fragrances.` : "");
+  return <article className="flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-darb-surface shadow-soft">
     <div className="aspect-[16/10] overflow-hidden bg-darb-green">{bundle.image?.url ? <img src={bundle.image.url} alt={bundle.image.alt || bundle.name} loading="lazy" className="h-full w-full object-cover"/> : <div className="grid h-full place-items-center font-display text-4xl text-darb-gold">Darb</div>}</div>
-    <div className="p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">Curated path</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.name}</h3>{price > 0 && <p className="mt-3 font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.freeDelivery && <span className="mt-3 inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">Free delivery</span>}<Link to="/shop" className="mt-5 inline-flex rounded-full border border-darb-green/25 px-5 py-2 text-sm font-semibold text-darb-green">Build this bundle</Link></div>
+    <div className="flex flex-1 flex-col p-5 sm:p-6"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">Curated path</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.title || bundle.name}</h3>{detail && <p className="mt-3 text-sm leading-6 text-darb-muted">{detail}</p>}<div className="mt-4 flex flex-wrap items-center gap-3">{price > 0 && <p className="font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.discountType === "percentage" && Number(bundle.discountValue) > 0 && <p className="text-sm font-semibold text-darb-green">Save {bundle.discountValue}%</p>}{bundle.freeDelivery && <span className="inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">Free delivery</span>}</div><Link to="/shop" className="mt-auto inline-flex pt-6 text-sm font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">Explore bundle</Link></div>
   </article>;
 }
 
@@ -205,7 +210,7 @@ function ReviewCard({
         flex-col
         rounded-[1.75rem]
         border border-darb-gold/25
-        bg-[#E9DDC9]
+        bg-darb-surface
         p-6
         shadow-soft
         sm:min-w-[46%]
@@ -345,7 +350,7 @@ function Home() {
 
   const reviewTrackRef =
     useRef(null);
-  const bundleTrackRef = useRef(null);
+  const [reviewCanScroll, setReviewCanScroll] = useState({ back: false, forward: false });
   const reviewAutoMovementEnabled = false;
 
   const [
@@ -469,6 +474,23 @@ function Home() {
     reviewsQuery.data
       ?.data || [];
 
+  useEffect(() => {
+    const track = reviewTrackRef.current;
+    if (!track) return undefined;
+    const update = () => setReviewCanScroll({
+      back: track.scrollLeft > 2,
+      forward: track.scrollLeft + track.clientWidth < track.scrollWidth - 2,
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(track);
+    track.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      track.removeEventListener("scroll", update);
+    };
+  }, [reviews.length]);
+
   const eligibility =
     eligibilityQuery.data
       ?.data || null;
@@ -481,21 +503,18 @@ function Home() {
   const categoryOrder = [
     "men",
     "women",
+    "unisex",
+    "musk",
   ];
-
-  const sourceCategories =
-    categories.length > 0
-      ? categories
-      : fallbackCategories;
 
   const displayCategories =
     categoryOrder
       .map((slug) =>
-        sourceCategories.find(
+        categories.find(
           (category) =>
             category.slug ===
             slug
-        )
+        ) || fallbackCategories.find((category) => category.slug === slug)
       )
       .filter(Boolean);
 
@@ -1065,9 +1084,9 @@ function Home() {
       </section>
 
       {bundles.length > 0 && <section className="bg-darb-cream py-16 sm:py-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex items-end justify-between gap-4 px-5 sm:px-6 lg:px-8"><div><p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold">Bundles</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">Paths chosen together.</h2></div><div className="hidden gap-2 md:flex"><button type="button" onClick={() => bundleTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Previous bundles"><ArrowLeft size={18}/></button><button type="button" onClick={() => bundleTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Next bundles"><ArrowRight size={18}/></button></div></div>
-          <div ref={bundleTrackRef} className="darb-horizontal-scroll mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-3 sm:px-6 lg:px-8">{bundles.map((bundle) => <BundleCard key={bundle._id} bundle={bundle}/>)}</div>
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold">Bundles</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">Paths chosen together.</h2></div>
+          <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">{bundles.map((bundle) => <BundleCard key={bundle._id} bundle={bundle}/>)}</div>
         </div>
       </section>}
 
@@ -1266,7 +1285,6 @@ function Home() {
                 left along the Darb
                 journey.
               </p>
-              <div className="mt-5 hidden gap-2 md:flex"><button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Previous reviews"><ArrowLeft size={18}/></button><button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} className="rounded-full border border-darb-gold/30 p-3 text-darb-green" aria-label="Next reviews"><ArrowRight size={18}/></button></div>
             </div>
           </div>
 
@@ -1305,11 +1323,13 @@ function Home() {
                   ref={
                     reviewTrackRef
                   }
-                  onPointerDown={() =>
+                   onPointerDown={() =>
                     setReviewMarqueePaused(
                       true
-                    )
-                  }
+                     )
+                   }
+                   tabIndex="0"
+                   aria-label="Customer reviews"
                   className="
                     darb-horizontal-scroll
                     mt-10
@@ -1369,6 +1389,11 @@ function Home() {
                         )
                     )}
                 </div>
+
+                {reviews.length > 1 && <div className="mt-5 hidden items-center justify-between px-5 sm:px-6 md:flex lg:px-8">
+                  <button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} disabled={!reviewCanScroll.back} className="rounded-full border border-darb-gold/30 p-3 text-darb-green transition hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label="Previous reviews"><ArrowLeft size={18}/></button>
+                  <button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} disabled={!reviewCanScroll.forward} className="rounded-full border border-darb-gold/30 p-3 text-darb-green transition hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label="Next reviews"><ArrowRight size={18}/></button>
+                </div>}
 
               </>
             )}

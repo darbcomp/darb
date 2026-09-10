@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 
 const {
-  uploadPaymentProofToCloudinary,
-  deletePaymentProofFromCloudinary,
+  uploadPaymentProofToR2,
+  deletePaymentProofFromR2,
 } = require("../services/paymentProof.service");
 
 const isDatabaseConnected = () =>
@@ -129,7 +129,7 @@ const replaceRejectedPaymentProof =
 
     try {
       newProof =
-        await uploadPaymentProofToCloudinary(
+        await uploadPaymentProofToR2(
           file
         );
 
@@ -143,7 +143,7 @@ const replaceRejectedPaymentProof =
     } catch (error) {
       if (newProof) {
         try {
-          await deletePaymentProofFromCloudinary(
+          await deletePaymentProofFromR2(
             newProof
           );
         } catch (
@@ -169,7 +169,7 @@ const replaceRejectedPaymentProof =
       previousProof?.publicId
     ) {
       try {
-        await deletePaymentProofFromCloudinary(
+        await deletePaymentProofFromR2(
           previousProof
         );
       } catch (

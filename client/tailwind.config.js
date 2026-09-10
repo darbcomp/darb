@@ -10,6 +10,7 @@ export default {
           gold: "#C8A97E",
           black: "#1C1C1C",
           cream: "#F7F1E6",
+          surface: "#EFE6D7",
           muted: "#8B8173",
         },
       },

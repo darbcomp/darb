@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Copy, ImagePlus, Trash2 } from "lucide-react";
 import { createOrder, previewOrder } from "../../api/orderApi";
 import { getPublicSettings } from "../../api/settingsApi";
 import { getMyRewards } from "../../api/rewardApi";
@@ -105,6 +105,8 @@ function Checkout() {
     const [appliedCouponCode, setAppliedCouponCode] = useState("");
     const [error, setError] = useState("");
     const [paymentProof, setPaymentProof] = useState(null);
+    const [copyStatus, setCopyStatus] = useState("idle");
+    const copyResetRef = useRef(null);
     const paymentProofPreview = useMemo(() => (paymentProof ? URL.createObjectURL(paymentProof) : ""), [paymentProof]);
     useEffect(() => {
         return () => {
@@ -113,6 +115,7 @@ function Checkout() {
             }
         };
     }, [paymentProofPreview]);
+    useEffect(() => () => window.clearTimeout(copyResetRef.current), []);
     /* =========================
        ORDER ITEMS
     ========================== */
@@ -299,9 +302,15 @@ function Checkout() {
         }
         try {
             await navigator.clipboard.writeText(recipient);
+            setCopyStatus("copied");
+            window.clearTimeout(copyResetRef.current);
+            copyResetRef.current = window.setTimeout(() => setCopyStatus("idle"), 1800);
         }
         catch {
+            setCopyStatus("failed");
             setError("Could not copy the payment number. Please copy it manually.");
+            window.clearTimeout(copyResetRef.current);
+            copyResetRef.current = window.setTimeout(() => setCopyStatus("idle"), 2000);
         }
     };
     /* =========================
@@ -704,10 +713,11 @@ function Checkout() {
                     {selectedPaymentMethod.recipient}
                   </p>
 
-                  <button type="button" onClick={handleCopyRecipient} className="inline-flex items-center gap-2 rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-beige transition hover:bg-darb-gold hover:text-darb-green">
-                    <Copy size={16}/>
-                    Copy
+                  <button type="button" onClick={handleCopyRecipient} className="inline-flex min-w-[7.25rem] items-center justify-center gap-2 rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-beige transition hover:bg-darb-gold hover:text-darb-green active:scale-[0.97]">
+                    {copyStatus === "copied" ? <Check size={16}/> : <Copy size={16}/>}
+                    {copyStatus === "copied" ? "Copied" : "Copy"}
                   </button>
+                  <span className="sr-only" aria-live="polite">{copyStatus === "copied" ? "Payment number copied" : copyStatus === "failed" ? "Payment number could not be copied" : ""}</span>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/10 px-4 py-3">
