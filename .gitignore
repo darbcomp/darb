@@ -42,6 +42,5 @@ coverage/
 uploads/
 server/uploads/
 
-.darb-phase1-backup/.darb-localization-backup/
 .darb-localization-backup/
 .darb-phase1-backup/
