@@ -9,6 +9,7 @@ import PublicLayout from "../components/layout/PublicLayout";
 import ProtectedRoute from "../components/common/ProtectedRoute";
 import AdminRoute from "../components/common/AdminRoute";
 import ScrollToTop from "../components/common/ScrollToTop";
+import RouteSEO from "../components/common/RouteSEO";
 
 const Home = lazy(() => import("../pages/public/Home"));
 const Shop = lazy(() => import("../pages/public/Shop"));
@@ -27,6 +28,7 @@ const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const Account = lazy(() => import("../pages/account/Account"));
 const MyOrders = lazy(() => import("../pages/account/MyOrders"));
+const NotFound = lazy(() => import("../pages/public/NotFound"));
 const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
 const AdminLogin = lazy(() => import("../pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("../pages/admin/AdminDashboard"));
@@ -45,6 +47,7 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
+      <RouteSEO />
 
       <Suspense fallback={<div className="grid min-h-[55vh] place-items-center bg-darb-cream" role="status"><span className="font-display text-2xl text-darb-green">Following the path…</span></div>}>
       <Routes>
@@ -154,6 +157,11 @@ function AppRoutes() {
               <MyOrders />
             </ProtectedRoute>
           }
+        />
+
+        <Route
+          path="*"
+          element={<NotFound />}
         />
       </Route>
 

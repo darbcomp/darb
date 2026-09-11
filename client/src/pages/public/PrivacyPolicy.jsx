@@ -190,7 +190,8 @@ function PrivacyPolicy() {
         <PolicySection number="10" title="Optional Personalization & Marketing">
           <p>A birthday or date of birth is collected only if you voluntarily provide it and may be used to personalize your Darb experience, offers, or gifts. It is not displayed publicly.</p>
           <p>Email marketing is optional and only used when you select the marketing consent checkbox. Essential order and account messages do not depend on marketing consent.</p>
-          <p>Meta Pixel or TikTok Pixel may be used only when configured, enabled, and the necessary tracking consent exists. When IDs are absent, disabled, or consent is absent, those pixels do not fire.</p>
+          <p>Meta Pixel or TikTok Pixel operates only when configured and enabled. When the required configuration is absent or disabled, those pixels do not operate.</p>
+          <p>Darb may use configured analytics and advertising technologies, including Meta Pixel and server-side conversion measurement, to understand site activity and measure advertising effectiveness.</p>
         </PolicySection>
 
         <PolicySection

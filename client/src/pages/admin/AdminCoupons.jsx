@@ -15,6 +15,9 @@ import {
   updateAdminCoupon,
 } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
+import AdminPagination from "../../components/admin/AdminPagination";
+import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const emptyForm = {
   code: "",
@@ -154,6 +157,8 @@ function ToggleField({ label, name, checked, onChange }) {
 
 function AdminCoupons() {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const [page, setPage] = useState(1);
 
   const [filters, setFilters] = useState({
     search: "",
@@ -165,10 +170,12 @@ function AdminCoupons() {
   const [editingCoupon, setEditingCoupon] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const editorRef = useAdminEditorReveal(isFormOpen, editingCoupon?._id || "new");
 
   const queryParams = useMemo(() => {
     const params = {
-      limit: 40,
+      page,
+      limit: 10,
     };
 
     if (filters.search.trim()) params.search = filters.search.trim();
@@ -176,7 +183,7 @@ function AdminCoupons() {
     if (filters.discountType) params.discountType = filters.discountType;
 
     return params;
-  }, [filters]);
+  }, [filters, page]);
 
   const couponsQuery = useQuery({
     queryKey: ["admin-coupons", queryParams],
@@ -191,9 +198,11 @@ function AdminCoupons() {
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       closeForm();
+      notify({ type: "success", title: "Coupon created" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to create coupon.");
+      notify({ type: "error", title: "Coupon was not created", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -204,9 +213,11 @@ function AdminCoupons() {
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       closeForm();
+      notify({ type: "success", title: "Coupon updated" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to update coupon.");
+      notify({ type: "error", title: "Coupon was not updated", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -216,7 +227,9 @@ function AdminCoupons() {
       queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
+      notify({ type: "success", title: "Coupon deactivated" });
     },
+    onError: (error) => notify({ type: "error", title: "Could not deactivate coupon", message: error.friendlyMessage || "Please try again." }),
   });
 
   const coupons = couponsQuery.data?.data || [];
@@ -230,6 +243,7 @@ function AdminCoupons() {
       ...current,
       [name]: value,
     }));
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -238,6 +252,7 @@ function AdminCoupons() {
       status: "",
       discountType: "",
     });
+    setPage(1);
   };
 
   const openCreateForm = () => {
@@ -314,10 +329,8 @@ function AdminCoupons() {
     createMutation.mutate(payload);
   };
 
-  const handleDeactivate = (coupon) => {
-    const confirmed = window.confirm(
-      `Deactivate coupon "${coupon.code}"? It will no longer work at checkout.`
-    );
+  const handleDeactivate = async (coupon) => {
+    const confirmed = await confirm({ title: "Deactivate coupon?", body: `“${coupon.code}” will no longer work at checkout.`, confirmLabel: "Deactivate", variant: "destructive" });
 
     if (!confirmed) return;
 
@@ -417,7 +430,7 @@ function AdminCoupons() {
       </div>
 
       {isFormOpen && (
-        <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <div ref={editorRef} className="mb-8 scroll-mt-32 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -936,7 +949,7 @@ function AdminCoupons() {
                         type="button"
                         onClick={() => handleDeactivate(coupon)}
                         disabled={deleteMutation.isPending}
-                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Trash2 size={16} />
                         Deactivate
@@ -949,6 +962,7 @@ function AdminCoupons() {
           </div>
         </div>
       )}
+      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
     </section>
   );
 }

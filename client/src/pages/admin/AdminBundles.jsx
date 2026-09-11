@@ -8,6 +8,9 @@ import {
   updateAdminBundle,
 } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
+import AdminPagination from "../../components/admin/AdminPagination";
+import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const emptyForm = {
   name: "",
@@ -210,6 +213,8 @@ function ToggleField({ label, name, checked, onChange }) {
 
 function AdminBundles() {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const [page, setPage] = useState(1);
 
   const [filters, setFilters] = useState({
     search: "",
@@ -222,12 +227,14 @@ function AdminBundles() {
   const [editingBundle, setEditingBundle] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const editorRef = useAdminEditorReveal(isFormOpen, editingBundle?._id || "new");
   const bundleImagePreview = useMemo(() => form.imageFile ? URL.createObjectURL(form.imageFile) : "", [form.imageFile]);
   useEffect(() => () => { if (bundleImagePreview) URL.revokeObjectURL(bundleImagePreview); }, [bundleImagePreview]);
 
   const queryParams = useMemo(() => {
     const params = {
-      limit: 40,
+      page,
+      limit: 10,
     };
 
     if (filters.search.trim()) params.search = filters.search.trim();
@@ -236,7 +243,7 @@ function AdminBundles() {
     if (filters.discountType) params.discountType = filters.discountType;
 
     return params;
-  }, [filters]);
+  }, [filters, page]);
 
   const bundlesQuery = useQuery({
     queryKey: ["admin-bundles", queryParams],
@@ -251,9 +258,11 @@ function AdminBundles() {
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       closeForm();
+      notify({ type: "success", title: "Bundle created" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to create bundle.");
+      notify({ type: "error", title: "Bundle was not created", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -264,9 +273,11 @@ function AdminBundles() {
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       closeForm();
+      notify({ type: "success", title: "Bundle updated" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to update bundle.");
+      notify({ type: "error", title: "Bundle was not updated", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -276,7 +287,9 @@ function AdminBundles() {
       queryClient.invalidateQueries({ queryKey: ["admin-bundles"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
+      notify({ type: "success", title: "Bundle deactivated" });
     },
+    onError: (error) => notify({ type: "error", title: "Could not deactivate bundle", message: error.friendlyMessage || "Please try again." }),
   });
 
   const bundles = bundlesQuery.data?.data || [];
@@ -290,6 +303,7 @@ function AdminBundles() {
       ...current,
       [name]: value,
     }));
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -299,6 +313,7 @@ function AdminBundles() {
       bundleType: "",
       discountType: "",
     });
+    setPage(1);
   };
 
   const openCreateForm = () => {
@@ -416,10 +431,8 @@ function AdminBundles() {
     createMutation.mutate(payload);
   };
 
-  const handleDeactivate = (bundle) => {
-    const confirmed = window.confirm(
-      `Deactivate bundle "${bundle.name}"? It will stop applying to checkout.`
-    );
+  const handleDeactivate = async (bundle) => {
+    const confirmed = await confirm({ title: "Deactivate bundle?", body: `“${bundle.name}” will stop applying at checkout.`, confirmLabel: "Deactivate", variant: "destructive" });
 
     if (!confirmed) return;
 
@@ -537,7 +550,7 @@ function AdminBundles() {
       </div>
 
       {isFormOpen && (
-        <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <div ref={editorRef} className="mb-8 scroll-mt-32 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -1151,7 +1164,7 @@ function AdminBundles() {
                         type="button"
                         onClick={() => handleDeactivate(bundle)}
                         disabled={deleteMutation.isPending}
-                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Trash2 size={16} />
                         Deactivate
@@ -1164,6 +1177,7 @@ function AdminBundles() {
           </div>
         </div>
       )}
+      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
     </section>
   );
 }

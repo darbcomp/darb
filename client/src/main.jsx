@@ -8,6 +8,7 @@ import { CartProvider } from "./context/CartContext.jsx";
 import "./index.css";
 import AppErrorBoundary from "./components/common/AppErrorBoundary.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
+import { FeedbackProvider } from "./context/FeedbackContext.jsx";
 
 const queryClient = new QueryClient();
 
@@ -16,11 +17,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <LanguageProvider>
-          <AuthProvider>
-            <CartProvider>
-              <AppErrorBoundary><App /></AppErrorBoundary>
-            </CartProvider>
-          </AuthProvider>
+          <FeedbackProvider>
+            <AuthProvider>
+              <CartProvider>
+                <AppErrorBoundary><App /></AppErrorBoundary>
+              </CartProvider>
+            </AuthProvider>
+          </FeedbackProvider>
         </LanguageProvider>
       </BrowserRouter>
     </QueryClientProvider>

@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import CartStoreContext from "./CartStoreContext";
+import { normalizeEcommercePayload, trackMarketingEvent } from "../utils/marketingEvents";
 
 const CART_STORAGE_KEY = "darb_cart_v1";
 
@@ -139,12 +140,20 @@ const normalizeCartItem = (
     name:
       product.name,
 
+    arabicName:
+      product.arabicName || "",
+
     image:
       getMainImage(product),
 
     categoryName:
       product.category?.name ||
       product.categorySnapshot?.name ||
+      "",
+
+    arabicCategoryName:
+      product.category?.arabicName ||
+      product.categorySnapshot?.arabicName ||
       "",
 
     categorySlug:
@@ -378,11 +387,23 @@ export function CartProvider({
         quantity,
         variant
       );
+    const existingItem = state.items.find((item) => item.cartItemId === cartItem.cartItemId);
+    const addedQuantity = existingItem
+      ? Math.max(clampQuantity(existingItem.quantity + cartItem.quantity, existingItem.stock) - existingItem.quantity, 0)
+      : cartItem.quantity;
 
     dispatch({
       type: "ADD_ITEM",
       payload: cartItem,
     });
+
+    if (addedQuantity > 0) {
+      trackMarketingEvent("AddToCart", normalizeEcommercePayload({
+        items: [{ ...cartItem, quantity: addedQuantity }],
+        value: cartItem.price * addedQuantity,
+        contentName: cartItem.name,
+      }));
+    }
 
     return cartItem;
   };

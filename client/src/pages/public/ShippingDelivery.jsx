@@ -7,6 +7,7 @@ import {
 
 import { getPublicSettings } from "../../api/settingsApi";
 import InfoPageShell from "../../components/common/InfoPageShell";
+import { useLanguage } from "../../context/LanguageContext";
 
 function formatMoney(
   value,
@@ -48,6 +49,7 @@ function InfoCard({
 }
 
 function ShippingDelivery() {
+  const { t } = useLanguage();
   const settingsQuery = useQuery({
     queryKey: ["public-settings"],
     queryFn: getPublicSettings,
@@ -78,7 +80,7 @@ function ShippingDelivery() {
           title="Delivery Timing"
         >
           <p>
-            {delivery.estimatedDeliveryText || "3–5 business days"} throughout Egypt.
+            {t(delivery.estimatedDeliveryText || "3–5 business days")} {t("throughout Egypt.")}
           </p>
         </InfoCard>
 
@@ -87,7 +89,7 @@ function ShippingDelivery() {
           title="Delivery Fee"
         >
           <p>
-            Cairo {formatMoney(fees.cairo, currency)}, Giza {formatMoney(fees.giza, currency)}, Alexandria {formatMoney(fees.alexandria, currency)}, and all other governorates {formatMoney(fees.other, currency)}.
+            {t("Cairo")} {formatMoney(fees.cairo, currency)}, {t("Giza")} {formatMoney(fees.giza, currency)}, {t("Alexandria")} {formatMoney(fees.alexandria, currency)}, {t("and all other governorates")} {formatMoney(fees.other, currency)}.
           </p>
         </InfoCard>
 

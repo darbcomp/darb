@@ -23,6 +23,7 @@ const reviewRoutes = require("./routes/review.routes");
 const adminRoutes = require("./routes/admin.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const rewardRoutes = require("./routes/reward.routes");
+const marketingRoutes = require("./routes/marketing.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -54,6 +55,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/rewards", rewardRoutes);
+app.use("/api/marketing", marketingRoutes);
 app.use(notFound);
 app.use(errorHandler);
 

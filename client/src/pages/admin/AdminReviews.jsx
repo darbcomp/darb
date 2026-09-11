@@ -23,6 +23,9 @@ import {
   getAdminReviews,
   updateAdminReview,
 } from "../../api/adminApi";
+import AdminPagination from "../../components/admin/AdminPagination";
+import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const todayInputValue = () =>
   new Date().toISOString().slice(0, 10);
@@ -129,6 +132,8 @@ function RatingStars({
 function AdminReviews() {
   const queryClient =
     useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const [page, setPage] = useState(1);
 
   const [filters, setFilters] =
     useState({
@@ -150,10 +155,12 @@ function AdminReviews() {
 
   const [formError, setFormError] =
     useState("");
+  const editorRef = useAdminEditorReveal(formOpen, editingReview?._id || "new");
 
   const queryParams = useMemo(() => {
     const params = {
-      limit: 40,
+      page,
+      limit: 10,
     };
 
     if (filters.search.trim()) {
@@ -172,7 +179,7 @@ function AdminReviews() {
     }
 
     return params;
-  }, [filters]);
+  }, [filters, page]);
 
   const reviewsQuery = useQuery({
     queryKey: [
@@ -220,6 +227,7 @@ function AdminReviews() {
         });
 
         closeForm();
+        notify({ type: "success", title: "Review created" });
       },
 
       onError: (error) => {
@@ -227,6 +235,7 @@ function AdminReviews() {
           error.friendlyMessage ||
             "Failed to create review."
         );
+        notify({ type: "error", title: "Review was not created", message: error.friendlyMessage || "Please try again." });
       },
     });
 
@@ -249,6 +258,7 @@ function AdminReviews() {
         });
 
         closeForm();
+        notify({ type: "success", title: "Review updated" });
       },
 
       onError: (error) => {
@@ -256,6 +266,7 @@ function AdminReviews() {
           error.friendlyMessage ||
             "Failed to update review."
         );
+        notify({ type: "error", title: "Review was not updated", message: error.friendlyMessage || "Please try again." });
       },
     });
 
@@ -270,6 +281,7 @@ function AdminReviews() {
             "admin-reviews",
           ],
         });
+        notify({ type: "success", title: "Review status updated" });
 
         queryClient.invalidateQueries({
           queryKey: [
@@ -296,6 +308,7 @@ function AdminReviews() {
             "public-reviews",
           ],
         });
+        notify({ type: "success", title: "Review deleted" });
       },
     });
 
@@ -336,6 +349,7 @@ function AdminReviews() {
       ...current,
       [name]: value,
     }));
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -344,6 +358,7 @@ function AdminReviews() {
       status: "",
       source: "",
     });
+    setPage(1);
   };
 
   const openCreateForm = () => {
@@ -521,13 +536,15 @@ function AdminReviews() {
     });
   };
 
-  const handleDelete = (
+  const handleDelete = async (
     review
   ) => {
-    const confirmed =
-      window.confirm(
-        `Delete the review from "${review.displayName}"?`
-      );
+    const confirmed = await confirm({
+      title: "Delete review?",
+      body: `The review from “${review.displayName}” will be permanently removed.`,
+      confirmLabel: "Delete review",
+      variant: "destructive",
+    });
 
     if (!confirmed) return;
 
@@ -697,7 +714,7 @@ function AdminReviews() {
 
       {/* Manual review form */}
       {formOpen && (
-        <div className="mb-8 overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-white shadow-soft">
+        <div ref={editorRef} className="mb-8 scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-white shadow-soft">
           <div className="flex items-center justify-between border-b border-darb-gold/20 px-6 py-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
@@ -1215,7 +1232,7 @@ function AdminReviews() {
                         disabled={
                           deleteMutation.isPending
                         }
-                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50"
                       >
                         <Trash2
                           size={
@@ -1232,6 +1249,7 @@ function AdminReviews() {
             )}
           </div>
         )}
+      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
     </section>
   );
 }

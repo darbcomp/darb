@@ -32,6 +32,9 @@ import {
 import ProductCard from "../../components/product/ProductCard";
 import { useLanguage } from "../../context/LanguageContext";
 import { localizeCategory } from "../../utils/localizedContent";
+import SEO from "../../components/common/SEO";
+import { breadcrumbJsonLd } from "../../seo/seoConfig";
+import { getRuntimeSiteUrl } from "../../seo/runtimeSeo";
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 3000;
@@ -146,7 +149,7 @@ function CategoryPage() {
   const {
     slug,
   } = useParams();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [
     searchParams,
@@ -313,6 +316,15 @@ function CategoryPage() {
       slug
     ] ||
     "Explore fragrances created for this Darb path.";
+  const categorySeoTitle = category?.seoTitle || `${categoryName} | ${language === "ar" ? "درب للعطور" : "Darb Perfumes"}`;
+  const categorySeoDescription = category?.seoDescription || categoryDescription;
+  const categorySeoPath = `/category/${slug}`;
+  const categorySeoImage = category?.image?.url || "";
+  const categoryJsonLd = breadcrumbJsonLd([
+    { name: t("Home"), path: "/" },
+    { name: t("Shop"), path: "/shop" },
+    { name: categoryName, path: categorySeoPath },
+  ], getRuntimeSiteUrl());
 
   /* =========================
      BODY LOCK
@@ -1127,6 +1139,7 @@ function CategoryPage() {
       `}</style>
 
       <main className="min-h-[70vh] bg-darb-cream">
+        <SEO title={categorySeoTitle} description={categorySeoDescription} path={categorySeoPath} image={categorySeoImage} robots={categoryQuery.isError ? "noindex, nofollow" : "index, follow"} jsonLd={categoryJsonLd} />
         {/* =========================
             CATEGORY INTRO
         ========================== */}
@@ -1134,7 +1147,7 @@ function CategoryPage() {
         <section className="border-b border-darb-gold/20">
           <div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8">
             <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
-              Darb Collection
+              {t("Darb Collection")}
             </p>
 
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1175,7 +1188,7 @@ function CategoryPage() {
                 }
               />
 
-              Filters
+              {t("Filters")}
 
               {activeFilterCount >
                 0 && (
@@ -1200,7 +1213,7 @@ function CategoryPage() {
               }}
               className="flex min-h-[68px] items-center justify-center gap-3 text-[15px] font-semibold text-darb-black"
             >
-              Sort by
+              {t("Sort by")}
 
               <ChevronDown
                 size={19}
@@ -1228,7 +1241,7 @@ function CategoryPage() {
                 }
               />
 
-              Filters
+              {t("Filters")}
 
               {activeFilterCount >
                 0 && (
@@ -1241,11 +1254,7 @@ function CategoryPage() {
             </button>
 
             <div className="text-center text-sm text-darb-muted">
-              {totalProducts}{" "}
-              {totalProducts ===
-              1
-                ? "fragrance"
-                : "fragrances"}
+              {t(String(totalProducts) + ` fragrance${totalProducts === 1 ? "" : "s"}`)}
             </div>
 
             <div
@@ -1262,7 +1271,7 @@ function CategoryPage() {
                 }
                 className="flex min-h-[72px] w-full items-center justify-end gap-3 text-sm font-semibold text-darb-black"
               >
-                Sort by
+                {t("Sort by")}
 
                 <ChevronDown
                   size={18}
@@ -1293,7 +1302,7 @@ function CategoryPage() {
                             option.value
                           )
                         }
-                        className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm transition ${
+                        className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-start text-sm transition ${
                           sort ===
                           option.value
                             ? "bg-darb-green text-darb-beige"
@@ -1301,7 +1310,7 @@ function CategoryPage() {
                         }`}
                       >
                         {
-                          option.label
+                          t(option.label)
                         }
 
                         {sort ===
@@ -1327,11 +1336,7 @@ function CategoryPage() {
 
         <section className="mx-auto max-w-7xl px-5 py-9 sm:px-6 lg:px-8 lg:py-12">
           <p className="text-center text-sm text-darb-black md:hidden">
-            {totalProducts}{" "}
-            {totalProducts ===
-            1
-              ? "fragrance"
-              : "fragrances"}
+            {t(String(totalProducts) + ` fragrance${totalProducts === 1 ? "" : "s"}`)}
           </p>
 
           {activeFilterCount >
@@ -1348,8 +1353,8 @@ function CategoryPage() {
                 >
                   {activeAvailability[0] ===
                   "in"
-                    ? "In stock"
-                    : "Out of stock"}
+                    ? t("In stock")
+                    : t("Out of stock")}
 
                   <X
                     size={15}
@@ -1387,16 +1392,16 @@ function CategoryPage() {
                 }
                 className="px-2 text-xs font-semibold text-darb-muted underline underline-offset-4 hover:text-darb-green"
               >
-                Clear filters
+                {t("Clear filters")}
               </button>
             </div>
           )}
 
           <div className="mt-5 text-center text-[11px] text-darb-muted md:hidden">
-            Sorted by{" "}
+            {t("Sorted by")}{" "}
             <span className="font-semibold text-darb-green">
               {
-                selectedSort.label
+                t(selectedSort.label)
               }
             </span>
           </div>
@@ -1419,13 +1424,11 @@ function CategoryPage() {
           {productsQuery.isError && (
             <div className="mt-10 rounded-[2rem] border border-darb-gold/20 bg-white px-6 py-14 text-center shadow-soft">
               <h2 className="font-display text-3xl text-darb-green">
-                This path couldn't
-                load.
+                {t("This path couldn't load.")}
               </h2>
 
               <p className="mt-3 text-sm text-darb-muted">
-                Please try again
-                shortly.
+                {t("Please try again shortly.")}
               </p>
             </div>
           )}
@@ -1459,14 +1462,11 @@ function CategoryPage() {
               0 && (
               <div className="mt-10 rounded-[2rem] border border-darb-gold/20 bg-white px-6 py-16 text-center shadow-soft">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">
-                  No Match
+                  {t("No Match")}
                 </p>
 
                 <h2 className="mt-3 font-display text-3xl text-darb-green">
-                  No{" "}
-                  {categoryName.toLowerCase()}{" "}
-                  fragrances match
-                  these filters.
+                  {t("No fragrances match these filters.")}
                 </h2>
 
                 <button
@@ -1476,7 +1476,7 @@ function CategoryPage() {
                   }
                   className="mt-7 rounded-full bg-darb-green px-7 py-3.5 text-sm font-semibold text-darb-beige"
                 >
-                  Clear Filters
+                  {t("Clear Filters")}
                 </button>
               </div>
             )}
@@ -1491,7 +1491,7 @@ function CategoryPage() {
         <div className="fixed inset-0 z-[100]">
           <button
             type="button"
-            aria-label="Close filters"
+            aria-label={t("Close filters")}
             onClick={() =>
               setFilterOpen(
                 false
@@ -1504,7 +1504,7 @@ function CategoryPage() {
             <div className="flex min-h-[82px] items-center justify-between border-b border-darb-gold/20 px-6">
               <div className="flex items-center gap-4">
                 <h2 className="font-display text-2xl text-darb-black">
-                  Filters
+                  {t("Filters")}
                 </h2>
 
                 {activeFilterCount >
@@ -1523,7 +1523,7 @@ function CategoryPage() {
                   }
                   className="text-sm text-darb-muted underline underline-offset-4"
                 >
-                  Clear all
+                  {t("Clear all")}
                 </button>
               </div>
 
@@ -1535,7 +1535,7 @@ function CategoryPage() {
                   )
                 }
                 className="flex h-11 w-11 items-center justify-center text-darb-black"
-                aria-label="Close filters"
+                aria-label={t("Close filters")}
               >
                 <X
                   size={26}
@@ -1557,10 +1557,10 @@ function CategoryPage() {
                       "availability"
                     )
                   }
-                  className="flex w-full items-center justify-between py-7 text-left"
+                  className="flex w-full items-center justify-between py-7 text-start"
                 >
                   <h3 className="font-display text-2xl text-darb-green">
-                    Availability
+                    {t("Availability")}
                   </h3>
 
                   <ChevronDown
@@ -1604,7 +1604,7 @@ function CategoryPage() {
                           />
 
                           {
-                            option.label
+                            t(option.label)
                           }
                         </label>
                       )
@@ -1623,10 +1623,10 @@ function CategoryPage() {
                       "price"
                     )
                   }
-                  className="flex w-full items-center justify-between gap-4 py-7 text-left"
+                  className="flex w-full items-center justify-between gap-4 py-7 text-start"
                 >
                   <h3 className="font-display text-2xl text-darb-green">
-                    Price
+                    {t("Price")}
                   </h3>
 
                   <div className="flex items-center gap-4">
@@ -1689,7 +1689,7 @@ function CategoryPage() {
                           handleMinRange
                         }
                         className="darb-range z-20"
-                        aria-label="Minimum price"
+                        aria-label={t("Minimum price")}
                       />
 
                       <input
@@ -1708,7 +1708,7 @@ function CategoryPage() {
                           handleMaxRange
                         }
                         className="darb-range z-30"
-                        aria-label="Maximum price"
+                        aria-label={t("Maximum price")}
                       />
                     </div>
 
@@ -1717,7 +1717,7 @@ function CategoryPage() {
 
                       <div className="w-[135px] min-w-0 border border-darb-gold/25 bg-white px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-darb-muted">
-                          Min
+                          {t("Min")}
                         </p>
 
                         <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -1737,20 +1737,20 @@ function CategoryPage() {
                             onBlur={
                               handleMinInputBlur
                             }
-                            className="w-full min-w-0 bg-transparent text-right text-sm outline-none"
+                            className="w-full min-w-0 bg-transparent text-end text-sm outline-none"
                           />
                         </div>
                       </div>
 
                       <span className="shrink-0 text-sm text-darb-muted">
-                        to
+                        {t("to")}
                       </span>
 
                       {/* Max */}
 
                       <div className="w-[135px] min-w-0 border border-darb-gold/25 bg-white px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-darb-muted">
-                          Max
+                          {t("Max")}
                         </p>
 
                         <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -1770,7 +1770,7 @@ function CategoryPage() {
                             onBlur={
                               handleMaxInputBlur
                             }
-                            className="w-full min-w-0 bg-transparent text-right text-sm outline-none"
+                            className="w-full min-w-0 bg-transparent text-end text-sm outline-none"
                           />
                         </div>
                       </div>
@@ -1788,7 +1788,7 @@ function CategoryPage() {
                 }
                 className="w-full rounded-full bg-darb-green px-6 py-4 text-sm font-bold uppercase tracking-[0.18em] text-darb-beige transition hover:bg-darb-black"
               >
-                View Results
+                {t("View Results")}
               </button>
             </div>
           </aside>
@@ -1803,7 +1803,7 @@ function CategoryPage() {
         <div className="fixed inset-0 z-[110] md:hidden">
           <button
             type="button"
-            aria-label="Close sort"
+            aria-label={t("Close sort")}
             onClick={() =>
               setMobileSortOpen(
                 false
@@ -1815,7 +1815,7 @@ function CategoryPage() {
           <div className="darb-bottom-sheet absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-[1.75rem] bg-darb-cream shadow-2xl">
             <div className="relative flex min-h-[86px] items-center justify-center border-b border-darb-gold/20 px-6">
               <h2 className="font-display text-3xl text-darb-green">
-                Sort by
+                {t("Sort by")}
               </h2>
 
               <button
@@ -1826,7 +1826,7 @@ function CategoryPage() {
                   )
                 }
                 className="absolute right-5 flex h-10 w-10 items-center justify-center"
-                aria-label="Close sort"
+                aria-label={t("Close sort")}
               >
                 <X
                   size={24}
@@ -1849,10 +1849,10 @@ function CategoryPage() {
                         option.value
                       )
                     }
-                    className="flex w-full items-center justify-between py-4 text-left text-[17px] text-darb-black"
+                    className="flex w-full items-center justify-between py-4 text-start text-[17px] text-darb-black"
                   >
                     {
-                      option.label
+                      t(option.label)
                     }
 
                     {sort ===

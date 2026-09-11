@@ -23,6 +23,8 @@ import {
 import {
   formatCurrency,
 } from "../../utils/formatCurrency";
+import { LocalizedPublicContent } from "../../components/common/InfoPageShell";
+import { useLanguage } from "../../context/LanguageContext";
 
 /* =========================
    PAYMENT LABELS
@@ -163,6 +165,7 @@ const buildAddressLines = (
 ========================== */
 
 function OrderSuccess() {
+  const { language } = useLanguage();
   const location =
     useLocation();
 
@@ -196,7 +199,7 @@ function OrderSuccess() {
 
   if (!order) {
     return (
-      <main className="min-h-[70vh] bg-darb-cream">
+      <LocalizedPublicContent><main className="min-h-[70vh] bg-darb-cream">
         <section className="mx-auto max-w-7xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-darb-gold/25 bg-white text-darb-green shadow-soft">
@@ -261,7 +264,7 @@ function OrderSuccess() {
             </div>
           </div>
         </section>
-      </main>
+      </main></LocalizedPublicContent>
     );
   }
 
@@ -334,7 +337,7 @@ function OrderSuccess() {
   ========================== */
 
   return (
-    <main className="min-h-[70vh] bg-darb-cream">
+    <LocalizedPublicContent><main className="min-h-[70vh] bg-darb-cream">
       {/* =========================
           SUCCESS HERO
       ========================== */}
@@ -511,6 +514,14 @@ function OrderSuccess() {
                   const snapshot =
                     item.productSnapshot ||
                     {};
+                  const localizedName =
+                    language === "ar" && snapshot.arabicName
+                      ? snapshot.arabicName
+                      : snapshot.name;
+                  const localizedCategory =
+                    language === "ar" && snapshot.arabicCategoryName
+                      ? snapshot.arabicCategoryName
+                      : snapshot.categoryName;
 
                   return (
                     <article
@@ -529,7 +540,7 @@ function OrderSuccess() {
                               snapshot.image
                             }
                             alt={
-                              snapshot.name ||
+                              localizedName ||
                               "Darb fragrance"
                             }
                             className="h-full w-full object-cover"
@@ -546,16 +557,16 @@ function OrderSuccess() {
                       {/* Info */}
 
                       <div className="min-w-0 flex-1">
-                        {snapshot.categoryName && (
+                        {localizedCategory && (
                           <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
                             {
-                              snapshot.categoryName
+                              localizedCategory
                             }
                           </p>
                         )}
 
                         <h3 className="mt-1 font-display text-2xl text-darb-green">
-                          {snapshot.name ||
+                          {localizedName ||
                             "Darb Fragrance"}
                         </h3>
 
@@ -838,7 +849,7 @@ function OrderSuccess() {
           </p>
         )}
       </section>
-    </main>
+    </main></LocalizedPublicContent>
   );
 }
 

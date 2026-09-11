@@ -2,9 +2,10 @@ import InfoPageShell from "../../components/common/InfoPageShell";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Gift, X } from "lucide-react";
 import { claimPolicyReward } from "../../api/rewardApi";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 function Section({
   number,
@@ -34,6 +35,7 @@ function Section({
 
 function PolicyReward() {
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const closeRef = useRef(null);
   const dialogRef = useRef(null);
@@ -67,15 +69,15 @@ function PolicyReward() {
     };
   }, [open]);
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="ml-auto mt-5 block rounded-full px-2 py-1 text-sm text-darb-gold/55 transition hover:text-darb-gold focus:text-darb-gold" aria-label="Open a hidden Darb detail">◇</button>
+    <button type="button" onClick={() => setOpen(true)} className="ms-auto mt-5 block rounded-full p-2 text-darb-gold/55 transition hover:bg-darb-gold/10 hover:text-darb-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-darb-gold" aria-label={t("Open a hidden Darb detail")}><Gift size={15} /></button>
     {open && <div className="fixed inset-0 z-[100] grid place-items-center bg-darb-black/60 p-5" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="policy-reward-title" className="relative w-full max-w-md rounded-[1.75rem] border border-darb-gold/30 bg-darb-cream p-7 text-center shadow-2xl sm:p-9">
-        <button ref={closeRef} type="button" onClick={() => setOpen(false)} className="absolute right-4 top-4 rounded-full p-2 text-darb-green" aria-label="Close reward reveal"><X size={18} /></button>
-        <p className="text-2xl text-darb-gold" aria-hidden="true">◇</p>
-        <h2 id="policy-reward-title" className="mt-3 font-display text-3xl text-darb-green">A quieter path found you.</h2>
-        <p className="mt-3 text-sm text-darb-muted">You've uncovered 10% off.</p>
-        {isAuthenticated ? <button type="button" disabled={rewardMutation.isPending || rewardMutation.isSuccess} onClick={() => rewardMutation.mutate()} className="mt-6 min-h-12 w-full rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige disabled:opacity-60">{rewardMutation.isSuccess ? "Reward claimed" : rewardMutation.isPending ? "Claiming…" : "Claim reward"}</button> : <Link to="/login" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige">Sign in to claim</Link>}
-        <div className="mt-3 min-h-5 text-xs text-darb-muted" aria-live="polite">{rewardMutation.isSuccess && "Valid for 7 days and ready in your account."}{rewardMutation.isError && (rewardMutation.error?.friendlyMessage || "This reward is no longer available.")}</div>
+        <button ref={closeRef} type="button" onClick={() => setOpen(false)} className="absolute end-4 top-4 rounded-full p-2 text-darb-green" aria-label={t("Close reward reveal")}><X size={18} /></button>
+        <Gift className="mx-auto text-darb-gold" size={25} aria-hidden="true" />
+        <h2 id="policy-reward-title" className="mt-3 font-display text-3xl text-darb-green">{t("A quieter path found you.")}</h2>
+        <p className="mt-3 text-sm text-darb-muted">{t("You've uncovered 10% off.")}</p>
+        {isAuthenticated ? <button type="button" disabled={rewardMutation.isPending || rewardMutation.isSuccess} onClick={() => rewardMutation.mutate()} className="mt-6 min-h-12 w-full rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige disabled:opacity-60">{t(rewardMutation.isSuccess ? "Reward claimed" : rewardMutation.isPending ? "Claiming…" : "Claim reward")}</button> : <Link to="/login" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-darb-green px-6 text-sm font-semibold text-darb-beige">{t("Sign in to claim")}</Link>}
+        <div className="mt-3 min-h-5 text-xs text-darb-muted" aria-live="polite">{rewardMutation.isSuccess && t("Valid for 7 days and ready in your account.")}{rewardMutation.isError && t(rewardMutation.error?.friendlyMessage || "This reward is no longer available.")}</div>
       </section>
     </div>}
   </>;

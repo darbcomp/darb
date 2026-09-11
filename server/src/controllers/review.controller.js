@@ -166,6 +166,10 @@ const serializePublicReview = (
             review.fragranceName ||
             "",
 
+          arabicName:
+            review.product.arabicName ||
+            "",
+
           slug:
             review.product.slug ||
             "",
@@ -247,7 +251,7 @@ const getPublicReviews = async (
         Review.find(filter)
           .populate(
             "product",
-            "name slug"
+            "name arabicName slug"
           )
           .sort({
             reviewDate: -1,

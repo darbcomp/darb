@@ -28,6 +28,7 @@ const { getGovernorateDeliveryFee } = require("../utils/shipping");
 const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, findAvailableEntitlementByCode } = require("../services/entitlement.service");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
+const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -161,10 +162,15 @@ const buildProductSnapshot = (product, variant = null) => {
 
   return {
     name: product.name,
+    arabicName: product.arabicName || "",
     slug: product.slug,
     image: image?.url || "",
     categoryName:
       product.category?.name || product.categorySnapshot?.name || "",
+    arabicCategoryName:
+      product.category?.arabicName ||
+      product.categorySnapshot?.arabicName ||
+      "",
     categorySlug:
       product.category?.slug || product.categorySnapshot?.slug || "",
     sizeLabel: variant?.label || product.sizeLabel || "",
@@ -207,8 +213,8 @@ const findProductForOrderItem = async (item, session = null) => {
     return null;
   }
 
-  query.populate("category", "name slug");
-  query.populate("categories", "name slug");
+  query.populate("category", "name arabicName slug");
+  query.populate("categories", "name arabicName slug");
 
   if (session) {
     query.session(session);
@@ -538,7 +544,6 @@ const createOrder = async (req, res) => {
 
   try {
     body = parseOrderCreateBody(req);
-
     validateCustomerAndAddress({
       customer: body.customer,
       shippingAddress: body.shippingAddress,
@@ -748,12 +753,24 @@ const createOrder = async (req, res) => {
       );
     }
 
+    const metaContext = extractMetaContext(body.trackingContext, req);
+    if (metaContext) {
+      await sendMetaEvent({
+        eventName: "Purchase",
+        eventId: metaContext.eventId,
+        eventSourceUrl: metaContext.eventSourceUrl,
+        customData: buildPurchaseCustomData(createdOrder),
+        userData: buildOrderUserData(createdOrder, metaContext),
+      });
+    }
+
     return res.status(201).json({
       success: true,
       message: uploadedPaymentProof
         ? "Order created successfully. Your payment proof is awaiting review."
         : "Order created successfully.",
       data: sanitizeOrderForClient(createdOrder),
+      ...(metaContext ? { metaEventId: metaContext.eventId } : {}),
     });
   } catch (error) {
     if (uploadedPaymentProof && !transactionCommitted) {

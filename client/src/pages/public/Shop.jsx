@@ -25,6 +25,7 @@ import {
 } from "../../api/productApi";
 
 import ProductCard from "../../components/product/ProductCard";
+import { useLanguage } from "../../context/LanguageContext";
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 3000;
@@ -140,6 +141,7 @@ const readUrlPrice = (
 };
 
 function Shop() {
+  const { t } = useLanguage();
   const [
     searchParams,
     setSearchParams,
@@ -1319,7 +1321,7 @@ function Shop() {
                 }
               />
 
-              Filters
+              {t("Filters")}
 
               {activeFilterCount >
                 0 && (
@@ -1344,7 +1346,7 @@ function Shop() {
               }}
               className="flex min-h-[68px] items-center justify-center gap-3 text-[15px] font-semibold text-darb-black"
             >
-              Sort by
+              {t("Sort by")}
 
               <ChevronDown
                 size={19}
@@ -1372,7 +1374,7 @@ function Shop() {
                 }
               />
 
-              Filters
+              {t("Filters")}
 
               {activeFilterCount >
                 0 && (
@@ -1385,11 +1387,7 @@ function Shop() {
             </button>
 
             <div className="text-center text-sm text-darb-muted">
-              {totalProducts}{" "}
-              {totalProducts ===
-              1
-                ? "fragrance"
-                : "fragrances"}
+              {t(String(totalProducts) + ` fragrance${totalProducts === 1 ? "" : "s"}`)}
             </div>
 
             <div
@@ -1406,7 +1404,7 @@ function Shop() {
                 }
                 className="flex min-h-[72px] w-full items-center justify-end gap-3 text-sm font-semibold text-darb-black"
               >
-                Sort by
+                {t("Sort by")}
 
                 <ChevronDown
                   size={18}
@@ -1437,7 +1435,7 @@ function Shop() {
                             option.value
                           )
                         }
-                        className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm transition ${
+                        className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-start text-sm transition ${
                           sort ===
                           option.value
                             ? "bg-darb-green text-darb-beige"
@@ -1445,7 +1443,7 @@ function Shop() {
                         }`}
                       >
                         {
-                          option.label
+                          t(option.label)
                         }
 
                         {sort ===
@@ -1473,11 +1471,7 @@ function Shop() {
           {/* Mobile Count */}
 
           <p className="text-center text-sm text-darb-black md:hidden">
-            {totalProducts}{" "}
-            {totalProducts ===
-            1
-              ? "fragrance"
-              : "fragrances"}
+            {t(String(totalProducts) + ` fragrance${totalProducts === 1 ? "" : "s"}`)}
           </p>
 
           {/* Active Chips */}
@@ -1494,8 +1488,7 @@ function Shop() {
                   }
                   className="inline-flex items-center gap-2 bg-darb-gold/15 px-4 py-3 text-sm text-darb-green"
                 >
-                  Search: “
-                  {search}”
+                  {t("Search: “" + search + "”")}
 
                   <X
                     size={15}
@@ -1514,8 +1507,8 @@ function Shop() {
                 >
                   {activeAvailability[0] ===
                   "in"
-                    ? "In stock"
-                    : "Out of stock"}
+                    ? t("In stock")
+                    : t("Out of stock")}
 
                   <X
                     size={15}
@@ -1568,8 +1561,7 @@ function Shop() {
                       }
                       className="inline-flex items-center gap-2 bg-darb-gold/15 px-4 py-3 text-sm text-darb-green"
                     >
-                      {item?.label ||
-                        value}
+                        {t(item?.label || value)}
 
                       <X
                         size={
@@ -1590,17 +1582,17 @@ function Shop() {
                   }
                   className="px-2 text-xs font-semibold text-darb-muted underline underline-offset-4 hover:text-darb-green"
                 >
-                  Clear filters
+                  {t("Clear filters")}
                 </button>
               )}
             </div>
           )}
 
           <div className="mt-5 text-center text-[11px] text-darb-muted md:hidden">
-            Sorted by{" "}
+            {t("Sorted by")}{" "}
             <span className="font-semibold text-darb-green">
               {
-                selectedSort.label
+                t(selectedSort.label)
               }
             </span>
           </div>
@@ -1627,13 +1619,11 @@ function Shop() {
           {productsQuery.isError && (
             <div className="mt-10 rounded-[2rem] border border-darb-gold/20 bg-white px-6 py-14 text-center shadow-soft">
               <h2 className="font-display text-3xl text-darb-green">
-                The collection
-                couldn't load.
+                {t("The collection couldn't load.")}
               </h2>
 
               <p className="mt-3 text-sm text-darb-muted">
-                Please try again
-                shortly.
+                {t("Please try again shortly.")}
               </p>
             </div>
           )}
@@ -1671,13 +1661,11 @@ function Shop() {
               0 && (
               <div className="mt-10 rounded-[2rem] border border-darb-gold/20 bg-white px-6 py-16 text-center shadow-soft">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">
-                  No Match
+                  {t("No Match")}
                 </p>
 
                 <h2 className="mt-3 font-display text-3xl text-darb-green">
-                  No fragrances
-                  match these
-                  filters.
+                  {t("No fragrances match these filters.")}
                 </h2>
 
                 <button
@@ -1687,7 +1675,7 @@ function Shop() {
                   }
                   className="mt-7 rounded-full bg-darb-green px-7 py-3.5 text-sm font-semibold text-darb-beige"
                 >
-                  Clear Filters
+                  {t("Clear Filters")}
                 </button>
               </div>
             )}
@@ -1702,7 +1690,7 @@ function Shop() {
         <div className="fixed inset-0 z-[100]">
           <button
             type="button"
-            aria-label="Close filters"
+            aria-label={t("Close filters")}
             onClick={() =>
               setFilterOpen(
                 false
@@ -1717,7 +1705,7 @@ function Shop() {
             <div className="flex min-h-[82px] items-center justify-between border-b border-darb-gold/20 px-6">
               <div className="flex items-center gap-4">
                 <h2 className="font-display text-2xl text-darb-black">
-                  Filters
+                  {t("Filters")}
                 </h2>
 
                 {activeFilterCount >
@@ -1736,7 +1724,7 @@ function Shop() {
                   }
                   className="text-sm text-darb-muted underline underline-offset-4"
                 >
-                  Clear all
+                  {t("Clear all")}
                 </button>
               </div>
 
@@ -1748,7 +1736,7 @@ function Shop() {
                   )
                 }
                 className="flex h-11 w-11 items-center justify-center text-darb-black"
-                aria-label="Close filters"
+                aria-label={t("Close filters")}
               >
                 <X
                   size={26}
@@ -1774,10 +1762,10 @@ function Shop() {
                       "availability"
                     )
                   }
-                  className="flex w-full items-center justify-between py-7 text-left"
+                  className="flex w-full items-center justify-between py-7 text-start"
                 >
                   <h3 className="font-display text-2xl text-darb-green">
-                    Availability
+                    {t("Availability")}
                   </h3>
 
                   <ChevronDown
@@ -1827,7 +1815,7 @@ function Shop() {
                             />
 
                             {
-                              option.label
+                              t(option.label)
                             }
                           </label>
                         );
@@ -1849,10 +1837,10 @@ function Shop() {
                       "price"
                     )
                   }
-                  className="flex w-full items-center justify-between gap-4 py-7 text-left"
+                  className="flex w-full items-center justify-between gap-4 py-7 text-start"
                 >
                   <h3 className="font-display text-2xl text-darb-green">
-                    Price
+                    {t("Price")}
                   </h3>
 
                   <div className="flex items-center gap-4">
@@ -1917,7 +1905,7 @@ function Shop() {
                           handleMinRange
                         }
                         className="darb-range z-20"
-                        aria-label="Minimum price"
+                        aria-label={t("Minimum price")}
                       />
 
                       <input
@@ -1936,7 +1924,7 @@ function Shop() {
                           handleMaxRange
                         }
                         className="darb-range z-30"
-                        aria-label="Maximum price"
+                        aria-label={t("Maximum price")}
                       />
                     </div>
 
@@ -1947,7 +1935,7 @@ function Shop() {
 
                       <div className="w-[135px] min-w-0 border border-darb-gold/25 bg-white px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-darb-muted">
-                          Min
+                          {t("Min")}
                         </p>
 
                         <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -1961,20 +1949,20 @@ function Shop() {
                             value={draftMinInput}
                             onChange={handleMinInputChange}
                             onBlur={handleMinInputBlur}
-                            className="w-full min-w-0 bg-transparent text-right text-sm outline-none"
+                            className="w-full min-w-0 bg-transparent text-end text-sm outline-none"
                           />
                         </div>
                       </div>
 
                       <span className="shrink-0 text-sm text-darb-muted">
-                        to
+                        {t("to")}
                       </span>
 
                       {/* Maximum */}
 
                       <div className="w-[135px] min-w-0 border border-darb-gold/25 bg-white px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-darb-muted">
-                          Max
+                          {t("Max")}
                         </p>
 
                         <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -1988,7 +1976,7 @@ function Shop() {
                             value={draftMaxInput}
                             onChange={handleMaxInputChange}
                             onBlur={handleMaxInputBlur}
-                            className="w-full min-w-0 bg-transparent text-right text-sm outline-none"
+                            className="w-full min-w-0 bg-transparent text-end text-sm outline-none"
                           />
                         </div>
                       </div>
@@ -2009,10 +1997,10 @@ function Shop() {
                       "productType"
                     )
                   }
-                  className="flex w-full items-center justify-between py-7 text-left"
+                  className="flex w-full items-center justify-between py-7 text-start"
                 >
                   <h3 className="font-display text-2xl text-darb-green">
-                    Product Type
+                    {t("Product Type")}
                   </h3>
 
                   <ChevronDown
@@ -2062,7 +2050,7 @@ function Shop() {
                             />
 
                             {
-                              type.label
+                              t(type.label)
                             }
                           </label>
                         );
@@ -2085,7 +2073,7 @@ function Shop() {
                 }
                 className="w-full rounded-full bg-darb-green px-6 py-4 text-sm font-bold uppercase tracking-[0.18em] text-darb-beige transition hover:bg-darb-black"
               >
-                View Results
+                {t("View Results")}
               </button>
             </div>
           </aside>
@@ -2100,7 +2088,7 @@ function Shop() {
         <div className="fixed inset-0 z-[110] md:hidden">
           <button
             type="button"
-            aria-label="Close sort"
+            aria-label={t("Close sort")}
             onClick={() =>
               setMobileSortOpen(
                 false
@@ -2112,7 +2100,7 @@ function Shop() {
           <div className="darb-bottom-sheet absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-[1.75rem] bg-darb-cream shadow-2xl">
             <div className="relative flex min-h-[86px] items-center justify-center border-b border-darb-gold/20 px-6">
               <h2 className="font-display text-3xl text-darb-green">
-                Sort by
+                {t("Sort by")}
               </h2>
 
               <button
@@ -2123,7 +2111,7 @@ function Shop() {
                   )
                 }
                 className="absolute right-5 flex h-10 w-10 items-center justify-center"
-                aria-label="Close sort"
+                aria-label={t("Close sort")}
               >
                 <X
                   size={24}
@@ -2146,10 +2134,10 @@ function Shop() {
                         option.value
                       )
                     }
-                    className="flex w-full items-center justify-between py-4 text-left text-[17px] text-darb-black"
+                    className="flex w-full items-center justify-between py-4 text-start text-[17px] text-darb-black"
                   >
                     {
-                      option.label
+                      t(option.label)
                     }
 
                     {sort ===

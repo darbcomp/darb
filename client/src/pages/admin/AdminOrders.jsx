@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient, } from "@tanstack/react-query";
 import { CheckCircle2, Eye, Filter, Package, Search, X, XCircle, } from "lucide-react";
 import { getAdminOrderPaymentProof, getAdminOrders, reviewAdminOrderPaymentProof, updateAdminOrderStatus, } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
+import AdminPagination from "../../components/admin/AdminPagination";
+import { useFeedback } from "../../context/FeedbackContext";
 const orderStatuses = [
     "pending",
     "confirmed",
@@ -62,6 +64,8 @@ function StatusBadge({ status }) {
 }
 function AdminOrders() {
     const queryClient = useQueryClient();
+    const { confirm, notify } = useFeedback();
+    const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({
         search: "",
         orderStatus: "",
@@ -81,7 +85,8 @@ function AdminOrders() {
     const [openingProofOrderId, setOpeningProofOrderId] = useState("");
     const queryParams = useMemo(() => {
         const params = {
-            limit: 30,
+            page,
+            limit: 10,
         };
         if (filters.search.trim()) {
             params.search = filters.search.trim();
@@ -99,7 +104,7 @@ function AdminOrders() {
             params.paymentProofStatus = filters.paymentProofStatus;
         }
         return params;
-    }, [filters]);
+    }, [filters, page]);
     const ordersQuery = useQuery({
         queryKey: ["admin-orders", queryParams],
         queryFn: () => getAdminOrders(queryParams),
@@ -118,6 +123,7 @@ function AdminOrders() {
                 adminNotes: "",
                 note: "",
             });
+            notify({ type: "success", title: "Order updated" });
         },
     });
     const proofReviewMutation = useMutation({
@@ -128,10 +134,12 @@ function AdminOrders() {
             });
             setProofViewer(null);
             setProofError("");
+            notify({ type: "success", title: "Payment proof reviewed" });
         },
         onError: (error) => {
             setProofError(error.friendlyMessage ||
                 "Failed to review payment proof.");
+            notify({ type: "error", title: "Could not review proof", message: error.friendlyMessage || "Please try again." });
         },
     });
     const orders = ordersQuery.data?.data || [];
@@ -142,6 +150,7 @@ function AdminOrders() {
             ...current,
             [name]: value,
         }));
+        setPage(1);
     };
     const resetFilters = () => {
         setFilters({
@@ -151,6 +160,7 @@ function AdminOrders() {
             paymentMethod: "",
             paymentProofStatus: "",
         });
+        setPage(1);
     };
     const startEditing = (order) => {
         setEditingOrderId(order._id);
@@ -202,8 +212,8 @@ function AdminOrders() {
             setOpeningProofOrderId("");
         }
     };
-    const approvePaymentProof = (orderId) => {
-        const confirmed = window.confirm("Approve this payment proof and mark the payment as paid?");
+    const approvePaymentProof = async (orderId) => {
+        const confirmed = await confirm({ title: "Approve payment proof?", body: "This will mark the payment as paid.", confirmLabel: "Approve proof" });
         if (!confirmed)
             return;
         proofReviewMutation.mutate({
@@ -211,14 +221,14 @@ function AdminOrders() {
             action: "approve",
         });
     };
-    const rejectPaymentProof = (orderId) => {
-        const reason = window.prompt("Reason for rejecting this payment proof (optional):", "");
-        if (reason === null)
+    const rejectPaymentProof = async (orderId) => {
+        const reason = await confirm({ title: "Reject payment proof?", body: "The customer’s submitted proof will be marked rejected.", inputLabel: "Reason (optional)", inputPlaceholder: "Add a short internal reason", confirmLabel: "Reject proof", variant: "destructive" });
+        if (reason === false)
             return;
         proofReviewMutation.mutate({
             orderId,
             action: "reject",
-            reason: reason.trim(),
+            reason: String(reason).trim(),
         });
     };
     return (<section className="admin-page">
@@ -483,7 +493,7 @@ function AdminOrders() {
                                 Approve Payment
                               </button>
 
-                              <button type="button" onClick={() => rejectPaymentProof(order._id)} disabled={proofReviewMutation.isPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60">
+                              <button type="button" onClick={() => rejectPaymentProof(order._id)} disabled={proofReviewMutation.isPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60">
                                 <XCircle size={16}/>
                                 Reject Proof
                               </button>
@@ -603,6 +613,8 @@ function AdminOrders() {
             })}
           </div>)}
 
+      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
+
       {proofViewer && (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
           <div className="max-h-[94vh] w-full max-w-4xl overflow-auto rounded-[1.5rem] bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-darb-gold/20 bg-white p-5">
@@ -652,7 +664,7 @@ function AdminOrders() {
                       Approve
                     </button>
 
-                    <button type="button" onClick={() => rejectPaymentProof(proofViewer.orderId)} disabled={proofReviewMutation.isPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button type="button" onClick={() => rejectPaymentProof(proofViewer.orderId)} disabled={proofReviewMutation.isPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60">
                       <XCircle size={16}/>
                       Reject
                     </button>

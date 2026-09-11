@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Copy, ImagePlus, Trash2 } from "lucide-react";
 import { createOrder, previewOrder } from "../../api/orderApi";
@@ -7,7 +7,16 @@ import { getPublicSettings } from "../../api/settingsApi";
 import { getMyRewards } from "../../api/rewardApi";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
+import { useFeedback } from "../../context/FeedbackContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { formatCurrency } from "../../utils/formatCurrency";
+import {
+    createMarketingEventId,
+    getMetaBrowserContext,
+    normalizeEcommercePayload,
+    trackMarketingEvent,
+    trackMarketingEventOnce,
+} from "../../utils/marketingEvents";
 const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024;
 const ALLOWED_PAYMENT_PROOF_TYPES = [
     "image/jpeg",
@@ -99,7 +108,10 @@ const paymentMethodMap = [
 ];
 function Checkout() {
     const { user } = useAuth();
+    const { notify } = useFeedback();
+    const { language, t } = useLanguage();
     const navigate = useNavigate();
+    const location = useLocation();
     const { items, isEmpty, subtotal, productSavings, itemCount, clearCart } = useCart();
     const [formData, setFormData] = useState(initialFormData);
     const [appliedCouponCode, setAppliedCouponCode] = useState("");
@@ -247,12 +259,33 @@ function Checkout() {
         Math.max(calculatedSubtotal +
             calculatedDeliveryFee -
             calculatedDiscountTotal, 0);
+    const checkoutEventPayload = useMemo(() => normalizeEcommercePayload({
+        items,
+        value: calculatedTotal,
+    }), [calculatedTotal, items]);
+
+    useEffect(() => {
+        if (isEmpty) return;
+        trackMarketingEventOnce(`initiate-checkout:${location.key}`, "InitiateCheckout", checkoutEventPayload);
+    }, [checkoutEventPayload, isEmpty, location.key]);
     /* =========================
        CREATE ORDER
     ========================== */
     const orderMutation = useMutation({
-        mutationFn: createOrder,
-        onSuccess: (response) => {
+        mutationFn: ({ payload }) => createOrder(payload),
+        onSuccess: (response, variables) => {
+            const order = response?.data;
+            const purchasePayload = normalizeEcommercePayload({
+                items: order?.items || [],
+                value: order?.total,
+                contentName: order?.orderNumber || "",
+            });
+            if (order) {
+                trackMarketingEvent("Purchase", { ...purchasePayload, order_id: order.orderNumber }, {
+                    eventId: response?.metaEventId || variables.purchaseEventId,
+                    mirrorMeta: false,
+                });
+            }
             clearCart();
             navigate("/order-success", {
                 replace: true,
@@ -266,6 +299,7 @@ function Checkout() {
         onError: (err) => {
             setError(err.friendlyMessage ||
                 "Failed to create order.");
+            notify({ type: "error", title: t("Order could not be placed"), message: err.friendlyMessage || t("Please try again.") });
         },
     });
     /* =========================
@@ -284,10 +318,12 @@ function Checkout() {
         }
         if (!ALLOWED_PAYMENT_PROOF_TYPES.includes(file.type)) {
             setPaymentProofError("Choose a JPG, PNG, or WEBP screenshot.");
+            notify({ type: "warning", title: t("Unsupported screenshot"), message: t("Choose a JPG, PNG, or WEBP screenshot.") });
             return;
         }
         if (file.size > MAX_PAYMENT_PROOF_SIZE) {
             setPaymentProofError("Choose a screenshot that is 10 MB or smaller.");
+            notify({ type: "warning", title: t("Screenshot is too large"), message: t("Choose a screenshot that is 10 MB or smaller.") });
             return;
         }
         setPaymentProofError("");
@@ -310,12 +346,14 @@ function Checkout() {
         try {
             await navigator.clipboard.writeText(recipient);
             setCopyStatus("copied");
+            notify({ type: "success", title: t("Copied") });
             window.clearTimeout(copyResetRef.current);
             copyResetRef.current = window.setTimeout(() => setCopyStatus("idle"), 1800);
         }
         catch {
             setCopyStatus("failed");
             setError("Could not copy the payment number. Please copy it manually.");
+            notify({ type: "error", title: t("Could not copy"), message: t("Please copy the payment number manually.") });
             window.clearTimeout(copyResetRef.current);
             copyResetRef.current = window.setTimeout(() => setCopyStatus("idle"), 2000);
         }
@@ -377,7 +415,7 @@ function Checkout() {
     /* =========================
        ORDER PAYLOAD
     ========================== */
-    const buildPayload = () => {
+    const buildPayload = (trackingContext) => {
         const orderData = {
             customer: {
                 name: formData.name.trim(),
@@ -403,6 +441,7 @@ function Checkout() {
             birthday: formData.birthday || null,
             entitlementId: formData.entitlementId || "",
             marketingConsent: formData.marketingConsent,
+            ...(trackingContext ? { trackingContext } : {}),
         };
         if (selectedPaymentMethod?.requireProof) {
             const payload = new FormData();
@@ -423,7 +462,10 @@ function Checkout() {
             return;
         }
         setError("");
-        orderMutation.mutate(buildPayload());
+        trackMarketingEvent("AddPaymentInfo", checkoutEventPayload);
+        const purchaseEventId = createMarketingEventId();
+        const trackingContext = getMetaBrowserContext(purchaseEventId);
+        orderMutation.mutate({ payload: buildPayload(trackingContext), purchaseEventId });
     };
     /* =========================
        EMPTY CART
@@ -432,22 +474,19 @@ function Checkout() {
         return (<section className="mx-auto max-w-7xl px-4 py-14">
         <div className="rounded-[2rem] bg-darb-green p-8 text-darb-beige shadow-soft">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-            Checkout
+            {t("Checkout")}
           </p>
 
           <h1 className="mt-2 font-display text-5xl">
-            No scents selected yet
+            {t("No scents selected yet")}
           </h1>
 
           <p className="mt-4 max-w-2xl leading-7 text-darb-beige/75">
-            Add your favorite
-            Darb perfumes to the
-            cart before continuing
-            to checkout.
+            {t("Add your favorite Darb perfumes to the cart before continuing to checkout.")}
           </p>
 
           <Link to="/shop" className="mt-8 inline-flex rounded-full bg-darb-gold px-7 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-beige">
-            Shop Darb
+            {t("Shop Darb")}
           </Link>
         </div>
       </section>);
@@ -459,17 +498,15 @@ function Checkout() {
 
       <div className="mb-10">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-          Checkout
+          {t("Checkout")}
         </p>
 
         <h1 className="mt-2 font-display text-5xl text-darb-green">
-          Complete your path
+          {t("Complete your path")}
         </h1>
 
         <p className="mt-4 max-w-2xl leading-7 text-darb-muted">
-          Add your delivery
-          details and choose how
-          you would like to pay.
+          {t("Add your delivery details and choose how you would like to pay.")}
         </p>
       </div>
 
@@ -478,10 +515,7 @@ function Checkout() {
         ========================== */}
 
       {settingsQuery.isError && (<div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          Store settings could
-          not be loaded, so
-          checkout is using
-          default values for now.
+          {t("Store settings could not be loaded, so checkout is using default values for now.")}
         </div>)}
 
       {/* =========================
@@ -491,7 +525,7 @@ function Checkout() {
       {previewQuery.isError && (<div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
           {previewQuery.error
                 ?.friendlyMessage ||
-                "Checkout preview could not be calculated. The final order will still be checked before creation."}
+                t("Checkout preview could not be calculated. The final order will still be checked before creation.")}
         </div>)}
 
       {/* =========================
@@ -510,7 +544,7 @@ function Checkout() {
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
-              Customer Details
+              {t("Customer Details")}
             </h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -518,17 +552,17 @@ function Checkout() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Full Name *
+                  {t("Full Name")} *
                 </label>
 
-                <input name="name" value={formData.name} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Customer name"/>
+                <input name="name" value={formData.name} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Customer name")}/>
               </div>
 
               {/* Phone */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Phone *
+                  {t("Phone")} *
                 </label>
 
                 <input name="phone" value={formData.phone} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="01xxxxxxxxx"/>
@@ -538,16 +572,16 @@ function Checkout() {
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Email
+                  {t("Email")}
                 </label>
 
                 <input name="email" value={formData.email} onChange={handleChange} type="email" className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="example@email.com"/>
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold text-darb-green">Birthday (optional)</label>
+                <label className="mb-2 block text-sm font-semibold text-darb-green">{t("Birthday (optional)")}</label>
                 <input name="birthday" value={formData.birthday} onChange={handleChange} type="date" className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" />
-                <p className="mt-2 text-xs text-darb-muted">Darb might have something waiting for you.</p>
+                <p className="mt-2 text-xs text-darb-muted">{t("Darb might have something waiting for you.")}</p>
               </div>
             </div>
           </div>
@@ -558,7 +592,7 @@ function Checkout() {
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
-              Delivery Address
+              {t("Delivery Address")}
             </h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -566,70 +600,70 @@ function Checkout() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Governorate *
+                  {t("Governorate")} *
                 </label>
 
-                <input name="governorate" value={formData.governorate} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Cairo, Giza..."/>
+                <input name="governorate" value={formData.governorate} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Cairo, Giza...")}/>
               </div>
 
               {/* City */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  City / Area *
+                  {t("City / Area")} *
                 </label>
 
-                <input name="city" value={formData.city} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Nasr City, Haram..."/>
+                <input name="city" value={formData.city} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Nasr City, Haram...")}/>
               </div>
 
               {/* Street */}
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Street Address *
+                  {t("Street Address")} *
                 </label>
 
-                <input name="street" value={formData.street} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Street name and details"/>
+                <input name="street" value={formData.street} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Street name and details")}/>
               </div>
 
               {/* Building */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Building
+                  {t("Building")}
                 </label>
 
-                <input name="building" value={formData.building} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Building number"/>
+                <input name="building" value={formData.building} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Building number")}/>
               </div>
 
               {/* Floor */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Floor
+                  {t("Floor")}
                 </label>
 
-                <input name="floor" value={formData.floor} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Floor"/>
+                <input name="floor" value={formData.floor} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Floor")}/>
               </div>
 
               {/* Apartment */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Apartment
+                  {t("Apartment")}
                 </label>
 
-                <input name="apartment" value={formData.apartment} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Apartment"/>
+                <input name="apartment" value={formData.apartment} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Apartment")}/>
               </div>
 
               {/* Notes */}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Notes
+                  {t("Notes")}
                 </label>
 
-                <input name="notes" value={formData.notes} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Any delivery notes"/>
+                <input name="notes" value={formData.notes} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Any delivery notes")}/>
               </div>
             </div>
 
@@ -641,30 +675,30 @@ function Checkout() {
             defaultSettings
                 .delivery
                 .estimatedDeliveryText}
-              <p className="mt-2 text-xs">Egypt delivery only. You may inspect the package at delivery. Wrong or damaged/leaking items require photo or video proof and should be reported within 2 days or 1 day respectively.</p>
+              <p className="mt-2 text-xs">{t("Egypt delivery only. You may inspect the package at delivery. Wrong or damaged/leaking items require photo or video proof and should be reported within 2 days or 1 day respectively.")}</p>
             </div>
           </div>
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <label className="flex cursor-pointer items-center gap-3 font-semibold text-darb-green">
               <input type="checkbox" name="isGift" checked={formData.isGift} onChange={handleChange} />
-              This is a gift
+              {t("This is a gift")}
             </label>
             {formData.isGift && (
               <div className="mt-5">
-                <label className="mb-2 block text-sm font-semibold text-darb-green">Gift-card message (optional)</label>
-                <textarea name="giftMessage" value={formData.giftMessage} onChange={handleChange} maxLength={500} rows={3} className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder="Leave blank for an empty gift card" />
+                <label className="mb-2 block text-sm font-semibold text-darb-green">{t("Gift-card message (optional)")}</label>
+                <textarea name="giftMessage" value={formData.giftMessage} onChange={handleChange} maxLength={500} rows={3} className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Leave blank for an empty gift card")} />
               </div>
             )}
           </div>
 
           {user && (rewardsQuery.data?.data?.available || []).length > 0 && (
             <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-beige p-6 shadow-soft">
-              <h2 className="font-display text-3xl text-darb-green">Choose one reward</h2>
-              <p className="mt-2 text-sm text-darb-muted">Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.</p>
+              <h2 className="font-display text-3xl text-darb-green">{t("Choose one reward")}</h2>
+              <p className="mt-2 text-sm text-darb-muted">{t("Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.")}</p>
               <div className="mt-5 space-y-2">
-                <label className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange}/> Use the best available store promotion</label>
-                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }}/> <span><strong>{reward.label}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-muted">Minimum {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
+                <label className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange}/> {t("Use the best available store promotion")}</label>
+                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }}/> <span><strong>{t(reward.label)}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-muted">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
               </div>
             </div>
           )}
@@ -675,12 +709,11 @@ function Checkout() {
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
             <h2 className="font-display text-3xl text-darb-green">
-              Payment Method
+              {t("Payment Method")}
             </h2>
 
             {settingsQuery.isLoading ? (<p className="mt-4 text-darb-muted">
-                Loading payment
-                methods...
+                {t("Loading payment methods...")}
               </p>) : (<div className="mt-6 border-y border-darb-gold/25">
                 {availablePaymentMethods.map((method) => (<label key={method.key} className={`block cursor-pointer border-b border-darb-gold/15 px-1 py-4 transition last:border-0 ${selectedPaymentMethodKey ===
                     method.key
@@ -692,11 +725,11 @@ function Checkout() {
 
                         <div>
                           <p className="font-semibold text-darb-green">
-                            {method.label}
+                            {t(method.label)}
                           </p>
 
                           <p className="mt-1 text-sm leading-6 text-darb-muted">
-                            {method.description}
+                            {t(method.description)}
                           </p>
                         </div>
                       </div>
@@ -705,14 +738,14 @@ function Checkout() {
 
             {selectedPaymentMethod?.description && (<div className="mt-5 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
                 <span className="font-semibold text-darb-green">
-                  Payment instructions:
+                  {t("Payment instructions:")}
                 </span>{" "}
-                {selectedPaymentMethod.description}
+                {t(selectedPaymentMethod.description)}
               </div>)}
 
             {selectedPaymentMethod?.recipient && (<div className="mt-5 rounded-3xl border border-darb-gold/25 bg-darb-green p-5 text-darb-beige">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                  Transfer To
+                  {t("Transfer To")}
                 </p>
 
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -722,54 +755,54 @@ function Checkout() {
 
                   <button type="button" onClick={handleCopyRecipient} className="inline-flex min-w-[7.25rem] items-center justify-center gap-2 rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-beige transition hover:bg-darb-gold hover:text-darb-green active:scale-[0.97]">
                     {copyStatus === "copied" ? <Check size={16}/> : <Copy size={16}/>}
-                    {copyStatus === "copied" ? "Copied" : "Copy"}
+                    {t(copyStatus === "copied" ? "Copied" : "Copy")}
                   </button>
-                  <span className="sr-only" aria-live="polite">{copyStatus === "copied" ? "Payment number copied" : copyStatus === "failed" ? "Payment number could not be copied" : ""}</span>
+                  <span className="sr-only" aria-live="polite">{copyStatus === "copied" ? t("Payment number copied") : copyStatus === "failed" ? t("Payment number could not be copied") : ""}</span>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/10 px-4 py-3">
                   <span className="text-sm text-darb-beige/75">
-                    Exact amount to transfer
+                    {t("Exact amount to transfer")}
                   </span>
                   <span className="font-semibold text-darb-gold">
                     {pricing
                 ? formatCurrency(pricing.total)
-                : "Confirming..."}
+                : t("Confirming...")}
                   </span>
                 </div>
               </div>)}
 
             {selectedPaymentMethod?.requireProof && (<div className="mt-5 border-t border-darb-gold/25 pt-5">
                 <label className="mb-4 block">
-                  <span className="mb-2 block text-sm font-semibold text-darb-green">Sender name *</span>
-                  <input name="transferSenderName" value={formData.transferSenderName} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green" placeholder="Name used for the transfer" />
+                  <span className="mb-2 block text-sm font-semibold text-darb-green">{t("Sender name")} *</span>
+                  <input name="transferSenderName" value={formData.transferSenderName} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green" placeholder={t("Name used for the transfer")} />
                 </label>
 
-                <p className="font-semibold text-darb-green">Transaction Screenshot *</p>
+                <p className="font-semibold text-darb-green">{t("Transaction Screenshot")} *</p>
                 {!paymentProof ? (<label onDragEnter={() => setIsProofDragging(true)} onDragLeave={() => setIsProofDragging(false)} onDragOver={(event) => event.preventDefault()} onDrop={handlePaymentProofDrop} className={`mt-3 flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border border-dashed px-6 py-10 text-center transition focus-within:ring-2 focus-within:ring-darb-gold focus-within:ring-offset-2 ${isProofDragging ? "border-darb-green bg-darb-green/10" : "border-darb-gold/55 bg-darb-surface/60 hover:border-darb-green hover:bg-darb-surface"}`}>
                     <span className="grid h-14 w-14 place-items-center rounded-full bg-darb-green text-darb-beige"><ImagePlus size={24} aria-hidden="true"/></span>
-                    <span className="mt-4 font-semibold text-darb-green">Choose screenshot</span>
-                    <span className="mt-2 max-w-md text-xs leading-5 text-darb-muted">Upload a screenshot of your completed transfer. JPG, PNG, or WebP up to 10 MB.</span>
-                    <span className="mt-2 text-[11px] text-darb-muted">You can also drag and drop the file here.</span>
+                    <span className="mt-4 font-semibold text-darb-green">{t("Choose screenshot")}</span>
+                    <span className="mt-2 max-w-md text-xs leading-5 text-darb-muted">{t("Upload a screenshot of your completed transfer. JPG, PNG, or WebP up to 10 MB.")}</span>
+                    <span className="mt-2 text-[11px] text-darb-muted">{t("You can also drag and drop the file here.")}</span>
                     <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
                   </label>) : (<div className="mt-3 grid min-h-64 gap-5 rounded-[1.25rem] border border-darb-gold/40 bg-darb-surface/60 p-5 sm:grid-cols-[160px_1fr_auto] sm:items-center">
                     <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green sm:w-40">
-                      {paymentProofPreview ? (<img src={paymentProofPreview} alt="Payment proof preview" className="h-full w-full object-contain"/>) : null}
+                      {paymentProofPreview ? (<img src={paymentProofPreview} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : null}
                     </div>
 
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-darb-green">{paymentProof.name}</p>
-                      <p className="mt-1 text-xs text-darb-muted">{(paymentProof.size / 1024 / 1024).toFixed(2)} MB · ready with your order</p>
+                      <p className="mt-1 text-xs text-darb-muted">{(paymentProof.size / 1024 / 1024).toFixed(2)} MB · {t("ready with your order")}</p>
                     </div>
 
                     <div className="flex flex-wrap gap-2 sm:flex-col">
-                      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>Change</span><input aria-label="Change transaction screenshot" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/></label>
-                      <button type="button" onClick={() => { setPaymentProof(null); setPaymentProofError(""); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>Remove</button>
+                      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>{t("Change")}</span><input aria-label={t("Change transaction screenshot")} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/></label>
+                      <button type="button" onClick={() => { setPaymentProof(null); setPaymentProofError(""); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>{t("Remove")}</button>
                     </div>
                   </div>)}
-                <p id="payment-proof-help" className="mt-3 text-xs leading-5 text-darb-muted">Darb securely optimizes the screenshot before private storage and admin review.</p>
-                {paymentProofError && <p id="payment-proof-error" className="mt-2 text-sm font-semibold text-red-700" role="alert">{paymentProofError}</p>}
-                {!pricing && (<p className="mt-2 text-xs font-semibold text-amber-700">Wait for the server-confirmed total above before transferring.</p>)}
+                <p id="payment-proof-help" className="mt-3 text-xs leading-5 text-darb-muted">{t("Darb securely optimizes the screenshot before private storage and admin review.")}</p>
+                {paymentProofError && <p id="payment-proof-error" className="mt-2 text-sm font-semibold text-red-700" role="alert">{t(paymentProofError)}</p>}
+                {!pricing && (<p className="mt-2 text-xs font-semibold text-amber-700">{t("Wait for the server-confirmed total above before transferring.")}</p>)}
               </div>)}
           </div>
 
@@ -778,12 +811,12 @@ function Checkout() {
         ========================== */}
 
           {error && (<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-              {error}
+              {t(error)}
             </div>)}
 
           <label className="flex items-start gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 text-sm leading-6 text-darb-muted">
             <input type="checkbox" name="marketingConsent" checked={formData.marketingConsent} onChange={handleChange} className="mt-1" />
-            Send me occasional Darb news, launches, and offers.
+            {t("Send me occasional Darb news, launches, and offers.")}
           </label>
         </div>
 
@@ -793,26 +826,30 @@ function Checkout() {
 
         <aside className="h-fit rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <h2 className="font-display text-3xl text-darb-green">
-            Order Summary
+            {t("Order Summary")}
           </h2>
 
           {/* Products */}
 
           <div className="mt-6 space-y-4">
-            {items.map((item) => (<div key={item.cartItemId} className="flex gap-4 border-b border-darb-gold/10 pb-4 last:border-b-0">
+            {items.map((item) => {
+              const localizedName = language === "ar" && item.arabicName ? item.arabicName : item.name;
+              const localizedCategory = language === "ar" && item.arabicCategoryName ? item.arabicCategoryName : item.categoryName;
+              return (<div key={item.cartItemId} className="flex gap-4 border-b border-darb-gold/10 pb-4 last:border-b-0">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
-                    {item.image ? (<img src={item.image} alt={item.name} className="h-full w-full object-cover"/>) : (<p className="font-display text-sm text-darb-gold">
+                    {item.image ? (<img src={item.image} alt={localizedName} className="h-full w-full object-cover"/>) : (<p className="font-display text-sm text-darb-gold">
                         Darb
                       </p>)}
                   </div>
 
                   <div className="flex-1">
+                    {localizedCategory && <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-darb-gold">{localizedCategory}</p>}
                     <p className="font-semibold text-darb-green">
-                      {item.name}
+                      {localizedName}
                     </p>
 
                     <p className="mt-1 text-xs text-darb-muted">
-                      Qty:{" "}
+                      {t("Qty:")}{" "}
                       {item.quantity}
 
                       {item.sizeLabel
@@ -825,7 +862,8 @@ function Checkout() {
                     {formatCurrency(item.price *
                 item.quantity)}
                   </p>
-                </div>))}
+                </div>);
+            })}
           </div>
 
           {/* =========================
@@ -834,19 +872,19 @@ function Checkout() {
 
           <div className="mt-6">
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Discount Code
+              {t("Discount Code")}
             </label>
 
             <div className="flex gap-2">
               <input name="couponCode" value={formData.couponCode} onChange={handleChange} className="min-w-0 flex-1 rounded-full border border-darb-gold/30 px-5 py-3 uppercase outline-none transition focus:border-darb-green" placeholder="DARB10"/>
 
               <button type="button" onClick={handleApplyCoupon} disabled={previewQuery.isFetching} className="rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60">
-                Apply
+                {t("Apply")}
               </button>
             </div>
 
             {appliedCouponCode && (<button type="button" onClick={handleRemoveCoupon} className="mt-2 text-xs font-semibold text-darb-green underline">
-                Remove coupon
+                {t("Remove coupon")}
               </button>)}
 
             {pricing?.coupon
@@ -855,8 +893,7 @@ function Checkout() {
                 "valid"
                 ? "bg-green-50 text-green-700"
                 : "bg-yellow-50 text-yellow-800"}`}>
-                {pricing.coupon
-                .message}
+                {t(pricing.coupon.message)}
               </p>)}
           </div>
 
@@ -865,8 +902,7 @@ function Checkout() {
         ========================== */}
 
           {previewQuery.isFetching && (<div className="mt-4 rounded-2xl bg-darb-cream/70 p-3 text-xs text-darb-muted">
-              Recalculating checkout
-              totals...
+              {t("Recalculating checkout totals...")}
             </div>)}
 
           {/* =========================
@@ -876,7 +912,7 @@ function Checkout() {
           {pricing?.discounts
             ?.length > 0 && (<div className="mt-5 rounded-2xl bg-darb-cream/70 p-4">
               <p className="text-sm font-semibold text-darb-green">
-                Applied discounts
+                {t("Applied discounts")}
               </p>
 
               <div className="mt-3 space-y-2">
@@ -885,7 +921,7 @@ function Checkout() {
                         {discount.title}
 
                         {discount.freeShipping
-                    ? " • Free delivery"
+                    ? " • " + t("Free delivery")
                     : ""}
                       </span>
 
@@ -893,7 +929,7 @@ function Checkout() {
                         {discount.amount >
                     0
                     ? `-${formatCurrency(discount.amount)}`
-                    : "Free delivery"}
+                    : t("Free delivery")}
                       </span>
                     </div>))}
               </div>
@@ -910,7 +946,7 @@ function Checkout() {
 
             <div className="flex justify-between gap-4">
               <span className="text-darb-muted">
-                Items
+                {t("Items")}
               </span>
 
               <span className="font-semibold text-darb-black">
@@ -922,7 +958,7 @@ function Checkout() {
 
             <div className="flex justify-between gap-4">
               <span className="text-darb-muted">
-                Subtotal
+                {t("Subtotal")}
               </span>
 
               <span className="font-semibold text-darb-black">
@@ -934,7 +970,7 @@ function Checkout() {
 
             <div className="flex justify-between gap-4">
               <span className="text-darb-muted">
-                Product savings
+                {t("Product savings")}
               </span>
 
               <span className="font-semibold text-darb-green">
@@ -949,7 +985,7 @@ function Checkout() {
 
             <div className="flex justify-between gap-4">
               <span className="text-darb-muted">
-                Offers / coupons
+                {t("Offers / coupons")}
               </span>
 
               <span className="font-semibold text-darb-green">
@@ -964,14 +1000,14 @@ function Checkout() {
 
             <div className="flex justify-between gap-4">
               <span className="text-darb-muted">
-                Delivery
+                {t("Delivery")}
               </span>
 
               <span className="font-semibold text-darb-black">
                 {calculatedDeliveryFee >
             0
             ? formatCurrency(calculatedDeliveryFee)
-            : "Free"}
+            : t("Free")}
               </span>
             </div>
 
@@ -983,21 +1019,19 @@ function Checkout() {
             subtotal <
                 Number(settings.delivery
                     .freeDeliveryThreshold) && (<div className="rounded-2xl bg-darb-cream/70 p-3 text-xs leading-5 text-darb-muted">
-                  Add{" "}
+                  {t("Add")}{" "}
                   <span className="font-semibold text-darb-green">
                     {formatCurrency(Number(settings.delivery
                 .freeDeliveryThreshold) -
                 subtotal)}
                   </span>{" "}
-                  more to unlock
-                  free delivery.
+                  {t("more to unlock free delivery.")}
                 </div>)}
 
             {/* Free Shipping Applied */}
 
             {pricing?.freeShipping && (<div className="rounded-2xl bg-green-50 p-3 text-xs font-semibold text-green-700">
-                Free delivery
-                applied.
+                {t("Free delivery applied.")}
               </div>)}
           </div>
 
@@ -1009,7 +1043,7 @@ function Checkout() {
 
           <div className="flex justify-between gap-4">
             <span className="font-semibold text-darb-green">
-              Total
+              {t("Total")}
             </span>
 
             <span className="font-display text-3xl text-darb-green">
@@ -1025,14 +1059,14 @@ function Checkout() {
             settingsQuery.isLoading ||
             previewQuery.isFetching} className="mt-6 flex w-full justify-center rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60">
             {orderMutation.isPending
-            ? "Creating Order..."
-            : "Place Order"}
+            ? t("Creating Order...")
+            : t("Place Order")}
           </button>
 
           {/* Back */}
 
           <Link to="/cart" className="mt-3 flex w-full justify-center rounded-full border border-darb-gold px-6 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-gold/15">
-            Back to Cart
+            {t("Back to Cart")}
           </Link>
         </aside>
       </form>

@@ -2,9 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import SpinWheel from "../../components/rewards/SpinWheel";
+import { useFeedback } from "../../context/FeedbackContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { createMarketingEventId, getMetaBrowserContext, trackMarketingEvent } from "../../utils/marketingEvents";
 
 function Register() {
   const { customerRegister } = useAuth();
+  const { notify } = useFeedback();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -35,10 +40,18 @@ function Register() {
     setIsSubmitting(true);
 
     try {
-      await customerRegister(formData);
+      const eventId = createMarketingEventId();
+      const trackingContext = getMetaBrowserContext(eventId);
+      const response = await customerRegister({ ...formData, ...(trackingContext ? { trackingContext } : {}) });
+      trackMarketingEvent("CompleteRegistration", { status: "completed" }, {
+        eventId: response?.metaEventId || eventId,
+        mirrorMeta: false,
+      });
+      notify({ type: "success", title: t("Account created"), message: t("Your first spin is ready.") });
       setShowWheel(true);
     } catch (err) {
       setError(err.friendlyMessage || "Registration failed.");
+      notify({ type: "error", title: t("Account was not created"), message: err.friendlyMessage || t("Please try again.") });
     } finally {
       setIsSubmitting(false);
     }
@@ -48,13 +61,13 @@ function Register() {
     <section className="mx-auto flex min-h-[70vh] max-w-7xl items-center justify-center px-4 py-14">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-          Start your path
+          {t("Start your path")}
         </p>
         <h1 className="mt-2 font-display text-4xl text-darb-green">
-          Create Account
+          {t("Create Account")}
         </h1>
         <p className="mt-3 text-darb-muted">
-          Save your details and track your Darb orders.
+          {t("Save your details and track your Darb orders.")}
         </p>
 
         {error && (
@@ -66,7 +79,7 @@ function Register() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Full Name
+              {t("Full Name")}
             </label>
             <input
               name="name"
@@ -80,12 +93,12 @@ function Register() {
 
           <label className="flex items-start gap-3 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
             <input type="checkbox" name="marketingConsent" checked={formData.marketingConsent} onChange={handleChange} className="mt-1" />
-            Send me occasional Darb news, launches, and offers.
+            {t("Send me occasional Darb news, launches, and offers.")}
           </label>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Email
+              {t("Email")}
             </label>
             <input
               name="email"
@@ -99,7 +112,7 @@ function Register() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Phone
+              {t("Phone")}
             </label>
             <input
               name="phone"
@@ -112,7 +125,7 @@ function Register() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Password
+              {t("Password")}
             </label>
             <input
               name="password"
@@ -130,14 +143,14 @@ function Register() {
             disabled={isSubmitting}
             className="w-full rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Creating account..." : "Create Account"}
+            {t(isSubmitting ? "Creating account..." : "Create Account")}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-darb-muted">
-          Already have an account?{" "}
+          {t("Already have an account?")}{" "}
           <Link to="/login" className="font-semibold text-darb-green">
-            Login
+            {t("Login")}
           </Link>
         </p>
       </div>

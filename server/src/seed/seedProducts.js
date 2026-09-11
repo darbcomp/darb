@@ -118,8 +118,7 @@ const run = async () => {
     );
     console.log(`\n✅ ${products.length} Darb catalog products ready.`);
     console.log(`ℹ️ ${legacy.modifiedCount || 0} obsolete development alias product(s) deactivated.`);
-    console.log("ℹ️ Musk entries stay inactive/placeholders until their missing owner copy is supplied.");
-    console.log("ℹ️ Concentration remains blank until the owner confirms it.");
+    console.log("ℹ️ Musks are active launch products at 6 ML / EGP 200.");
   } catch (error) {
     console.error("\n❌ Darb seed failed:", error.message);
     process.exitCode = 1;

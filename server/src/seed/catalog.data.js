@@ -73,7 +73,7 @@ const products = [
     bestFor: ["Sunset Dates", "Beach", "Vacation", "Spring & Summer Evenings"],
   }),
   perfume({
-    name: "Hawas", arabicName: "هَوس", slug: "hawas", primaryCategory: "men",
+    name: "Hawas", arabicName: "هوس", slug: "hawas", primaryCategory: "men",
     inspiredBy: "New Notes Mangomina D",
     top: ["Mango", "Mandarin", "Yuzu", "Marine Notes"],
     middle: ["Solar Notes", "Saffron", "Rose"],
@@ -229,29 +229,75 @@ const products = [
   }),
 ];
 
-const muskSlugs = ["blueberry", "marshmallow", "pineapple", "pomegranate", "vanilla", "white"];
-for (const slug of muskSlugs) {
+const perfumePrices = {
+  faris: 800, mawg: 700, qandeel: 650, hazeem: 800, mazaq: 750,
+  haibah: 750, sahm: 700, naseem: 850, hawas: 800, barq: 750, najm: 800,
+  sehr: 700, hawa: 750, sahar: 750, ghazal: 700, rouh: 800,
+  gharam: 750, nagham: 650, rahaf: 650, layla: 750, mahd: 850,
+  haneen: 750, ishq: 800, ward: 700, ghewaa: 800, shaghaf: 750,
+};
+const initialBestSellers = new Set(["faris", "mawg", "shaghaf", "gharam"]);
+
+products.forEach((product) => {
+  product.price = perfumePrices[product.slug];
+  product.isBestSeller = initialBestSellers.has(product.slug);
+});
+
+const musks = [
+  {
+    slug: "marshmallow",
+    name: "Marshmallow Musk",
+    description: "A soft, comforting blend where the purity of musk meets the sweet, airy warmth of marshmallow. Creamy, smooth, and addictive, with a delicate sweetness that stays close to the skin. Made with raw musk, free from alcohol and additives, for a rich and authentic scent experience.",
+  },
+  {
+    slug: "blueberry",
+    name: "Blueberry Musk",
+    description: "A fresh and playful take on musk, blending its clean softness with the juicy sweetness of blueberry. Fruity without feeling overly sweet, leaving a smooth and distinctive trail on the skin. Made with raw musk, free from alcohol and additives, preserving its pure and concentrated character.",
+  },
+  {
+    slug: "pomegranate",
+    name: "Pomegranate Musk",
+    description: "A vibrant blend of pure musk and the juicy, slightly tart character of pomegranate. Fresh, fruity, and beautifully balanced, creating a scent that feels lively yet refined. Made with raw musk, free from alcohol and additives, for a concentrated and authentic fragrance experience.",
+  },
+  {
+    slug: "white",
+    name: "White Musk",
+    description: "Clean, soft, and effortlessly comforting. White Musk captures the feeling of freshly washed skin with a delicate soapy freshness and a subtle floral touch. Made with raw musk, free from alcohol and additives, giving it a pure, intimate character that sits beautifully on the skin.",
+  },
+  {
+    slug: "vanilla",
+    name: "Vanilla Musk",
+    description: "Warm vanilla melts into the softness of musk to create a creamy, smooth, and comforting scent. Sweet without becoming overwhelming, it leaves an inviting warmth that feels both familiar and luxurious. Made with raw musk, free from alcohol and additives, for a rich and concentrated experience.",
+  },
+  {
+    slug: "pineapple",
+    name: "Pineapple Musk",
+    description: "A bright tropical interpretation of musk, combining its smooth character with the fresh, juicy sweetness of pineapple. Vibrant and uplifting at first, then settling into a soft, clean trail. Made with raw musk, free from alcohol and additives, maintaining its pure and concentrated nature.",
+  },
+];
+
+for (const musk of musks) {
   products.push({
-    name: slug.replace(/(^|-)\w/g, (m) => m.replace("-", " ").toUpperCase()),
+    name: musk.name,
     arabicName: "",
-    slug,
+    slug: musk.slug,
     primaryCategory: "musk",
     alsoIn: [],
     productType: "musk",
     inspiredBy: "",
     scentNotes: { top: [], middle: [], base: [] },
     keyNotes: [],
-    description: "",
+    description: musk.description,
     scentFamilies: [],
     bestFor: [],
     concentration: "",
     sizeLabel: "6 ML",
     sizeMl: 6,
-    price: 1000,
+    price: 200,
     stock: 8,
     lowStockThreshold: 3,
-    isActive: false,
-    isPlaceholder: true,
+    isActive: true,
+    isPlaceholder: false,
     isFeatured: false,
     isBestSeller: false,
     isNewArrival: false,

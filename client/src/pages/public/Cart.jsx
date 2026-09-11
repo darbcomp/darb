@@ -10,12 +10,16 @@ import {
 } from "lucide-react";
 
 import { useCart } from "../../context/useCart";
+import { useFeedback } from "../../context/FeedbackContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 import {
   formatCurrency,
 } from "../../utils/formatCurrency";
 
 function Cart() {
+  const { confirm, notify } = useFeedback();
+  const { language, t } = useLanguage();
   const {
     items,
     isEmpty,
@@ -28,6 +32,16 @@ function Cart() {
     removeItem,
     clearCart,
   } = useCart();
+  const localizedItemName = (item) =>
+    language === "ar" && item.arabicName ? item.arabicName : item.name;
+  const handleClearCart = async () => {
+    const accepted = await confirm({ title: t("Clear your cart?"), body: t("All selected fragrances will be removed."), confirmLabel: t("Clear cart"), variant: "destructive" });
+    if (accepted) { clearCart(); notify({ type: "info", title: t("Cart cleared") }); }
+  };
+  const handleRemoveItem = async (item) => {
+    const accepted = await confirm({ title: t("Remove fragrance?"), body: localizedItemName(item), confirmLabel: t("Remove"), variant: "destructive" });
+    if (accepted) { removeItem(item.cartItemId); notify({ type: "info", title: t("Removed from cart") }); }
+  };
 
   /* =========================
      EMPTY CART
@@ -46,23 +60,22 @@ function Cart() {
             </div>
 
             <p className="mt-7 text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
-              Your Cart
+              {t("Your Cart")}
             </p>
 
             <h1 className="mt-3 font-display text-4xl text-darb-green sm:text-5xl">
-              Your path is still empty.
+              {t("Your path is still empty.")}
             </h1>
 
             <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-darb-muted sm:text-base">
-              Find a fragrance that feels like your path and bring it along for
-              the journey.
+              {t("Find a fragrance that feels like your path and bring it along for the journey.")}
             </p>
 
             <Link
               to="/shop"
               className="mt-8 inline-flex min-h-[52px] items-center justify-center gap-3 rounded-full bg-darb-green px-8 text-sm font-bold uppercase tracking-[0.13em] text-darb-beige transition hover:bg-darb-black"
             >
-              Explore Darb
+              {t("Explore Darb")}
 
               <ArrowRight
                 size={17}
@@ -85,28 +98,24 @@ function Cart() {
           <div className="flex items-end justify-between gap-6">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
-                Your Selection
+                {t("Your Selection")}
               </p>
 
               <h1 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">
-                Your Cart
+                {t("Your Cart")}
               </h1>
 
               <p className="mt-3 text-sm text-darb-muted">
-                {itemCount}{" "}
-                {itemCount === 1
-                  ? "item"
-                  : "items"}{" "}
-                selected.
+                {t(`${itemCount} ${itemCount === 1 ? "item" : "items"} selected.`)}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={clearCart}
-              className="hidden text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-darb-green sm:block"
+              onClick={handleClearCart}
+              className="hidden text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-red-700 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:block"
             >
-              Clear cart
+              {t("Clear cart")}
             </button>
           </div>
         </div>
@@ -169,7 +178,7 @@ function Cart() {
                                 item.image
                               }
                               alt={
-                                item.name
+                                localizedItemName(item)
                               }
                               className="h-full w-full object-cover"
                             />
@@ -181,7 +190,7 @@ function Cart() {
                                 </p>
 
                                 <p className="mt-1 text-[8px] uppercase tracking-[0.2em] text-darb-beige/60">
-                                  Visual soon
+                                  {t("Visual soon")}
                                 </p>
                               </div>
                             </div>
@@ -192,7 +201,9 @@ function Cart() {
 
                         <div className="min-w-0">
                           <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-darb-gold">
-                            {item.categoryName ||
+                            {(language === "ar" && item.arabicCategoryName
+                              ? item.arabicCategoryName
+                              : item.categoryName) ||
                               "Darb"}
                           </p>
 
@@ -201,7 +212,7 @@ function Cart() {
                             className="inline-block"
                           >
                             <h2 className="mt-1 font-display text-2xl leading-tight text-darb-green transition hover:text-darb-black sm:text-3xl">
-                              {item.name}
+                              {localizedItemName(item)}
                             </h2>
                           </Link>
 
@@ -230,11 +241,7 @@ function Cart() {
 
                           {hasDiscount && (
                             <p className="mt-1 text-[10px] font-semibold text-darb-green">
-                              Save{" "}
-                              {formatCurrency(
-                                unitSaving
-                              )}{" "}
-                              per bottle
+                              {t(`Save ${formatCurrency(unitSaving)} per bottle`)}
                             </p>
                           )}
 
@@ -267,12 +274,10 @@ function Cart() {
                             <button
                               type="button"
                               onClick={() =>
-                                removeItem(
-                                  item.cartItemId
-                                )
+                                handleRemoveItem(item)
                               }
-                              aria-label={`Remove ${item.name}`}
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-darb-muted transition hover:bg-red-50 hover:text-red-600"
+                              aria-label={t(`Remove ${localizedItemName(item)}`)}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-darb-muted transition hover:bg-red-50 hover:text-red-700 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                             >
                               <Trash2
                                 size={
@@ -286,21 +291,14 @@ function Cart() {
 
                           {lowStock && (
                             <p className="mt-3 text-[10px] font-semibold text-darb-gold">
-                              Only{" "}
-                              {item.stock}{" "}
-                              {item.stock ===
-                              1
-                                ? "bottle"
-                                : "bottles"}{" "}
-                              available
+                              {t(`Only ${item.stock} ${item.stock === 1 ? "bottle" : "bottles"} available`)}
                             </p>
                           )}
 
                           {atMaxStock &&
                             !lowStock && (
                               <p className="mt-3 text-[10px] text-darb-muted">
-                                Maximum available
-                                quantity reached
+                                {t("Maximum available quantity reached")}
                               </p>
                             )}
                         </div>
@@ -311,12 +309,10 @@ function Cart() {
                           <button
                             type="button"
                             onClick={() =>
-                              removeItem(
-                                item.cartItemId
-                              )
+                              handleRemoveItem(item)
                             }
-                            aria-label={`Remove ${item.name}`}
-                            className="flex h-9 w-9 items-center justify-center rounded-full text-darb-muted transition hover:bg-red-50 hover:text-red-600"
+                            aria-label={t(`Remove ${localizedItemName(item)}`)}
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-darb-muted transition hover:bg-red-50 hover:text-red-700 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                           >
                             <Trash2
                               size={16}
@@ -347,9 +343,9 @@ function Cart() {
                               }
                             />
 
-                            <p className="text-right">
+                            <p className="text-end">
                               <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-darb-muted">
-                                Total
+                                {t("Total")}
                               </span>
 
                               <span className="mt-1 block font-display text-xl text-darb-green">
@@ -366,7 +362,7 @@ function Cart() {
 
                       <div className="mt-5 flex items-center justify-between border-t border-darb-gold/10 pt-4 sm:hidden">
                         <span className="text-xs text-darb-muted">
-                          Item total
+                          {t("Item total")}
                         </span>
 
                         <span className="font-display text-xl text-darb-green">
@@ -384,10 +380,10 @@ function Cart() {
             <div className="mt-8 flex flex-col items-start gap-5">
               <button
                 type="button"
-                onClick={clearCart}
-                className="text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-darb-green sm:hidden"
+                onClick={handleClearCart}
+                className="text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-red-700 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:hidden"
               >
-                Clear cart
+                {t("Clear cart")}
               </button>
 
               <Link
@@ -396,7 +392,7 @@ function Cart() {
               >
                 <span>←</span>
 
-                Continue shopping
+                {t("Continue Shopping")}
               </Link>
             </div>
           </div>
@@ -408,11 +404,11 @@ function Cart() {
           <aside className="h-fit lg:sticky lg:top-[125px]">
             <div className="rounded-[1.75rem] border border-darb-gold/20 bg-white p-6 shadow-soft sm:p-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                Summary
+                {t("Summary")}
               </p>
 
               <h2 className="mt-2 font-display text-3xl text-darb-green">
-                Order Summary
+                {t("Order Summary")}
               </h2>
 
               <div className="mt-7 space-y-4 text-sm">
@@ -421,7 +417,7 @@ function Cart() {
                 {productSavings >
                   0 && (
                   <SummaryRow
-                    label="Original price"
+                    label={t("Original price")}
                     value={formatCurrency(
                       compareAtSubtotal
                     )}
@@ -432,7 +428,7 @@ function Cart() {
                 {/* Subtotal */}
 
                 <SummaryRow
-                  label="Subtotal"
+                  label={t("Subtotal")}
                   value={formatCurrency(
                     subtotal
                   )}
@@ -443,7 +439,7 @@ function Cart() {
                 {productSavings >
                   0 && (
                   <SummaryRow
-                    label="Product savings"
+                    label={t("Product savings")}
                     value={`-${formatCurrency(
                       productSavings
                     )}`}
@@ -453,15 +449,15 @@ function Cart() {
 
                 <div className="border-t border-darb-gold/15 pt-4">
                   <SummaryRow
-                    label="Offers & bundles"
-                    value="Calculated at checkout"
+                    label={t("Offers & bundles")}
+                    value={t("Calculated at checkout")}
                     subtle
                   />
                 </div>
 
                 <SummaryRow
-                  label="Delivery"
-                  value="Calculated at checkout"
+                  label={t("Delivery")}
+                  value={t("Calculated at checkout")}
                   subtle
                 />
               </div>
@@ -472,12 +468,11 @@ function Cart() {
                 <div className="flex items-end justify-between gap-5">
                   <div>
                     <p className="text-sm font-semibold text-darb-green">
-                      Estimated Total
+                      {t("Estimated Total")}
                     </p>
 
                     <p className="mt-1 text-[10px] leading-5 text-darb-muted">
-                      Before delivery,
-                      offers and coupons.
+                      {t("Before delivery, offers and coupons.")}
                     </p>
                   </div>
 
@@ -495,7 +490,7 @@ function Cart() {
                 to="/checkout"
                 className="mt-7 flex min-h-[54px] w-full items-center justify-center gap-3 rounded-full bg-darb-green px-6 text-sm font-bold uppercase tracking-[0.12em] text-darb-beige transition hover:bg-darb-black"
               >
-                Checkout
+                {t("Checkout")}
 
                 <ArrowRight
                   size={17}
@@ -513,10 +508,7 @@ function Cart() {
                 </div>
 
                 <p className="text-[11px] leading-5 text-darb-muted">
-                  Final pricing, delivery,
-                  applicable offers and
-                  coupons are confirmed
-                  during checkout.
+                  {t("Final pricing, delivery, applicable offers and coupons are confirmed during checkout.")}
                 </p>
               </div>
             </div>
@@ -538,13 +530,15 @@ function QuantityControl({
   onDecrease,
   onIncrease,
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="inline-flex h-11 items-center rounded-full border border-darb-gold/30 bg-darb-cream">
       <button
         type="button"
         onClick={onDecrease}
         disabled={!canDecrease}
-        aria-label="Decrease quantity"
+        aria-label={t("Decrease quantity")}
         className="flex h-11 w-10 items-center justify-center text-darb-green transition hover:text-darb-black disabled:cursor-not-allowed disabled:opacity-25"
       >
         <Minus
@@ -560,7 +554,7 @@ function QuantityControl({
         type="button"
         onClick={onIncrease}
         disabled={!canIncrease}
-        aria-label="Increase quantity"
+        aria-label={t("Increase quantity")}
         className="flex h-11 w-10 items-center justify-center text-darb-green transition hover:text-darb-black disabled:cursor-not-allowed disabled:opacity-25"
       >
         <Plus
@@ -595,7 +589,7 @@ function SummaryRow({
       </span>
 
       <span
-        className={`text-right font-semibold ${
+        className={`text-end font-semibold ${
           saving
             ? "text-darb-green"
             : subtle

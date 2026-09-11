@@ -4,6 +4,7 @@ const generateToken = require("../utils/generateToken");
 const { createFirstOrderEntitlement } = require("../services/entitlement.service");
 const { ensureSignupSpinGrant, getUserAvailableSpinCount } = require("../services/spinGrant.service");
 const { cookieSameSite } = require("../middleware/security.middleware");
+const { extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 const authCookieOptions = () => ({
@@ -34,15 +35,21 @@ const publicUser = async (user) => {
   };
 };
 
-const sendAuthResponse = async (res, user, message = "Authenticated successfully") => {
+const sendAuthResponse = async (res, user, message = "Authenticated successfully", metaEventId = "") => {
   res.cookie("token", generateToken(user._id), authCookieOptions());
-  return res.status(200).json({ success: true, message, data: { user: await publicUser(user) } });
+  return res.status(200).json({
+    success: true,
+    message,
+    data: { user: await publicUser(user) },
+    ...(metaEventId ? { metaEventId } : {}),
+  });
 };
 
 const registerCustomer = async (req, res) => {
   try {
     if (!isDatabaseConnected()) return res.status(503).json({ success: false, message: "Database is unavailable." });
-    const { name, email, phone, password, marketingConsent = false } = req.body;
+    const { name, email, phone, password, marketingConsent = false, trackingContext } = req.body;
+    const metaContext = extractMetaContext(trackingContext, req);
     if (!name || !password || (!email && !phone)) return res.status(400).json({ success: false, message: "Name, password, and either email or phone are required." });
     if (String(password).length < 8) return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
     const cleanEmail = email ? String(email).toLowerCase().trim() : undefined;
@@ -72,7 +79,22 @@ const registerCustomer = async (req, res) => {
       .filter((result) => result.status === "rejected")
       .forEach((result) => console.error("Post-registration reward provisioning failed:", result.reason?.message || result.reason));
 
-    return sendAuthResponse(res, user, "Account created successfully.");
+    if (metaContext) {
+      await sendMetaEvent({
+        eventName: "CompleteRegistration",
+        eventId: metaContext.eventId,
+        eventSourceUrl: metaContext.eventSourceUrl,
+        customData: { status: "completed" },
+        userData: {
+          email: user.email,
+          phone: user.phone,
+          externalId: user._id,
+          ...metaContext,
+        },
+      });
+    }
+
+    return sendAuthResponse(res, user, "Account created successfully.", metaContext?.eventId || "");
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || "Registration failed." });
   }

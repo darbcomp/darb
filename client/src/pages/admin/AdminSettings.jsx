@@ -13,6 +13,7 @@ import {
   getAdminSettings,
   updateAdminSettings,
 } from "../../api/adminApi";
+import { useFeedback } from "../../context/FeedbackContext";
 
 /* =========================
    DEFAULTS
@@ -700,6 +701,7 @@ function PaymentCard({
 function AdminSettings() {
   const queryClient =
     useQueryClient();
+  const { notify } = useFeedback();
 
   /*
     IMPORTANT:
@@ -826,9 +828,9 @@ function AdminSettings() {
         });
 
         setMessage(
-          response?.message ||
-            "Settings updated successfully."
+          ""
         );
+        notify({ type: "success", title: "Settings saved", message: response?.message });
 
         setError("");
       },
@@ -842,6 +844,7 @@ function AdminSettings() {
           err.friendlyMessage ||
             "Failed to update settings."
         );
+        notify({ type: "error", title: "Settings were not saved", message: err.friendlyMessage || "Please try again." });
       },
     });
 
@@ -1679,7 +1682,7 @@ function AdminSettings() {
             {/* SEO */}
 
             <SectionCard title="Marketing Pixels">
-              <p className="mb-4 text-sm leading-6 text-darb-muted">Dormant until an ID is present, the channel is enabled, and the visitor has granted tracking consent.</p>
+              <p className="mb-4 text-sm leading-6 text-darb-muted">Dormant until an ID is present and the channel is enabled.</p>
               {[["meta", "Meta Pixel"], ["tiktok", "TikTok Pixel"]].map(([channel, label]) => (
                 <div key={channel} className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
                   <TextInput label={`${label} ID`} value={form.marketingPixels[channel].id} onChange={(event) => updateNestedField("marketingPixels", channel, { ...form.marketingPixels[channel], id: event.target.value })} />

@@ -89,6 +89,11 @@ const orderCreateLimiter = makeLimiter({
   limit: 20,
   message: "Too many order attempts. Please wait a little and try again.",
 });
+const marketingEventLimiter = makeLimiter({
+  windowMs: 10 * 60 * 1000,
+  limit: 120,
+  message: "Too many measurement events. Please try again later.",
+});
 
 module.exports = {
   cookieSameSite,
@@ -100,4 +105,5 @@ module.exports = {
   trackingLimiter,
   guestRewardLimiter,
   orderCreateLimiter,
+  marketingEventLimiter,
 };

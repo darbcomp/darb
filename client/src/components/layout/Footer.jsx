@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
+import { useLanguage } from "../../context/LanguageContext";
 
 const supportLinks = [
   {
@@ -102,6 +103,7 @@ const socialLinks = [
 ];
 
 function Footer() {
+  const { t } = useLanguage();
   const year =
     new Date().getFullYear();
 
@@ -147,7 +149,7 @@ function Footer() {
             <Link
               to="/"
               className="inline-flex"
-              aria-label="Darb home"
+              aria-label={t("Darb home")}
             >
               <img
                 src="/images/logo/beige.webp"
@@ -174,9 +176,7 @@ function Footer() {
                 sm:text-[1.7rem]
               "
             >
-              More than perfume —
-              a journey, a memory
-              in every step.
+              {t("More than perfume — a journey, a memory in every step.")}
             </p>
 
             <p
@@ -188,10 +188,7 @@ function Footer() {
                 text-darb-beige/55
               "
             >
-              Scents created to
-              walk beside the
-              moments that become
-              part of your story.
+              {t("Scents created to walk beside the moments that become part of your story.")}
             </p>
           </div>
 
@@ -209,7 +206,7 @@ function Footer() {
                 text-darb-gold
               "
             >
-              Customer Care
+              {t("Customer Care")}
             </p>
 
             <nav className="mt-5 flex flex-col items-start gap-3.5">
@@ -219,7 +216,7 @@ function Footer() {
                     key={link.to}
                     to={link.to}
                   >
-                    {link.label}
+                    {t(link.label)}
                   </FooterLink>
                 )
               )}
@@ -227,20 +224,20 @@ function Footer() {
           </div>
 
           <div className="lg:pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">SOCIALS</p>
-            <nav className="mt-5 flex items-center gap-2" aria-label="Darb social links">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">{t("SOCIALS")}</p>
+            <nav className="mt-5 flex items-center gap-2" aria-label={t("Darb social links")}>
               {socialLinks.map((social) => (
                 <a
                   key={social.brand}
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={social.label}
-                  title={social.label}
+                  aria-label={t(social.label)}
+                  title={t(social.label)}
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-darb-beige transition duration-200 hover:-translate-y-0.5 hover:bg-darb-gold/10 hover:text-darb-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-gold"
                 >
                   <span className="flex h-[25px] w-[25px] items-center justify-center"><SocialBrandIcon brand={social.brand} /></span>
-                  <span className="sr-only">{social.label}</span>
+                  <span className="sr-only">{t(social.label)}</span>
                 </a>
               ))}
             </nav>
@@ -260,7 +257,7 @@ function Footer() {
                 text-darb-gold
               "
             >
-              Darb
+              {t("Darb")}
             </p>
 
             <nav className="mt-5 flex flex-col items-start gap-3.5">
@@ -270,7 +267,7 @@ function Footer() {
                     key={link.to}
                     to={link.to}
                   >
-                    {link.label}
+                    {t(link.label)}
                   </FooterLink>
                 )
               )}
@@ -308,12 +305,11 @@ function Footer() {
           "
         >
           <p>
-            © {year} Darb Perfumes.
-            All rights reserved.
+            © {year} {t("Darb Perfumes.")} {t("All rights reserved.")}
           </p>
 
           <p>
-            A scent for every path
+            {t("A scent for every path")}
           </p>
         </div>
       </div>

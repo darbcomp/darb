@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -21,6 +21,8 @@ import {
 } from "../../api/adminApi";
 
 import { formatCurrency } from "../../utils/formatCurrency";
+import AdminPagination from "../../components/admin/AdminPagination";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const MAX_IMAGES = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -51,7 +53,6 @@ const emptyForm = {
   costPrice: "",
   sizeLabel: "50 ML",
   sizeMl: "50",
-  concentration: "",
   scentFamily: "",
   scentFamilies: "",
   arabicScentFamilies: "",
@@ -143,7 +144,6 @@ const productToForm = (product) => ({
   costPrice: product.costPrice || "",
   sizeLabel: product.sizeLabel || "",
   sizeMl: product.sizeMl || "",
-  concentration: product.concentration || "",
   scentFamily: product.scentFamily || "",
   scentFamilies: (product.scentFamilies || []).join(", "),
   arabicScentFamilies: (product.arabicScentFamilies || []).join(", "),
@@ -253,6 +253,10 @@ function ToggleField({
 
 function AdminProducts() {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const formHeadingRef = useRef(null);
+  const firstFieldRef = useRef(null);
+  const [page, setPage] = useState(1);
 
   const [filters, setFilters] = useState({
     search: "",
@@ -292,7 +296,8 @@ function AdminProducts() {
 
   const queryParams = useMemo(() => {
     const params = {
-      limit: 40,
+      page,
+      limit: 10,
     };
 
     if (filters.search.trim()) {
@@ -312,7 +317,7 @@ function AdminProducts() {
     }
 
     return params;
-  }, [filters]);
+  }, [filters, page]);
 
   const productsQuery = useQuery({
     queryKey: [
@@ -355,6 +360,7 @@ function AdminProducts() {
       });
 
       closeForm();
+      notify({ type: "success", title: "Product created" });
     },
 
     onError: (error) => {
@@ -362,6 +368,7 @@ function AdminProducts() {
         error.friendlyMessage ||
           "Failed to create product."
       );
+      notify({ type: "error", title: "Product was not created", message: error.friendlyMessage || "Please review the form and try again." });
     },
   });
 
@@ -394,6 +401,7 @@ function AdminProducts() {
       });
 
       closeForm();
+      notify({ type: "success", title: "Product updated" });
     },
 
     onError: (error) => {
@@ -401,6 +409,7 @@ function AdminProducts() {
         error.friendlyMessage ||
           "Failed to update product."
       );
+      notify({ type: "error", title: "Product was not updated", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -419,7 +428,9 @@ function AdminProducts() {
           "products",
         ],
       });
+      notify({ type: "success", title: "Product deactivated" });
     },
+    onError: (error) => notify({ type: "error", title: "Could not deactivate product", message: error.friendlyMessage || "Please try again." }),
   });
 
   const products =
@@ -506,6 +517,16 @@ function AdminProducts() {
     setIsFormOpen(true);
   };
 
+  useEffect(() => {
+    if (!isFormOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      formHeadingRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      window.setTimeout(() => firstFieldRef.current?.focus(), reduced ? 0 : 250);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isFormOpen, editingProduct]);
+
   const handleFilterChange = (
     event
   ) => {
@@ -520,6 +541,7 @@ function AdminProducts() {
         [name]: value,
       })
     );
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -529,6 +551,7 @@ function AdminProducts() {
       status: "",
       placeholder: "",
     });
+    setPage(1);
   };
 
   const handleFormChange = (
@@ -1019,6 +1042,12 @@ function AdminProducts() {
       setFormError(
         validationError
       );
+      const sectionName = validationError.toLowerCase().includes("image") ? "media" : "essentials";
+      const section = document.querySelector(`[data-editor-section="${sectionName}"]`);
+      if (section) {
+        section.open = true;
+        section.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+      }
 
       return;
     }
@@ -1046,13 +1075,15 @@ function AdminProducts() {
     );
   };
 
-  const handleDeactivate = (
+  const handleDeactivate = async (
     product
   ) => {
-    const confirmed =
-      window.confirm(
-        `Deactivate "${product.name}"? It will be hidden from the public store.`
-      );
+    const confirmed = await confirm({
+      title: "Deactivate product?",
+      body: `“${product.name}” will be hidden from the public store. Its data will remain saved.`,
+      confirmLabel: "Deactivate",
+      variant: "destructive",
+    });
 
     if (
       !confirmed
@@ -1222,7 +1253,7 @@ function AdminProducts() {
       </div>
 
       {isFormOpen && (
-        <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <div ref={formHeadingRef} tabIndex={-1} className="mb-8 scroll-mt-28 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft outline-none">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -1268,10 +1299,11 @@ function AdminProducts() {
             }
             className="space-y-7"
           >
-            <SectionHeader title="Basic" description="Identity, product type and where this fragrance appears." />
+            <EditorSection title="Essentials" description="Identity, product type, collections and launch essentials." defaultOpen>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field
                 label="English Name *"
+                inputRef={firstFieldRef}
                 name="name"
                 value={
                   form.name
@@ -1417,19 +1449,11 @@ function AdminProducts() {
                 min="0"
               />
 
-              <Field
-                label="Concentration (optional)"
-                name="concentration"
-                value={
-                  form.concentration
-                }
-                onChange={
-                  handleFormChange
-                }
-                placeholder="Leave blank when not supplied"
-              />
+            </div>
+            </EditorSection>
 
-              <div className="md:col-span-2 xl:col-span-3"><SectionHeader title="Scent profile" description="Use Top / Middle / Base for a pyramid, or Key Notes when only key notes are supplied. You do not need both." /></div>
+            <EditorSection title="Scent Profile" description="Use Top / Middle / Base for a pyramid, or Key Notes when only key notes are supplied. You do not need both.">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 
               <Field
                 label="Scent Families"
@@ -1489,7 +1513,11 @@ function AdminProducts() {
               <Field label="Middle Notes — Arabic" name="arabicMiddleNotes" value={form.arabicMiddleNotes} onChange={handleFormChange} placeholder="ورد، ياسمين" dir="rtl" />
               <Field label="Base Notes — Arabic" name="arabicBaseNotes" value={form.arabicBaseNotes} onChange={handleFormChange} placeholder="مسك، عنبر، عود" dir="rtl" />
 
-              <div className="md:col-span-2 xl:col-span-3"><SectionHeader title="Story" description="Storefront summary and full fragrance description." /></div>
+            </div>
+            </EditorSection>
+
+            <EditorSection title="Story" description="Storefront summary and full fragrance description, paired with Arabic where supplied.">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="md:col-span-2 xl:col-span-3">
                 <Field
                   label="Short Description"
@@ -1567,8 +1595,14 @@ function AdminProducts() {
                 />
               </div>
             </div>
+            </EditorSection>
 
-            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/40 p-5">
+            <EditorSection title="Arabic Content" description="Arabic fields stay paired beside their English equivalents so the owner can compare them safely.">
+              <p className="text-sm leading-6 text-darb-muted">Arabic identity is in Essentials; Arabic story and note fields are paired in Story and Scent Profile. Empty Arabic fields remain optional and are never fabricated.</p>
+            </EditorSection>
+
+            <EditorSection title="Variants & Pricing" description="Set each purchasable size, SKU, price and stock independently.">
+            <div className="p-1">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">Variants</p>
@@ -1592,8 +1626,10 @@ function AdminProducts() {
                 ))}
               </div>
             </div>
+            </EditorSection>
 
-            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/40 p-5">
+            <EditorSection title="Media" description="Optimized product artwork, up to 10 images.">
+            <div className="p-1">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h3 className="font-display text-2xl text-darb-green">
@@ -1629,7 +1665,7 @@ function AdminProducts() {
                 <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handleImageChange} className="sr-only" />
               </label>}
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 {existingImages.map(
                   (
                     image,
@@ -1735,8 +1771,9 @@ function AdminProducts() {
                 )}
               </div>
             </div>
+            </EditorSection>
 
-            <SectionHeader title="Visibility" description="Choose where this product appears in the storefront." />
+            <EditorSection title="Visibility" description="Choose where this product appears in the storefront.">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <ToggleField
                 label="Active"
@@ -1793,8 +1830,9 @@ function AdminProducts() {
                 }
               />
             </div>
+            </EditorSection>
 
-            <SectionHeader title="SEO" description="Optional search and sharing copy." />
+            <EditorSection title="SEO" description="Optional search and sharing copy.">
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Meta Title"
@@ -1828,6 +1866,7 @@ function AdminProducts() {
                 />
               </label>
             </div>
+            </EditorSection>
 
             <div className="flex flex-wrap gap-3">
               <button
@@ -2138,7 +2177,7 @@ function AdminProducts() {
                                 deleteMutation.isPending ||
                                 !product.isActive
                               }
-                              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Trash2
                                 size={
@@ -2156,6 +2195,7 @@ function AdminProducts() {
                 }
               )}
             </div>
+            <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
           </div>
         )}
     </section>
@@ -2172,6 +2212,7 @@ function Field({
   placeholder,
   readOnly = false,
   dir,
+  inputRef,
 }) {
   return (
     <label>
@@ -2180,6 +2221,7 @@ function Field({
       </span>
 
       <input
+        ref={inputRef}
         name={name}
         value={value}
         onChange={onChange}
@@ -2200,8 +2242,15 @@ function Field({
   );
 }
 
-function SectionHeader({ title, description }) {
-  return <div className="border-b border-darb-gold/20 pb-3"><p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">{title}</p>{description && <p className="mt-1 text-sm text-darb-muted">{description}</p>}</div>;
+function EditorSection({ title, description, defaultOpen = false, children }) {
+  const sectionName = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return <details data-editor-section={sectionName} defaultOpen={defaultOpen} className="group border-y border-darb-gold/20 py-1">
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-gold">
+      <span><span className="block text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">{title}</span>{description && <span className="mt-1 block text-sm text-darb-muted">{description}</span>}</span>
+      <span aria-hidden="true" className="text-xl text-darb-green transition-transform group-open:rotate-45">+</span>
+    </summary>
+    <div className="pb-5">{children}</div>
+  </details>;
 }
 
 function ImageEditorCard({

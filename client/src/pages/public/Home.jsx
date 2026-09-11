@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useRef,
   useState,
 } from "react";
 
@@ -35,6 +34,7 @@ import {
 } from "../../api/reviewApi";
 
 import ProductCard from "../../components/product/ProductCard";
+import ReviewCarousel from "../../components/common/ReviewCarousel";
 import { getPublicBundles } from "../../api/bundleApi";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
@@ -141,13 +141,13 @@ function CategoryCard({
 }
 
 function BundleCard({ bundle: sourceBundle }) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const bundle = localizeBundle(sourceBundle, language);
   const price = Number(bundle.fixedBundlePrice || (bundle.discountType === "fixed_bundle_price" ? bundle.discountValue : 0));
-  const detail = bundle.description || (bundle.requiredQuantity ? `Choose ${bundle.requiredQuantity} Darb fragrances.` : "");
+  const detail = bundle.description || (bundle.requiredQuantity ? t(`Choose ${bundle.requiredQuantity} Darb fragrances.`) : "");
   return <article className="flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-darb-surface shadow-soft">
     <div className="aspect-[16/10] overflow-hidden bg-darb-green">{bundle.image?.url ? <img src={bundle.image.url} alt={bundle.image.alt || bundle.name} loading="lazy" className="h-full w-full object-cover"/> : <div className="grid h-full place-items-center font-display text-4xl text-darb-gold">Darb</div>}</div>
-    <div className="flex flex-1 flex-col p-5 sm:p-6"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">Curated path</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.title || bundle.name}</h3>{detail && <p className="mt-3 text-sm leading-6 text-darb-muted">{detail}</p>}<div className="mt-4 flex flex-wrap items-center gap-3">{price > 0 && <p className="font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.discountType === "percentage" && Number(bundle.discountValue) > 0 && <p className="text-sm font-semibold text-darb-green">Save {bundle.discountValue}%</p>}{bundle.freeDelivery && <span className="inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">Free delivery</span>}</div><Link to="/shop" className="mt-auto inline-flex pt-6 text-sm font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">Explore bundle</Link></div>
+    <div className="flex flex-1 flex-col p-5 sm:p-6"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">{t("Curated path")}</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.title || bundle.name}</h3>{detail && <p className="mt-3 text-sm leading-6 text-darb-muted">{detail}</p>}<div className="mt-4 flex flex-wrap items-center gap-3">{price > 0 && <p className="font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.discountType === "percentage" && Number(bundle.discountValue) > 0 && <p className="text-sm font-semibold text-darb-green">{t(`Save ${bundle.discountValue}%`)}</p>}{bundle.freeDelivery && <span className="inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">{t("Free delivery")}</span>}</div><Link to="/shop" className="mt-auto inline-flex pt-6 text-sm font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">{t("Explore bundle")}</Link></div>
   </article>;
 }
 
@@ -181,7 +181,7 @@ function RatingStars({
   );
 }
 
-function ReviewCard({
+export function ReviewCard({
   review,
   isDuplicate = false,
 }) {
@@ -355,30 +355,7 @@ function Home() {
     user,
     isAuthenticated,
   } = useAuth();
-
-  const reviewTrackRef =
-    useRef(null);
-  const [reviewCanScroll, setReviewCanScroll] = useState({ back: false, forward: false });
-  const reviewAutoMovementEnabled = false;
-
-  const [
-    reviewMarqueePaused,
-    setReviewMarqueePaused,
-  ] = useState(false);
-
-  const [
-    reduceReviewMotion,
-    setReduceReviewMotion,
-  ] = useState(
-    () =>
-      typeof window !==
-        "undefined" &&
-      Boolean(
-        window.matchMedia?.(
-          "(prefers-reduced-motion: reduce)"
-        )?.matches
-      )
-  );
+  const { language, t } = useLanguage();
 
   const [
     reviewForm,
@@ -482,23 +459,6 @@ function Home() {
     reviewsQuery.data
       ?.data || [];
 
-  useEffect(() => {
-    const track = reviewTrackRef.current;
-    if (!track) return undefined;
-    const update = () => setReviewCanScroll({
-      back: track.scrollLeft > 2,
-      forward: track.scrollLeft + track.clientWidth < track.scrollWidth - 2,
-    });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(track);
-    track.addEventListener("scroll", update, { passive: true });
-    return () => {
-      observer.disconnect();
-      track.removeEventListener("scroll", update);
-    };
-  }, [reviews.length]);
-
   const eligibility =
     eligibilityQuery.data
       ?.data || null;
@@ -576,161 +536,6 @@ function Home() {
       );
     };
   }, [reviewModalOpen]);
-
-  useEffect(() => {
-    const mediaQuery =
-      window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      );
-
-    const updateMotionPreference =
-      () => {
-        setReduceReviewMotion(
-          mediaQuery.matches
-        );
-      };
-
-    updateMotionPreference();
-
-    mediaQuery.addEventListener?.(
-      "change",
-      updateMotionPreference
-    );
-
-    return () => {
-      mediaQuery.removeEventListener?.(
-        "change",
-        updateMotionPreference
-      );
-    };
-  }, []);
-
-  useEffect(() => {
-    const container =
-      reviewTrackRef.current;
-
-    if (
-      !container ||
-      reduceReviewMotion ||
-      reviewMarqueePaused ||
-      reviews.length === 0 ||
-      !reviewAutoMovementEnabled
-    ) {
-      return undefined;
-    }
-
-    let frameId = 0;
-    let scrollPosition =
-      container.scrollLeft;
-    let previousTime =
-      performance.now();
-
-    const moveReviews = (
-      currentTime
-    ) => {
-      const firstReview =
-        container.children[0];
-
-      const firstDuplicate =
-        container.children[
-          reviews.length
-        ];
-
-      if (
-        firstReview &&
-        firstDuplicate
-      ) {
-        const loopWidth =
-          firstDuplicate.offsetLeft -
-          firstReview.offsetLeft;
-
-        const elapsed =
-          Math.min(
-            currentTime -
-              previousTime,
-            64
-          );
-
-        scrollPosition +=
-          (elapsed / 1000) *
-          30;
-
-        if (
-          loopWidth > 0 &&
-          scrollPosition >=
-            loopWidth
-        ) {
-          scrollPosition %=
-            loopWidth;
-        }
-
-        container.scrollLeft =
-          scrollPosition;
-      }
-
-      previousTime =
-        currentTime;
-
-      frameId =
-        window.requestAnimationFrame(
-          moveReviews
-        );
-    };
-
-    frameId =
-      window.requestAnimationFrame(
-        moveReviews
-      );
-
-    return () => {
-      window.cancelAnimationFrame(
-        frameId
-      );
-    };
-  }, [
-    reduceReviewMotion,
-    reviewMarqueePaused,
-    reviewAutoMovementEnabled,
-    reviews.length,
-  ]);
-
-  useEffect(() => {
-    if (!reviewMarqueePaused) {
-      return undefined;
-    }
-
-    const resumeOutside = (
-      event
-    ) => {
-      const container =
-        reviewTrackRef.current;
-
-      if (
-        container &&
-        !container.contains(
-          event.target
-        )
-      ) {
-        setReviewMarqueePaused(
-          false
-        );
-      }
-    };
-
-    document.addEventListener(
-      "pointerdown",
-      resumeOutside,
-      true
-    );
-
-    return () => {
-      document.removeEventListener(
-        "pointerdown",
-        resumeOutside,
-        true
-      );
-    };
-  }, [reviewMarqueePaused]);
 
   const reviewMutation =
     useMutation({
@@ -917,8 +722,6 @@ function Home() {
         )
     );
 
-  const reviewCloneCount = 0;
-
   return (
     <div className="bg-darb-cream">
       <style>{`
@@ -1027,16 +830,13 @@ function Home() {
                 lg:text-[5.5rem]
               "
             >
-              A scent for
+              {t("A scent for")}
               <br />
-              every path.
+              {t("every path.")}
             </h1>
 
             <p className="mt-6 max-w-[570px] text-base leading-7 text-darb-beige/85 sm:text-lg sm:leading-8">
-              Darb is more than
-              perfume — a journey,
-              a memory in every
-              step.
+              {t("Darb is more than perfume — a journey, a memory in every step.")}
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3 sm:gap-4">
@@ -1058,7 +858,7 @@ function Home() {
                   hover:bg-darb-gold
                 "
               >
-                Shop Now
+                {t("Shop Now")}
               </Link>
 
               <a
@@ -1084,7 +884,7 @@ function Home() {
                   hover:text-darb-green
                 "
               >
-                Explore Categories
+                {t("Explore Categories")}
               </a>
             </div>
           </div>
@@ -1093,7 +893,7 @@ function Home() {
 
       {bundles.length > 0 && <section className="bg-darb-cream py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold">Bundles</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">Paths chosen together.</h2></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold">{t("Bundles")}</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">{t("Paths chosen together.")}</h2></div>
           <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">{bundles.map((bundle) => <BundleCard key={bundle._id} bundle={bundle}/>)}</div>
         </div>
       </section>}
@@ -1113,11 +913,11 @@ function Home() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 px-5 sm:px-6 lg:px-8">
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-sm">
-              Categories
+              {t("Categories")}
             </p>
 
             <h2 className="mt-2 font-display text-4xl leading-tight text-darb-green sm:text-5xl">
-              Choose your path
+              {t("Choose your path")}
             </h2>
           </div>
 
@@ -1163,7 +963,7 @@ function Home() {
               to="/shop"
               className="inline-flex min-h-[52px] items-center justify-center rounded-full bg-darb-green px-8 text-sm font-semibold text-darb-beige transition duration-300 hover:bg-darb-gold hover:text-darb-green"
             >
-              Shop All Fragrances
+              {t("Shop All Fragrances")}
             </Link>
           </div>
         </div>
@@ -1177,18 +977,15 @@ function Home() {
         <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
           <div className="mb-9">
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-sm">
-              Best Sellers
+              {t("Best Sellers")}
             </p>
 
             <h2 className="mt-2 font-display text-4xl leading-tight sm:text-5xl">
-              Scents worth
-              remembering.
+              {t("Scents worth remembering.")}
             </h2>
 
             <p className="mt-4 max-w-xl text-sm leading-7 text-darb-beige/65 sm:text-base">
-              Fragrances that
-              found their way into
-              more than one memory.
+              {t("Fragrances that found their way into more than one memory.")}
             </p>
           </div>
 
@@ -1210,14 +1007,11 @@ function Home() {
           ) : bestSellersQuery.isError ? (
             <div className="rounded-[1.75rem] border border-darb-gold/25 bg-darb-beige/10 px-6 py-12 text-center">
               <p className="font-display text-3xl text-darb-gold">
-                The path is quiet
-                for now
+                {t("The path is quiet for now")}
               </p>
 
               <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-darb-beige/70">
-                Best sellers could
-                not be loaded right
-                now.
+                {t("Best sellers could not be loaded right now.")}
               </p>
             </div>
           ) : bestSellerProducts.length >
@@ -1238,15 +1032,11 @@ function Home() {
           ) : (
             <div className="rounded-[1.75rem] border border-darb-gold/25 bg-darb-beige/10 px-6 py-12 text-center">
               <p className="font-display text-3xl text-darb-gold">
-                Best sellers
-                coming soon
+                {t("Best sellers coming soon")}
               </p>
 
               <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-darb-beige/70">
-                Mark fragrances as
-                Best Seller from
-                the Darb admin
-                dashboard.
+                {t("Mark fragrances as Best Seller from the Darb admin dashboard.")}
               </p>
             </div>
           )}
@@ -1256,7 +1046,7 @@ function Home() {
               to="/shop"
               className="inline-flex min-h-[50px] items-center justify-center rounded-full border border-darb-beige/45 px-7 text-sm font-semibold text-darb-beige transition hover:bg-darb-beige hover:text-darb-green"
             >
-              Shop All Fragrances
+              {t("Shop All Fragrances")}
             </Link>
           </div>
         </div>
@@ -1274,18 +1064,15 @@ function Home() {
           <div className="px-5 sm:px-6 lg:px-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-sm">
-                What They Remember
+                {t("What They Remember")}
               </p>
 
               <h2 className="mt-2 font-display text-4xl leading-tight text-darb-green sm:text-5xl">
-                Stories that stayed.
+                {t("Stories that stayed.")}
               </h2>
 
               <p className="mt-4 max-w-xl text-sm leading-7 text-darb-muted sm:text-base">
-                Moments, memories
-                and impressions
-                left along the Darb
-                journey.
+                {t("Moments, memories and impressions left along the Darb journey.")}
               </p>
             </div>
           </div>
@@ -1310,8 +1097,7 @@ function Home() {
           {reviewsQuery.isError && (
             <div className="mx-5 mt-10 rounded-[1.75rem] border border-darb-gold/20 bg-white p-8 text-center shadow-soft sm:mx-6 lg:mx-8">
               <p className="font-display text-3xl text-darb-green">
-                The stories are
-                quiet for now.
+                {t("The stories are quiet for now.")}
               </p>
             </div>
           )}
@@ -1320,84 +1106,7 @@ function Home() {
             !reviewsQuery.isError &&
             reviews.length >
               0 && (
-              <>
-                <div
-                  ref={
-                    reviewTrackRef
-                  }
-                   onPointerDown={() =>
-                    setReviewMarqueePaused(
-                      true
-                     )
-                   }
-                   tabIndex="0"
-                   aria-label="Customer reviews"
-                  className="
-                    darb-horizontal-scroll
-                    mt-10
-                    flex
-                    gap-4
-                    overflow-x-auto
-                    px-5
-                    pb-3
-                    sm:px-6
-                    lg:gap-5
-                    lg:px-8
-                  "
-                >
-                  {reviews.map(
-                    (
-                      review,
-                      index
-                    ) => (
-                      <ReviewCard
-                        key={
-                          review._id ||
-                          index
-                        }
-                        review={
-                          review
-                        }
-                      />
-                    )
-                  )}
-
-                  {!reduceReviewMotion &&
-                    Array.from(
-                      {
-                        length:
-                          reviewCloneCount,
-                      },
-                      (_, index) =>
-                        index + 1
-                    ).flatMap(
-                      (copy) =>
-                        reviews.map(
-                          (
-                            review,
-                            index
-                          ) => (
-                            <ReviewCard
-                              key={`${
-                                review._id ||
-                                index
-                              }-duplicate-${copy}`}
-                              review={
-                                review
-                              }
-                              isDuplicate
-                            />
-                          )
-                        )
-                    )}
-                </div>
-
-                {reviews.length > 1 && <div className="mt-5 hidden items-center justify-between px-5 sm:px-6 md:flex lg:px-8">
-                  <button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: -420, behavior: "smooth" })} disabled={!reviewCanScroll.back} className="rounded-full border border-darb-gold/30 p-3 text-darb-green transition hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label="Previous reviews"><ArrowLeft size={18}/></button>
-                  <button type="button" onClick={() => reviewTrackRef.current?.scrollBy({ left: 420, behavior: "smooth" })} disabled={!reviewCanScroll.forward} className="rounded-full border border-darb-gold/30 p-3 text-darb-green transition hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label="Next reviews"><ArrowRight size={18}/></button>
-                </div>}
-
-              </>
+              <div className="mt-10 px-5 sm:px-6 lg:px-8"><ReviewCarousel reviews={reviews} label="Customer reviews" /></div>
             )}
 
           {!reviewsQuery.isLoading &&
@@ -1411,15 +1120,11 @@ function Home() {
                 />
 
                 <p className="mt-4 font-display text-3xl text-darb-green">
-                  The first memory
-                  is still waiting
-                  to be shared.
+                  {t("The first memory is still waiting to be shared.")}
                 </p>
 
                 <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-darb-muted">
-                  Approved customer
-                  experiences will
-                  appear here.
+                  {t("Approved customer experiences will appear here.")}
                 </p>
               </div>
             )}
@@ -1432,19 +1137,15 @@ function Home() {
             <div className="flex flex-col justify-between gap-8 px-7 py-8 sm:px-9 sm:py-9 lg:flex-row lg:items-center lg:px-10">
               <div className="max-w-2xl">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-xs">
-                  Your Journey
+                  {t("Your Journey")}
                 </p>
 
                 <h3 className="mt-3 font-display text-3xl leading-tight sm:text-4xl">
-                  Leave a memory behind.
+                  {t("Leave a memory behind.")}
                 </h3>
 
                 <p className="mt-3 max-w-xl text-sm leading-7 text-darb-beige/65">
-                  Already walked
-                  part of the Darb
-                  journey? Share
-                  what stayed with
-                  you.
+                  {t("Already walked part of the Darb journey? Share what stayed with you.")}
                 </p>
 
                 <div className="mt-5 flex items-center gap-2 text-xs text-darb-beige/60">
@@ -1453,8 +1154,7 @@ function Home() {
                     className="shrink-0 text-darb-gold"
                   />
 
-                  Verified order
-                  checking
+                  {t("Verified order checking")}
                 </div>
               </div>
 
@@ -1464,7 +1164,7 @@ function Home() {
                     to="/login"
                     className="inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-darb-beige px-8 text-sm font-semibold text-darb-green transition hover:bg-darb-gold sm:w-auto"
                   >
-                    Sign In to Review
+                    {t("Sign In to Review")}
                   </Link>
                 )}
 
@@ -1480,17 +1180,14 @@ function Home() {
                   !eligibility.hasOrder && (
                     <div>
                       <p className="max-w-xs text-sm leading-6 text-darb-beige/60">
-                        Reviews unlock
-                        after your
-                        first Darb
-                        order.
+                        {t("Reviews unlock after your first Darb order.")}
                       </p>
 
                       <Link
                         to="/shop"
                         className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-full border border-darb-beige/35 px-6 text-sm font-semibold text-darb-beige transition hover:bg-darb-beige hover:text-darb-green"
                       >
-                        Explore Fragrances
+                        {t("Explore Fragrances")}
                       </Link>
                     </div>
                   )}
@@ -1512,8 +1209,8 @@ function Home() {
                             .existingReview
                             .status ===
                           "approved"
-                            ? "Part of the Journey"
-                            : "Review Received"}
+                            ? t("Part of the Journey")
+                            : t("Review Received")}
                         </p>
                       </div>
 
@@ -1522,8 +1219,8 @@ function Home() {
                           .existingReview
                           .status ===
                         "approved"
-                          ? "Your review has been approved."
-                          : "Your review is waiting for approval."}
+                          ? t("Your review has been approved.")
+                          : t("Your review is waiting for approval.")}
                       </p>
                     </div>
                   )}
@@ -1540,7 +1237,7 @@ function Home() {
                       }
                       className="inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-darb-beige px-8 text-sm font-semibold text-darb-green transition hover:bg-darb-gold sm:w-auto"
                     >
-                      Write a Review
+                      {t("Write a Review")}
                     </button>
                   )}
               </div>
@@ -1549,7 +1246,7 @@ function Home() {
 
           {reviewMessage && (
             <div className="mx-5 mt-5 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700 sm:mx-6 lg:mx-8">
-              {reviewMessage}
+              {t(reviewMessage)}
             </div>
           )}
         </div>
@@ -1586,7 +1283,7 @@ function Home() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Write a Darb review"
+            aria-label={t("Write a Darb review")}
             className="
               darb-horizontal-scroll
               max-h-[92vh]
@@ -1605,12 +1302,11 @@ function Home() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
-                    Write a Review
+                    {t("Write a Review")}
                   </p>
 
                   <p className="mt-1 text-xs text-darb-muted">
-                    A small memory
-                    in three steps.
+                    {t("A small memory in three steps.")}
                   </p>
                 </div>
 
@@ -1623,7 +1319,7 @@ function Home() {
                     reviewMutation.isPending
                   }
                   className="flex h-10 w-10 items-center justify-center rounded-full border border-darb-gold/30 text-darb-green transition hover:bg-darb-gold/10"
-                  aria-label="Close"
+                  aria-label={t("Close")}
                 >
                   <X size={18} />
                 </button>
@@ -1646,7 +1342,7 @@ function Home() {
             >
               {reviewError && (
                 <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-                  {reviewError}
+                  {t(reviewError)}
                 </div>
               )}
 
@@ -1656,26 +1352,20 @@ function Home() {
                 1 && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                    Step One
+                    {t("Step One")}
                   </p>
 
                   <h3 className="mt-2 font-display text-4xl leading-tight text-darb-green">
-                    How did it
-                    stay with you?
+                    {t("How did it stay with you?")}
                   </h3>
 
                   <p className="mt-3 max-w-lg text-sm leading-7 text-darb-muted">
-                    Start with the
-                    feeling. Pick
-                    your rating,
-                    then choose the
-                    fragrance if
-                    one stands out.
+                    {t("Start with the feeling. Pick your rating, then choose the fragrance if one stands out.")}
                   </p>
 
                   <div className="mt-8">
                     <label className="text-sm font-semibold text-darb-green">
-                      Your rating
+                      {t("Your rating")}
                     </label>
 
                     <div className="mt-3 flex gap-2">
@@ -1718,7 +1408,7 @@ function Home() {
                                 transition
                                 hover:border-darb-gold
                               "
-                              aria-label={`${rating} stars`}
+                              aria-label={t(`${rating} stars`)}
                             >
                               <Star
                                 size={24}
@@ -1746,13 +1436,13 @@ function Home() {
                       {
                         reviewForm.rating
                       }{" "}
-                      out of 5
+                      {t("out of 5")}
                     </p>
                   </div>
 
                   <div className="mt-7">
                     <label className="mb-2 block text-sm font-semibold text-darb-green">
-                      Which fragrance?
+                      {t("Which fragrance?")}
                     </label>
 
                     <select
@@ -1766,8 +1456,7 @@ function Home() {
                       className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3.5 outline-none transition focus:border-darb-green"
                     >
                       <option value="">
-                        Darb overall
-                        experience
+                        {t("Darb overall experience")}
                       </option>
 
                       {purchasedProducts.map(
@@ -1783,7 +1472,7 @@ function Home() {
                             }
                           >
                             {
-                              product.name
+                              language === "ar" && product.arabicName ? product.arabicName : product.name
                             }
                           </option>
                         )
@@ -1791,17 +1480,14 @@ function Home() {
                     </select>
 
                     <p className="mt-2 text-xs leading-5 text-darb-muted">
-                      Only fragrances
-                      from your order
-                      history appear
-                      here.
+                      {t("Only fragrances from your order history appear here.")}
                     </p>
                   </div>
 
                   <div className="mt-5">
-                    <label className="mb-2 block text-sm font-semibold text-darb-green">Photo (optional)</label>
+                    <label className="mb-2 block text-sm font-semibold text-darb-green">{t("Photo (optional)")}</label>
                     <input type="file" name="imageFile" accept="image/jpeg,image/png,image/webp,image/avif" onChange={handleReviewChange} className="w-full rounded-2xl border border-darb-gold/30 bg-white px-4 py-3 text-sm" />
-                    <p className="mt-2 text-xs text-darb-muted">Images only. Videos are not accepted through this form.</p>
+                    <p className="mt-2 text-xs text-darb-muted">{t("Images only. Videos are not accepted through this form.")}</p>
                   </div>
 
                   <div className="mt-8 flex justify-end">
@@ -1812,10 +1498,10 @@ function Home() {
                       }
                       className="inline-flex min-h-[50px] items-center justify-center rounded-full bg-darb-green px-8 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
                     >
-                      Continue
+                      {t("Continue")}
                       <ArrowRight
                         size={16}
-                        className="ml-2"
+                        className={`ms-2 ${language === "ar" ? "rotate-180" : ""}`}
                       />
                     </button>
                   </div>
@@ -1842,26 +1528,21 @@ function Home() {
                   >
                     <ChevronLeft
                       size={15}
+                      className={language === "ar" ? "rotate-180" : ""}
                     />
-                    Back
+                    {t("Back")}
                   </button>
 
                   <p className="mt-6 text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                    Step Two
+                    {t("Step Two")}
                   </p>
 
                   <h3 className="mt-2 font-display text-4xl leading-tight text-darb-green">
-                    What stayed
-                    with you?
+                    {t("What stayed with you?")}
                   </h3>
 
                   <p className="mt-3 max-w-lg text-sm leading-7 text-darb-muted">
-                    There is no
-                    perfect way to
-                    say it. Share
-                    the scent, the
-                    moment, or the
-                    feeling.
+                    {t("There is no perfect way to say it. Share the scent, the moment, or the feeling.")}
                   </p>
 
                   <div className="mt-6 flex flex-wrap gap-2">
@@ -1872,7 +1553,7 @@ function Home() {
                       ) => (
                         <button
                           key={
-                            prompt.label
+                            t(prompt.label)
                           }
                           type="button"
                           onClick={() =>
@@ -1896,7 +1577,7 @@ function Home() {
                           `}
                         >
                           {
-                            prompt.label
+                            t(prompt.label)
                           }
                         </button>
                       )
@@ -1918,10 +1599,10 @@ function Home() {
                       }
                       autoFocus
                       placeholder={
-                        reviewPrompts[
+                        t(reviewPrompts[
                           activePrompt
                         ]
-                          .placeholder
+                          .placeholder)
                       }
                       className="w-full resize-none rounded-[1.5rem] border border-darb-gold/30 bg-white px-5 py-4 text-base outline-none transition focus:border-darb-green"
                     />
@@ -1954,9 +1635,9 @@ function Home() {
                     >
                       <ArrowLeft
                         size={15}
-                        className="mr-2"
+                        className={`me-2 ${language === "ar" ? "rotate-180" : ""}`}
                       />
-                      Back
+                      {t("Back")}
                     </button>
 
                     <button
@@ -1966,10 +1647,10 @@ function Home() {
                       }
                       className="inline-flex min-h-[50px] items-center justify-center rounded-full bg-darb-green px-7 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
                     >
-                      Continue
+                      {t("Continue")}
                       <ArrowRight
                         size={16}
-                        className="ml-2"
+                        className={`ms-2 ${language === "ar" ? "rotate-180" : ""}`}
                       />
                     </button>
                   </div>
@@ -1996,30 +1677,26 @@ function Home() {
                   >
                     <ChevronLeft
                       size={15}
+                      className={language === "ar" ? "rotate-180" : ""}
                     />
-                    Back
+                    {t("Back")}
                   </button>
 
                   <p className="mt-6 text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                    Step Three
+                    {t("Step Three")}
                   </p>
 
                   <h3 className="mt-2 font-display text-4xl leading-tight text-darb-green">
-                    Ready to leave
-                    your memory?
+                    {t("Ready to leave your memory?")}
                   </h3>
 
                   <p className="mt-3 max-w-lg text-sm leading-7 text-darb-muted">
-                    One last look
-                    before your
-                    review begins
-                    its Darb.
+                    {t("One last look before your review begins its Darb.")}
                   </p>
 
                   <div className="mt-7">
                     <label className="mb-2 block text-sm font-semibold text-darb-green">
-                      Name shown
-                      publicly
+                      {t("Name shown publicly")}
                     </label>
 
                     <input
@@ -2032,7 +1709,7 @@ function Home() {
                       }
                       placeholder={
                         user?.name ||
-                        "Your name"
+                        t("Your name")
                       }
                       className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3.5 outline-none transition focus:border-darb-green"
                     />
@@ -2042,7 +1719,7 @@ function Home() {
 
                   <div className="mt-7 rounded-[1.75rem] border border-darb-gold/25 bg-white p-6">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">
-                      Preview
+                      {t("Preview")}
                     </p>
 
                     <div className="mt-4">
@@ -2066,11 +1743,11 @@ function Home() {
                       <p className="font-display text-xl text-darb-green">
                         {reviewForm.displayName.trim() ||
                           user?.name ||
-                          "Darb Customer"}
+                          t("Darb Customer")}
                       </p>
 
                       <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
-                        {selectedProduct?.name ||
+                        {(language === "ar" && selectedProduct?.arabicName ? selectedProduct.arabicName : selectedProduct?.name) ||
                           "Darb"}
                       </p>
 
@@ -2079,16 +1756,13 @@ function Home() {
                           size={14}
                         />
 
-                        Verified Purchase
+                        {t("Verified Purchase")}
                       </div>
                     </div>
                   </div>
 
                   <p className="mt-4 text-xs leading-6 text-darb-muted">
-                    Your review
-                    will be checked
-                    before appearing
-                    publicly.
+                    {t("Your review will be checked before appearing publicly.")}
                   </p>
 
                   <div className="mt-7 flex items-center justify-between gap-3">
@@ -2110,9 +1784,9 @@ function Home() {
                     >
                       <ArrowLeft
                         size={15}
-                        className="mr-2"
+                        className={`me-2 ${language === "ar" ? "rotate-180" : ""}`}
                       />
-                      Back
+                      {t("Back")}
                     </button>
 
                     <button
@@ -2123,8 +1797,8 @@ function Home() {
                       className="inline-flex min-h-[50px] items-center justify-center rounded-full bg-darb-green px-7 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {reviewMutation.isPending
-                        ? "Submitting..."
-                        : "Submit Review"}
+                        ? t("Submitting...")
+                        : t("Submit Review")}
                     </button>
                   </div>
                 </div>

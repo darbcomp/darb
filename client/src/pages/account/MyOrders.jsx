@@ -25,6 +25,8 @@ import {
   formatCurrency,
 } from "../../utils/formatCurrency";
 import { buildOrderWhatsAppUrl } from "../../utils/whatsapp";
+import { useLanguage } from "../../context/LanguageContext";
+import { LocalizedPublicContent } from "../../components/common/InfoPageShell";
 
 const MAX_PAYMENT_PROOF_SIZE =
   10 * 1024 * 1024;
@@ -104,6 +106,7 @@ const formatDate = (
 function StatusBadge({
   status,
 }) {
+  const { t } = useLanguage();
   return (
     <span
       className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
@@ -113,9 +116,7 @@ function StatusBadge({
         "bg-gray-50 text-gray-700 border-gray-200"
       }`}
     >
-      {formatStatus(
-        status
-      )}
+      {t(formatStatus(status))}
     </span>
   );
 }
@@ -267,7 +268,7 @@ function PaymentProofPanel({
   }
 
   return (
-    <div className="mt-5 rounded-[1.25rem] border border-darb-gold/20 bg-darb-cream/45 p-5">
+    <LocalizedPublicContent><div className="mt-5 rounded-[1.25rem] border border-darb-gold/20 bg-darb-cream/45 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-darb-gold">
@@ -427,11 +428,12 @@ function PaymentProofPanel({
           </div>
         </div>
       )}
-    </div>
+    </div></LocalizedPublicContent>
   );
 }
 
 function MyOrders() {
+  const { language, t } = useLanguage();
   const ordersQuery =
     useQuery({
       queryKey: [
@@ -449,14 +451,14 @@ function MyOrders() {
       ?.data || [];
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-14">
+    <LocalizedPublicContent><section className="mx-auto max-w-7xl px-4 py-14">
       <div className="mb-10 rounded-[2rem] bg-darb-green p-8 text-darb-beige shadow-soft">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-          Account
+          {t("Account")}
         </p>
 
         <h1 className="mt-2 font-display text-5xl">
-          My Orders
+          {t("My Orders")}
         </h1>
 
         <p className="mt-4 max-w-2xl leading-7 text-darb-beige/75">
@@ -506,7 +508,7 @@ function MyOrders() {
             </div>
 
             <h2 className="mt-6 font-display text-3xl text-darb-green">
-              No orders yet
+              {t("No orders yet")}
             </h2>
 
             <p className="mt-3 max-w-2xl leading-7 text-darb-muted">
@@ -522,7 +524,7 @@ function MyOrders() {
               to="/shop"
               className="mt-6 inline-flex rounded-full bg-darb-green px-7 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
             >
-              Shop Darb
+              {t("Shop")}
             </Link>
           </div>
         )}
@@ -635,9 +637,9 @@ function MyOrders() {
                                           .image
                                       }
                                       alt={
-                                        item
-                                          .productSnapshot
-                                          .name
+                                        language === "ar" && item.productSnapshot.arabicName
+                                          ? item.productSnapshot.arabicName
+                                          : item.productSnapshot.name
                                       }
                                       className="h-full w-full object-cover"
                                     />
@@ -649,10 +651,17 @@ function MyOrders() {
                                 </div>
 
                                 <div className="flex-1">
+                                  {(item.productSnapshot?.categoryName || item.productSnapshot?.arabicCategoryName) && (
+                                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-darb-gold">
+                                      {language === "ar" && item.productSnapshot?.arabicCategoryName
+                                        ? item.productSnapshot.arabicCategoryName
+                                        : item.productSnapshot.categoryName}
+                                    </p>
+                                  )}
                                   <p className="font-semibold text-darb-green">
-                                    {item
-                                      .productSnapshot
-                                      ?.name ||
+                                    {(language === "ar" && item.productSnapshot?.arabicName
+                                      ? item.productSnapshot.arabicName
+                                      : item.productSnapshot?.name) ||
                                       "Darb Product"}
                                   </p>
 
@@ -771,7 +780,7 @@ function MyOrders() {
             )}
           </div>
         )}
-    </section>
+    </section></LocalizedPublicContent>
   );
 }
 

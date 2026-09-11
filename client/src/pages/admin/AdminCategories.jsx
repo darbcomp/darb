@@ -15,6 +15,9 @@ import {
   getAdminCategories,
   updateAdminCategory,
 } from "../../api/adminApi";
+import AdminPagination from "../../components/admin/AdminPagination";
+import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const emptyForm = {
   name: "",
@@ -139,6 +142,8 @@ const formatDate = (date) => {
 
 function AdminCategories() {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -146,6 +151,7 @@ function AdminCategories() {
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState(null);
   const [formError, setFormError] = useState("");
+  const editorRef = useAdminEditorReveal(isFormOpen, editingCategory?._id || "new");
 
   const categoriesQuery = useQuery({
     queryKey: ["admin-categories"],
@@ -158,9 +164,11 @@ function AdminCategories() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
       closeForm();
+      notify({ type: "success", title: "Category created" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to create category.");
+      notify({ type: "error", title: "Category was not created", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -170,9 +178,11 @@ function AdminCategories() {
       queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       closeForm();
+      notify({ type: "success", title: "Category updated" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to update category.");
+      notify({ type: "error", title: "Category was not updated", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -181,7 +191,9 @@ function AdminCategories() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      notify({ type: "success", title: "Category deactivated" });
     },
+    onError: (error) => notify({ type: "error", title: "Could not deactivate category", message: error.friendlyMessage || "Please try again." }),
   });
 
   const backendCategories = categoriesQuery.data?.data || [];
@@ -191,6 +203,9 @@ function AdminCategories() {
     const searchText = `${category.name} ${category.slug} ${category.description}`.toLowerCase();
     return searchText.includes(search.trim().toLowerCase());
   });
+  const totalPages = Math.max(1, Math.ceil(filteredCategories.length / 10));
+  const boundedPage = Math.max(1, Math.min(page, totalPages));
+  const visibleCategories = filteredCategories.slice((boundedPage - 1) * 10, boundedPage * 10);
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
@@ -266,10 +281,13 @@ function AdminCategories() {
     createMutation.mutate(payload);
   };
 
-  const handleDeactivate = (category) => {
-    const confirmed = window.confirm(
-      `Deactivate "${category.name}"? Products can stay saved, but this category will be hidden publicly.`
-    );
+  const handleDeactivate = async (category) => {
+    const confirmed = await confirm({
+      title: "Deactivate category?",
+      body: `“${category.name}” will be hidden publicly. Its products and saved data will remain intact.`,
+      confirmLabel: "Deactivate",
+      variant: "destructive",
+    });
 
     if (!confirmed) return;
 
@@ -319,7 +337,7 @@ function AdminCategories() {
 
           <input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             placeholder="Search category name, slug, or description..."
             className="w-full rounded-full border border-darb-gold/30 py-3 pl-11 pr-5 outline-none transition focus:border-darb-green"
           />
@@ -327,7 +345,7 @@ function AdminCategories() {
       </div>
 
       {isFormOpen && (
-        <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <div ref={editorRef} className="mb-8 scroll-mt-32 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -628,7 +646,7 @@ function AdminCategories() {
 
       {!categoriesQuery.isLoading && !categoriesQuery.isError && (
         <div className="admin-record-list border-y border-darb-gold/25">
-          {filteredCategories.map((category) => {
+          {visibleCategories.map((category) => {
             const stats = category.productStats || {
               totalProducts: 0,
               activeProducts: 0,
@@ -731,7 +749,7 @@ function AdminCategories() {
                         type="button"
                         onClick={() => handleDeactivate(category)}
                         disabled={deleteMutation.isPending}
-                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Trash2 size={16} />
                         Deactivate
@@ -744,6 +762,7 @@ function AdminCategories() {
           })}
         </div>
       )}
+      <AdminPagination page={page} pages={totalPages} onPageChange={setPage} />
     </section>
   );
 }

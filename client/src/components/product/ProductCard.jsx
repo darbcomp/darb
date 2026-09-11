@@ -10,7 +10,7 @@ import { localizeProduct } from "../../utils/localizedContent";
 
 function ProductCard({ product: sourceProduct }) {
   const navigate = useNavigate();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const product = localizeProduct(sourceProduct, language);
   const {
     addToCart,
@@ -187,14 +187,14 @@ function ProductCard({ product: sourceProduct }) {
           {product.isBestSeller &&
             !product.isPlaceholder && (
               <span className="rounded-full bg-darb-beige px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-green sm:px-3 sm:text-[10px]">
-                Best Seller
+                {t("Best Seller")}
               </span>
             )}
 
           {product.isNewArrival &&
             !product.isPlaceholder && (
               <span className="rounded-full bg-darb-gold px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-green sm:px-3 sm:text-[10px]">
-                New
+                {t("New")}
               </span>
             )}
 
@@ -202,7 +202,7 @@ function ProductCard({ product: sourceProduct }) {
             !product.isBestSeller &&
             !product.isPlaceholder && (
               <span className="rounded-full bg-darb-green px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-darb-beige sm:px-3 sm:text-[10px]">
-                Featured
+                {t("Featured")}
               </span>
             )}
         </div>
@@ -238,7 +238,7 @@ function ProductCard({ product: sourceProduct }) {
           <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
             {price > 0
               ? formatCurrency(price)
-              : "Unavailable"}
+              : t("Unavailable")}
           </p>
 
           {hasDiscount && (
@@ -251,7 +251,7 @@ function ProductCard({ product: sourceProduct }) {
 
           {stock <= 0 && (
             <p className="mt-1 text-[9px] font-semibold text-darb-muted sm:text-xs">
-              Join waitlist
+              {t("Join waitlist")}
             </p>
           )}
         </div>
@@ -274,12 +274,12 @@ function ProductCard({ product: sourceProduct }) {
           />
 
           {!quickVariant
-            ? "Select Options"
+            ? t("Select Options")
             : atCartLimit
-            ? "Max in Cart"
+            ? t("Max in Cart")
             : canPurchase
-              ? "Add to Cart"
-              : "Unavailable"}
+              ? t("Add to Cart")
+              : t("Unavailable")}
         </button>
       </div>
     </article>

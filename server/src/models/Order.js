@@ -9,9 +9,11 @@ const orderItemSchema = new mongoose.Schema(
     },
     productSnapshot: {
       name: { type: String, required: true },
+      arabicName: { type: String, default: "" },
       slug: { type: String, default: "" },
       image: { type: String, default: "" },
       categoryName: { type: String, default: "" },
+      arabicCategoryName: { type: String, default: "" },
       categorySlug: { type: String, default: "" },
       sizeLabel: { type: String, default: "" },
       sizeMl: { type: Number, default: 0 },

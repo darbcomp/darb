@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useFeedback } from "../../context/FeedbackContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 function Login() {
   const { customerLogin } = useAuth();
+  const { notify } = useFeedback();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -33,9 +37,11 @@ function Login() {
 
     try {
       await customerLogin(formData);
+      notify({ type: "success", title: t("Welcome back") });
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err.friendlyMessage || "Login failed.");
+      notify({ type: "error", title: t("Login failed"), message: err.friendlyMessage || t("Please try again.") });
     } finally {
       setIsSubmitting(false);
     }
@@ -45,11 +51,11 @@ function Login() {
     <section className="mx-auto flex min-h-[70vh] max-w-7xl items-center justify-center px-4 py-14">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
-          Welcome back
+          {t("Welcome back")}
         </p>
-        <h1 className="mt-2 font-display text-4xl text-darb-green">Login</h1>
+        <h1 className="mt-2 font-display text-4xl text-darb-green">{t("Login")}</h1>
         <p className="mt-3 text-darb-muted">
-          Access your Darb account and follow your scent journey.
+          {t("Access your Darb account and follow your scent journey.")}
         </p>
 
         {error && (
@@ -61,7 +67,7 @@ function Login() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Email or Phone
+              {t("Email or Phone")}
             </label>
             <input
               name="identifier"
@@ -75,7 +81,7 @@ function Login() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-darb-green">
-              Password
+              {t("Password")}
             </label>
             <input
               name="password"
@@ -93,14 +99,14 @@ function Login() {
             disabled={isSubmitting}
             className="w-full rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Logging in..." : "Login"}
+            {t(isSubmitting ? "Logging in..." : "Login")}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-darb-muted">
-          No account yet?{" "}
+          {t("No account yet?")}{" "}
           <Link to="/register" className="font-semibold text-darb-green">
-            Create one
+            {t("Create one")}
           </Link>
         </p>
       </div>

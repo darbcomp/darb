@@ -25,6 +25,8 @@ import {
   formatCurrency,
 } from "../../utils/formatCurrency";
 import { buildOrderWhatsAppUrl } from "../../utils/whatsapp";
+import { LocalizedPublicContent } from "../../components/common/InfoPageShell";
+import { useLanguage } from "../../context/LanguageContext";
 
 const MAX_PAYMENT_PROOF_SIZE =
   10 * 1024 * 1024;
@@ -118,6 +120,7 @@ const getTrackedOrder = (
 function StatusBadge({
   status,
 }) {
+  const { t } = useLanguage();
   return (
     <span
       className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
@@ -127,9 +130,7 @@ function StatusBadge({
         "bg-gray-50 text-gray-700 border-gray-200"
       }`}
     >
-      {formatStatus(
-        status
-      )}
+      {t(formatStatus(status))}
     </span>
   );
 }
@@ -302,7 +303,7 @@ function GuestPaymentProofPanel({
   }
 
   return (
-    <div className="mt-6 rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/45 p-5">
+    <LocalizedPublicContent><div className="mt-6 rounded-[1.5rem] border border-darb-gold/20 bg-darb-cream/45 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-darb-gold">
@@ -466,11 +467,12 @@ function GuestPaymentProofPanel({
           </div>
         </div>
       )}
-    </div>
+    </div></LocalizedPublicContent>
   );
 }
 
 function TrackOrder() {
+  const { language } = useLanguage();
   const [
     form,
     setForm,
@@ -610,7 +612,7 @@ function TrackOrder() {
     [];
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-14">
+    <LocalizedPublicContent><section className="mx-auto max-w-6xl px-4 py-14">
       <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -804,9 +806,9 @@ function TrackOrder() {
                                   .image
                               }
                               alt={
-                                item
-                                  .productSnapshot
-                                  .name ||
+                                (language === "ar" && item.productSnapshot.arabicName
+                                  ? item.productSnapshot.arabicName
+                                  : item.productSnapshot.name) ||
                                 "Darb product"
                               }
                               className="h-full w-full object-cover"
@@ -819,10 +821,17 @@ function TrackOrder() {
                         </div>
 
                         <div className="min-w-0 flex-1">
+                          {(item.productSnapshot?.categoryName || item.productSnapshot?.arabicCategoryName) && (
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-darb-gold">
+                              {language === "ar" && item.productSnapshot?.arabicCategoryName
+                                ? item.productSnapshot.arabicCategoryName
+                                : item.productSnapshot.categoryName}
+                            </p>
+                          )}
                           <p className="truncate font-semibold text-darb-green">
-                            {item
-                              .productSnapshot
-                              ?.name ||
+                            {(language === "ar" && item.productSnapshot?.arabicName
+                              ? item.productSnapshot.arabicName
+                              : item.productSnapshot?.name) ||
                               "Darb Product"}
                           </p>
 
@@ -896,7 +905,7 @@ function TrackOrder() {
           )}
         </div>
       </div>
-    </section>
+    </section></LocalizedPublicContent>
   );
 }
 

@@ -6,6 +6,9 @@ import {
   getAdminWaitlist,
   updateAdminWaitlistRequest,
 } from "../../api/adminApi";
+import AdminPagination from "../../components/admin/AdminPagination";
+import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import { useFeedback } from "../../context/FeedbackContext";
 
 const statusOptions = [
   { label: "All statuses", value: "" },
@@ -59,6 +62,8 @@ function SummaryCard({ label, value }) {
 
 function AdminWaitlist() {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const [page, setPage] = useState(1);
 
   const [filters, setFilters] = useState({
     search: "",
@@ -72,17 +77,19 @@ function AdminWaitlist() {
     adminNote: "",
   });
   const [formError, setFormError] = useState("");
+  const editorRef = useAdminEditorReveal(Boolean(editingRequest), editingRequest?._id);
 
   const queryParams = useMemo(() => {
     const params = {
-      limit: 40,
+      page,
+      limit: 10,
     };
 
     if (filters.search.trim()) params.search = filters.search.trim();
     if (filters.status) params.status = filters.status;
 
     return params;
-  }, [filters]);
+  }, [filters, page]);
 
   const waitlistQuery = useQuery({
     queryKey: ["admin-waitlist", queryParams],
@@ -97,9 +104,11 @@ function AdminWaitlist() {
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       closeEditor();
+      notify({ type: "success", title: "Waitlist request updated" });
     },
     onError: (error) => {
       setFormError(error.friendlyMessage || "Failed to update waitlist request.");
+      notify({ type: "error", title: "Request was not updated", message: error.friendlyMessage || "Please try again." });
     },
   });
 
@@ -109,7 +118,9 @@ function AdminWaitlist() {
       queryClient.invalidateQueries({ queryKey: ["admin-waitlist"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
+      notify({ type: "success", title: "Waitlist request cancelled" });
     },
+    onError: (error) => notify({ type: "error", title: "Could not cancel request", message: error.friendlyMessage || "Please try again." }),
   });
 
   const requests = waitlistQuery.data?.data || [];
@@ -130,6 +141,7 @@ function AdminWaitlist() {
       ...current,
       [name]: value,
     }));
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -137,6 +149,7 @@ function AdminWaitlist() {
       search: "",
       status: "",
     });
+    setPage(1);
   };
 
   const openEditor = (request) => {
@@ -186,10 +199,8 @@ function AdminWaitlist() {
     });
   };
 
-  const handleCancelRequest = (request) => {
-    const confirmed = window.confirm(
-      `Cancel waitlist request for ${request.name}?`
-    );
+  const handleCancelRequest = async (request) => {
+    const confirmed = await confirm({ title: "Cancel waitlist request?", body: `Cancel the request for ${request.name}?`, confirmLabel: "Cancel request", variant: "destructive" });
 
     if (!confirmed) return;
 
@@ -269,7 +280,7 @@ function AdminWaitlist() {
       </div>
 
       {editingRequest && (
-        <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <div ref={editorRef} className="mb-8 scroll-mt-32 rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-darb-gold">
@@ -547,7 +558,7 @@ function AdminWaitlist() {
                             type="button"
                             onClick={() => handleCancelRequest(request)}
                             disabled={deleteMutation.isPending}
-                            className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <Trash2 size={16} />
                             Cancel
@@ -560,7 +571,8 @@ function AdminWaitlist() {
               })}
             </div>
           </div>
-        )}
+      )}
+      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
     </section>
   );
 }

@@ -28,7 +28,9 @@ import {
 
 import { useCart } from "../../context/useCart";
 import { useLanguage } from "../../context/LanguageContext";
+import { useFeedback } from "../../context/FeedbackContext";
 import { getSearchSuggestions } from "../../api/productApi";
+import { trackMarketingEvent } from "../../utils/marketingEvents";
 
 
 const categories = [
@@ -108,6 +110,13 @@ const adminSections = [
   ],
 ];
 
+function LanguageSwitch({ language, setLanguage, label }) {
+  return <div className="inline-flex rounded-full border border-darb-gold/40 bg-darb-cream p-1 text-xs font-semibold shadow-sm" role="group" aria-label={label}>
+    <button type="button" onClick={() => setLanguage("en")} aria-pressed={language === "en"} className={`rounded-full px-2.5 py-1.5 transition duration-200 ease-out active:scale-[0.97] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-darb-gold ${language === "en" ? "bg-darb-green text-darb-beige shadow-sm" : "text-darb-green hover:bg-darb-gold/15"}`}>EN</button>
+    <button type="button" onClick={() => setLanguage("ar")} aria-pressed={language === "ar"} className={`rounded-full px-2.5 py-1.5 transition duration-200 ease-out active:scale-[0.97] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-darb-gold ${language === "ar" ? "bg-darb-green text-darb-beige shadow-sm" : "text-darb-green hover:bg-darb-gold/15"}`}>عربي</button>
+  </div>;
+}
+
 function Navbar() {
   const {
     user,
@@ -121,8 +130,10 @@ function Navbar() {
 
   const {
     language,
-    toggleLanguage,
+    setLanguage,
+    t,
   } = useLanguage();
+  const { confirm } = useFeedback();
 
   const location =
     useLocation();
@@ -326,6 +337,8 @@ function Navbar() {
 
     if (!cleanSearch) return;
 
+    trackMarketingEvent("Search", { search_string: cleanSearch });
+
     closeSearch();
 
     navigate(
@@ -337,6 +350,8 @@ function Navbar() {
 
   const handleAdminLogout =
     async () => {
+      const confirmed = await confirm({ title: "Log out?", body: "You’ll need to sign in again to continue.", confirmLabel: "Log out", variant: "destructive" });
+      if (!confirmed) return;
       closeDesktopMenus();
       closeMobileMenu();
 
@@ -350,10 +365,10 @@ function Navbar() {
   const desktopNavClass = ({
     isActive,
   }) =>
-    `relative flex h-full items-center py-3 text-sm font-medium transition-colors ${
+    `relative flex h-full items-center py-3 text-sm font-medium transition-colors duration-200 after:absolute after:bottom-[19px] after:left-1/2 after:h-px after:w-5 after:-translate-x-1/2 after:bg-darb-gold after:transition-transform after:duration-200 after:content-[''] motion-reduce:after:transition-none ${
       isActive
-        ? "text-darb-green"
-        : "text-darb-black/65 hover:text-darb-green"
+        ? "text-darb-green after:scale-x-100"
+        : "text-darb-black/65 after:scale-x-0 hover:text-darb-green hover:after:scale-x-50"
     }`;
 
   const mobileNavClass = ({
@@ -396,25 +411,28 @@ function Navbar() {
             infinite;
         }
 
-        @keyframes darbDrawerEnter {
-          from {
-            transform:
-              translateX(-100%);
-          }
-
-          to {
-            transform:
-              translateX(0);
-          }
+        .darb-nav-menu {
+          opacity: 0;
+          transform: translate(-50%, -0.35rem) scale(0.985);
+          visibility: hidden;
+          pointer-events: none;
+          transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
         }
-
-        .darb-drawer-enter {
-          animation:
-            darbDrawerEnter
-            280ms
-            ease-out
-            forwards;
+        .darb-nav-menu[data-open="true"] {
+          opacity: 1;
+          transform: translate(-50%, 0) scale(1);
+          visibility: visible;
+          pointer-events: auto;
+          transition-delay: 0s;
         }
+        .darb-mobile-layer, .darb-search-layer { opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
+        .darb-mobile-layer[data-open="true"], .darb-search-layer[data-open="true"] { opacity: 1; pointer-events: auto; }
+        .darb-mobile-drawer { transition: transform 240ms cubic-bezier(.22,.75,.25,1); }
+        .darb-mobile-drawer[data-open="false"][data-side="left"] { transform: translateX(-100%); }
+        .darb-mobile-drawer[data-open="false"][data-side="right"] { transform: translateX(100%); }
+        .darb-mobile-drawer[data-open="true"] { transform: translateX(0); }
+        .darb-search-panel { opacity: 0; transform: translateY(-0.5rem) scale(.985); transition: opacity 200ms ease, transform 200ms ease; }
+        .darb-search-layer[data-open="true"] .darb-search-panel { opacity: 1; transform: translateY(0) scale(1); }
 
         .darb-dropdown-scroll {
           scrollbar-width: none;
@@ -439,9 +457,7 @@ function Navbar() {
             animation: none;
           }
 
-          .darb-drawer-enter {
-            animation: none;
-          }
+          .darb-nav-menu, .darb-mobile-layer, .darb-mobile-drawer, .darb-search-layer, .darb-search-panel { transition: none; }
         }
       `}</style>
 
@@ -454,10 +470,10 @@ function Navbar() {
 
         <div
           className="relative h-[29px] overflow-hidden bg-darb-green"
-          aria-label="Announcement"
+          aria-label={t("Announcement")}
         >
           <p className="darb-announcement-motion text-[10px] font-semibold uppercase tracking-[0.32em] text-darb-gold sm:text-[11px]">
-            A SCENT FOR EVERY PATH
+            {t("A SCENT FOR EVERY PATH")}
           </p>
         </div>
 
@@ -475,7 +491,7 @@ function Navbar() {
                 closeDesktopMenus
               }
               className="justify-self-start"
-              aria-label="Darb home"
+              aria-label={t("Darb home")}
             >
               <img
                 src="/images/logo/green.webp"
@@ -501,15 +517,10 @@ function Navbar() {
                   desktopNavClass
                 }
               >
-                {({
-                  isActive,
-                }) => (
+                {() => (
                   <>
-                    Home
+                    {t("Home")}
 
-                    {isActive && (
-                      <span className="absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold" />
-                    )}
                   </>
                 )}
               </NavLink>
@@ -525,15 +536,10 @@ function Navbar() {
                   desktopNavClass
                 }
               >
-                {({
-                  isActive,
-                }) => (
+                {() => (
                   <>
-                    Shop
+                    {t("Shop")}
 
-                    {isActive && (
-                      <span className="absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold" />
-                    )}
                   </>
                 )}
               </NavLink>
@@ -570,7 +576,7 @@ function Navbar() {
                     categoriesOpen
                   }
                 >
-                  Categories
+                  {t("Categories")}
 
                   <ChevronDown
                     size={15}
@@ -584,14 +590,13 @@ function Navbar() {
                     }`}
                   />
 
-                  {categoriesActive && (
-                    <span className="absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold" />
-                  )}
+                  <span className={`absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold transition-transform duration-200 motion-reduce:transition-none ${categoriesActive ? "scale-x-100" : "scale-x-0"}`} />
                 </button>
 
-                {categoriesOpen && (
                   <div
-                    className="absolute left-1/2 top-[66px] w-52 -translate-x-1/2 overflow-hidden rounded-2xl border border-darb-gold/20 bg-darb-cream p-2 shadow-xl"
+                    data-open={categoriesOpen}
+                    aria-hidden={!categoriesOpen}
+                    className="darb-nav-menu absolute left-1/2 top-[66px] w-52 overflow-hidden rounded-2xl border border-darb-gold/20 bg-darb-cream p-2 shadow-xl"
                     role="menu"
                   >
                     {categories.map(
@@ -605,6 +610,7 @@ function Navbar() {
                           to={
                             category.path
                           }
+                          tabIndex={categoriesOpen ? undefined : -1}
                           onClick={
                             closeDesktopMenus
                           }
@@ -619,13 +625,12 @@ function Navbar() {
                           }
                         >
                           {
-                            category.label
+                                    t(category.label)
                           }
                         </NavLink>
                       )
                     )}
                   </div>
-                )}
               </div>
 
               {/* =========================
@@ -673,21 +678,20 @@ function Navbar() {
                       }`}
                     />
 
-                    {adminActive && (
-                      <span className="absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold" />
-                    )}
+                    <span className={`absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold transition-transform duration-200 motion-reduce:transition-none ${adminActive ? "scale-x-100" : "scale-x-0"}`} />
                   </button>
 
-                  {adminOpen && (
                     <div
+                      data-open={adminOpen}
+                      aria-hidden={!adminOpen}
                       className="
                         darb-dropdown-scroll
+                        darb-nav-menu
                         absolute
                         left-1/2
                         top-[66px]
                         max-h-[72vh]
                         w-60
-                        -translate-x-1/2
                         overflow-y-auto
                         rounded-[1.4rem]
                         border
@@ -729,6 +733,7 @@ function Navbar() {
                                     item.path ===
                                     "/admin"
                                   }
+                                  tabIndex={adminOpen ? undefined : -1}
                                   onClick={
                                     closeDesktopMenus
                                   }
@@ -752,7 +757,6 @@ function Navbar() {
                         )
                       )}
                     </div>
-                  )}
                 </div>
               ) : (
                 /* Guest / Customer */
@@ -770,17 +774,10 @@ function Navbar() {
                     desktopNavClass
                   }
                 >
-                  {({
-                    isActive,
-                  }) => (
+                  {() => (
                     <>
-                      {isCustomer
-                        ? "My Orders"
-                        : "Track Order"}
+                      {t(isCustomer ? "My Orders" : "Track Order")}
 
-                      {isActive && (
-                        <span className="absolute bottom-[19px] left-1/2 h-px w-5 -translate-x-1/2 bg-darb-gold" />
-                      )}
                     </>
                   )}
                 </NavLink>
@@ -793,15 +790,7 @@ function Navbar() {
 
             <div className="flex items-center justify-self-end gap-2">
               {!isAdmin && (
-                <button
-                  type="button"
-                  onClick={toggleLanguage}
-                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-darb-gold/35 px-3 text-xs font-bold text-darb-green transition hover:border-darb-green hover:bg-darb-green hover:text-darb-beige"
-                  aria-label={language === "ar" ? "Switch to English" : "Switch to Arabic"}
-                  title={language === "ar" ? "English" : "العربية"}
-                >
-                  {language === "ar" ? "EN" : "ع"}
-                </button>
+                <LanguageSwitch language={language} setLanguage={setLanguage} label={t("Choose language")} />
               )}
 
               {/* Search */}
@@ -812,7 +801,7 @@ function Navbar() {
                   openSearch
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full text-darb-green transition hover:bg-darb-gold/10"
-                aria-label="Search Darb"
+                aria-label={t("Search Darb")}
               >
                 <Search
                   size={19}
@@ -830,7 +819,7 @@ function Navbar() {
                   onClick={
                     handleAdminLogout
                   }
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-darb-gold/35 px-4 text-sm font-semibold text-darb-green transition hover:border-darb-green hover:bg-darb-green hover:text-darb-beige"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-darb-gold/35 px-4 text-sm font-semibold text-darb-green transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                 >
                   <LogOut
                     size={15}
@@ -850,7 +839,7 @@ function Navbar() {
                     closeDesktopMenus
                   }
                   className="flex h-10 w-10 items-center justify-center rounded-full border border-darb-gold/35 text-darb-green transition hover:border-darb-green hover:bg-darb-green hover:text-darb-beige"
-                  aria-label="Account"
+                  aria-label={t("Account")}
                 >
                   <User
                     size={18}
@@ -869,7 +858,7 @@ function Navbar() {
                   }
                   className="px-3 py-2 text-sm font-semibold text-darb-green transition hover:text-darb-black"
                 >
-                  Sign In
+                  {t("Sign In")}
                 </Link>
               )}
 
@@ -882,11 +871,11 @@ function Navbar() {
                   closeDesktopMenus
                 }
                 className="relative flex h-10 w-10 items-center justify-center rounded-full bg-darb-green text-darb-beige transition hover:bg-darb-black"
-                aria-label={`Cart with ${itemCount} item${
+                aria-label={t(`Cart with ${itemCount} item${
                   itemCount === 1
                     ? ""
                     : "s"
-                }`}
+                }`)}
               >
                 <ShoppingBag
                   size={18}
@@ -923,7 +912,7 @@ function Navbar() {
                   openMobileMenu
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full text-darb-green transition active:bg-darb-gold/10"
-                aria-label="Open menu"
+                aria-label={t("Open menu")}
               >
                 <Menu
                   size={23}
@@ -939,7 +928,7 @@ function Navbar() {
                   openSearch
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full text-darb-green transition active:bg-darb-gold/10"
-                aria-label="Search Darb"
+                aria-label={t("Search Darb")}
               >
                 <Search
                   size={21}
@@ -958,7 +947,7 @@ function Navbar() {
                 closeMobileMenu
               }
               className="justify-self-center"
-              aria-label="Darb home"
+              aria-label={t("Darb home")}
             >
               <img
                 src="/images/logo/green.webp"
@@ -976,11 +965,11 @@ function Navbar() {
                 closeMobileMenu
               }
               className="relative flex h-11 w-11 items-center justify-center justify-self-end rounded-full bg-darb-green text-darb-beige transition active:bg-darb-black"
-              aria-label={`Cart with ${itemCount} item${
+              aria-label={t(`Cart with ${itemCount} item${
                 itemCount === 1
                   ? ""
                   : "s"
-              }`}
+              }`)}
             >
               <ShoppingBag
                 size={20}
@@ -1006,18 +995,17 @@ function Navbar() {
           MOBILE DRAWER
       ========================== */}
 
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-[80] md:hidden">
+        <div data-open={mobileMenuOpen} aria-hidden={!mobileMenuOpen} inert={mobileMenuOpen ? undefined : ""} className="darb-mobile-layer fixed inset-0 z-[80] md:hidden">
           <button
             type="button"
-            aria-label="Close menu"
+            aria-label={t("Close menu")}
             onClick={
               closeMobileMenu
             }
             className="absolute inset-0 bg-darb-black/45 backdrop-blur-[1px]"
           />
 
-          <aside className="darb-mobile-drawer darb-drawer-enter absolute left-0 top-0 flex h-full w-[86%] max-w-[350px] flex-col bg-darb-cream shadow-2xl">
+          <aside data-open={mobileMenuOpen} data-side={language === "ar" ? "right" : "left"} className={`darb-mobile-drawer absolute top-0 flex h-full w-[86%] max-w-[350px] flex-col bg-darb-cream shadow-2xl ${language === "ar" ? "right-0" : "left-0"}`}>
             {/* Header */}
 
             <div className="flex items-center justify-between border-b border-darb-gold/20 px-6 py-5">
@@ -1033,7 +1021,7 @@ function Navbar() {
                   closeMobileMenu
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-darb-gold/30 text-darb-green"
-                aria-label="Close menu"
+                aria-label={t("Close menu")}
               >
                 <X
                   size={20}
@@ -1060,7 +1048,7 @@ function Navbar() {
                     mobileNavClass
                   }
                 >
-                  Home
+                  {t("Home")}
                 </NavLink>
 
                 {/* Shop */}
@@ -1074,7 +1062,7 @@ function Navbar() {
                     mobileNavClass
                   }
                 >
-                  Shop
+                  {t("Shop")}
                 </NavLink>
 
                 {/* =========================
@@ -1098,7 +1086,7 @@ function Navbar() {
                         : "text-darb-black/75"
                     }`}
                   >
-                    Categories
+                    {t("Categories")}
 
                     <ChevronDown
                       size={18}
@@ -1140,7 +1128,7 @@ function Navbar() {
                             }
                           >
                             {
-                              category.label
+                              t(category.label)
                             }
                           </NavLink>
                         )
@@ -1243,9 +1231,7 @@ function Navbar() {
                       mobileNavClass
                     }
                   >
-                    {isCustomer
-                      ? "My Orders"
-                      : "Track Order"}
+                    {t(isCustomer ? "My Orders" : "Track Order")}
                   </NavLink>
                 )}
               </nav>
@@ -1253,16 +1239,9 @@ function Navbar() {
               {!isAdmin && (
                 <div className="mt-7 flex items-center justify-between border-y border-darb-gold/15 py-4">
                   <span className="text-sm font-semibold text-darb-green">
-                    Language
+                    {t("Language")}
                   </span>
-                  <button
-                    type="button"
-                    onClick={toggleLanguage}
-                    className="rounded-full border border-darb-gold/35 px-4 py-2 text-sm font-semibold text-darb-green"
-                    aria-label={language === "ar" ? "Switch to English" : "Switch to Arabic"}
-                  >
-                    {language === "ar" ? "English" : "العربية"}
-                  </button>
+                  <LanguageSwitch language={language} setLanguage={setLanguage} label={t("Choose language")} />
                 </div>
               )}
 
@@ -1277,7 +1256,7 @@ function Navbar() {
                     onClick={
                       handleAdminLogout
                     }
-                    className="flex w-full items-center justify-center gap-2 rounded-full border border-darb-gold/35 px-5 py-3.5 text-sm font-semibold text-darb-green transition hover:bg-darb-green hover:text-darb-beige"
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-darb-gold/35 px-5 py-3.5 text-sm font-semibold text-darb-green transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                   >
                     <LogOut
                       size={17}
@@ -1303,7 +1282,7 @@ function Navbar() {
                       }
                     />
 
-                    Account
+                    {t("Account")}
                   </Link>
                 ) : (
                   <Link
@@ -1313,7 +1292,7 @@ function Navbar() {
                     }
                     className="flex items-center justify-center rounded-full bg-darb-green px-5 py-3.5 text-sm font-semibold text-darb-beige"
                   >
-                    Sign In
+                    {t("Sign In")}
                   </Link>
                 )}
               </div>
@@ -1323,39 +1302,37 @@ function Navbar() {
 
             <div className="border-t border-darb-gold/20 px-6 py-5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-darb-gold">
-                A SCENT FOR EVERY PATH
+                {t("A SCENT FOR EVERY PATH")}
               </p>
             </div>
           </aside>
         </div>
-      )}
 
       {/* =========================
           SEARCH OVERLAY
       ========================== */}
 
-      {searchOpen && (
-        <div className="fixed inset-0 z-[90] flex items-start justify-center bg-darb-black/50 px-4 pt-20 backdrop-blur-sm sm:pt-28">
+        <div data-open={searchOpen} aria-hidden={!searchOpen} inert={searchOpen ? undefined : ""} className="darb-search-layer fixed inset-0 z-[90] flex items-start justify-center bg-darb-black/50 px-4 pt-20 backdrop-blur-sm sm:pt-28">
           <button
             type="button"
-            aria-label="Close search"
+            aria-label={t("Close search")}
             onClick={
               closeSearch
             }
             className="absolute inset-0"
           />
 
-          <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-darb-cream shadow-2xl">
+          <div className="darb-search-panel relative z-10 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-darb-cream shadow-2xl">
             {/* Search Header */}
 
             <div className="flex items-center justify-between border-b border-darb-gold/20 px-6 py-5 sm:px-8">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
-                  Find your path
+                  {t("Find your path")}
                 </p>
 
                 <h2 className="mt-1 font-display text-2xl text-darb-green">
-                  Search Darb
+                  {t("Search Darb")}
                 </h2>
               </div>
 
@@ -1365,7 +1342,7 @@ function Navbar() {
                   closeSearch
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-darb-gold/30 text-darb-green transition hover:bg-darb-gold/10"
-                aria-label="Close search"
+                aria-label={t("Close search")}
               >
                 <X
                   size={19}
@@ -1406,30 +1383,30 @@ function Navbar() {
                         .value
                     )
                   }
-                  placeholder="Search fragrances..."
+                  placeholder={t("Search fragrances...")}
                   className="w-full rounded-full border border-darb-gold/35 bg-white py-4 pl-14 pr-5 text-darb-black outline-none transition placeholder:text-darb-muted/70 focus:border-darb-green"
                 />
               </div>
 
               {debouncedSearch.length >= 2 && (
                 <div className="mt-3 max-h-[42vh] overflow-y-auto rounded-3xl border border-darb-gold/20 bg-white p-2" aria-live="polite">
-                  {searchQuery.isFetching && <p className="px-4 py-3 text-sm text-darb-muted">Searching...</p>}
+                  {searchQuery.isFetching && <p className="px-4 py-3 text-sm text-darb-muted">{t("Searching...")}</p>}
                   {!searchQuery.isFetching && searchResults.products.length === 0 && searchResults.categories.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-darb-muted">No matching paths found.</p>
+                    <p className="px-4 py-3 text-sm text-darb-muted">{t("No matching paths found.")}</p>
                   )}
                   {searchResults.categories.map((category) => (
                     <Link key={category._id} to={`/category/${category.slug}`} onClick={closeSearch} className="block rounded-2xl px-4 py-3 text-sm font-semibold text-darb-green hover:bg-darb-cream">
-                      Category · {category.name}
+                      {t("Category")} · {language === "ar" && category.arabicName ? category.arabicName : category.name}
                     </Link>
                   ))}
                   {searchResults.products.map((product) => (
                     <Link key={product._id} to={`/product/${product.slug}`} onClick={closeSearch} className="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-darb-cream">
                       {product.images?.[0]?.url && <img src={product.images[0].url} alt="" className="h-12 w-12 rounded-xl object-cover" />}
-                      <span><span className="block text-sm font-semibold text-darb-green">{product.name}</span><span className="line-clamp-1 text-xs text-darb-muted">{product.shortDescription || product.category?.name}</span></span>
+                      <span><span className="block text-sm font-semibold text-darb-green">{language === "ar" && product.arabicName ? product.arabicName : product.name}</span><span className="line-clamp-1 text-xs text-darb-muted">{language === "ar" ? product.arabicShortDescription || product.category?.arabicName || product.shortDescription || product.category?.name : product.shortDescription || product.category?.name}</span></span>
                     </Link>
                   ))}
                   {(searchResults.products.length > 0 || searchResults.categories.length > 0) && (
-                    <button type="submit" className="mt-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold text-darb-green hover:bg-darb-cream">View all results for “{debouncedSearch}”</button>
+                    <button type="submit" className="mt-1 w-full rounded-2xl px-4 py-3 text-start text-sm font-semibold text-darb-green hover:bg-darb-cream">{t(`View all results for “${debouncedSearch}”`)}</button>
                   )}
                 </div>
               )}
@@ -1438,12 +1415,12 @@ function Navbar() {
                 type="submit"
                 className="mt-4 w-full rounded-full bg-darb-green px-6 py-4 text-sm font-semibold text-darb-beige transition hover:bg-darb-black"
               >
-                Search
+                {t("Search")}
               </button>
 
               <div className="mt-7 border-t border-darb-gold/20 pt-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-darb-gold">
-                  Browse categories
+                  {t("Browse categories")}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -1464,7 +1441,7 @@ function Navbar() {
                         className="rounded-full border border-darb-gold/30 px-4 py-2 text-sm font-medium text-darb-green transition hover:border-darb-green hover:bg-darb-green hover:text-darb-beige"
                       >
                         {
-                          category.label
+                          t(category.label)
                         }
                       </Link>
                     )
@@ -1474,7 +1451,6 @@ function Navbar() {
             </form>
           </div>
         </div>
-      )}
     </>
   );
 }
