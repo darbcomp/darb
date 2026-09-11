@@ -10,10 +10,11 @@ const {
 
 const { protect } = require("../middleware/auth.middleware");
 const { requireAdmin } = require("../middleware/admin.middleware");
+const { waitlistLimiter } = require("../middleware/security.middleware");
 
 const router = express.Router();
 
-router.post("/", createWaitlistRequest);
+router.post("/", waitlistLimiter, createWaitlistRequest);
 
 router.get("/admin", protect, requireAdmin, getAdminWaitlist);
 router.get("/admin/:id", protect, requireAdmin, getAdminWaitlistRequestById);

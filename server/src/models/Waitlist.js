@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
 const waitlistSchema = new mongoose.Schema(
   {
@@ -49,12 +50,16 @@ const waitlistSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 120,
     },
 
     phone: {
       type: String,
       trim: true,
       default: "",
+      maxlength: 12,
+      set: (value) => value ? normalizeEgyptPhone(value) || String(value).trim() : "",
+      validate: { validator: (value) => !value || Boolean(normalizeEgyptPhone(value)), message: "Enter a valid Egyptian mobile number." },
     },
 
     email: {
@@ -62,6 +67,7 @@ const waitlistSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       default: "",
+      maxlength: 254,
     },
 
     status: {
@@ -74,6 +80,7 @@ const waitlistSchema = new mongoose.Schema(
     source: {
       type: String,
       trim: true,
+      enum: ["product_page", "collection_page", "search", "storefront"],
       default: "product_page",
     },
 
@@ -81,6 +88,7 @@ const waitlistSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+      maxlength: 1000,
     },
 
     adminNote: {

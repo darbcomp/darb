@@ -1,3 +1,4 @@
+const { getSafeInternalMessage, sendInternalError } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Coupon = require("../models/Coupon");
 const Product = require("../models/Product");
@@ -668,6 +669,10 @@ const validateCoupon = async (
       });
     }
 
+    if (code.length > 64 || !/^[A-Z0-9_-]+$/.test(code)) {
+      return res.status(400).json({ success: false, message: "Enter a valid coupon code." });
+    }
+
     const coupon =
       await Coupon.findOne({
         code,
@@ -796,12 +801,7 @@ const validateCoupon = async (
       },
     });
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-      message:
-        error.message ||
-        "Failed to validate coupon.",
-    });
+    return sendInternalError(res, error, "Coupon validation failed", "Failed to validate coupon.");
   }
 };
 
@@ -876,8 +876,7 @@ const getAdminCoupons = async (
       success: false,
 
       message:
-        error.message ||
-        "Failed to fetch admin coupons.",
+        getSafeInternalMessage(error, "Failed to fetch admin coupons."),
     });
   }
 };
@@ -911,8 +910,7 @@ const getAdminCouponById = async (
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to fetch coupon.",
+        getSafeInternalMessage(error, "Failed to fetch coupon."),
     });
   }
 };

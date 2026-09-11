@@ -1,6 +1,8 @@
+const { getSafeInternalMessage, sendInternalError } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Waitlist = require("../models/Waitlist");
 const Product = require("../models/Product");
+const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -11,6 +13,17 @@ const allowedStatuses = [
   "converted",
   "cancelled",
 ];
+const allowedSources = ["product_page", "collection_page", "search", "storefront"];
+
+const serializePublicWaitlist = (request) => {
+  const plain = typeof request?.toObject === "function" ? request.toObject() : request || {};
+  return {
+    id: plain._id,
+    productSnapshot: plain.productSnapshot || {},
+    status: plain.status,
+    createdAt: plain.createdAt,
+  };
+};
 
 const escapeRegex = (value = "") => {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -125,14 +138,21 @@ const createWaitlistRequest = async (req, res) => {
       note = "",
     } = req.body;
 
-    if (!name?.trim()) {
+    if (!String(name || "").trim()) {
       return res.status(400).json({
         success: false,
         message: "Name is required.",
       });
     }
 
-    if (!phone?.trim() && !email?.trim()) {
+    if (String(name).trim().length > 120) {
+      return res.status(400).json({ success: false, message: "Name is too long." });
+    }
+    if (String(phone || "").length > 40 || String(email || "").length > 254) {
+      return res.status(400).json({ success: false, message: "Contact information is too long." });
+    }
+
+    if (!String(phone || "").trim() && !String(email || "").trim()) {
       return res.status(400).json({
         success: false,
         message: "Phone or email is required.",
@@ -153,8 +173,20 @@ const createWaitlistRequest = async (req, res) => {
       });
     }
 
-    const cleanPhone = phone?.trim() || "";
-    const cleanEmail = email?.trim().toLowerCase() || "";
+    const cleanPhone = phone ? normalizeEgyptPhone(phone) : "";
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (phone && !cleanPhone) {
+      return res.status(400).json({ success: false, message: "Enter a valid Egyptian mobile number." });
+    }
+    if (cleanEmail && (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+    if (!allowedSources.includes(source)) {
+      return res.status(400).json({ success: false, message: "Invalid waitlist source." });
+    }
+    if (String(note || "").length > 1000) {
+      return res.status(400).json({ success: false, message: "Note is too long." });
+    }
     const snapshot = buildProductSnapshot(foundProduct, {
       productName,
       productSlug,
@@ -167,7 +199,7 @@ const createWaitlistRequest = async (req, res) => {
       $or: [],
     };
 
-    if (cleanPhone) duplicateFilter.$or.push({ phone: cleanPhone });
+    if (cleanPhone) duplicateFilter.$or.push({ phone: { $in: getEgyptPhoneIdentityVariants(cleanPhone) } });
     if (cleanEmail) duplicateFilter.$or.push({ email: cleanEmail });
 
     if (duplicateFilter.$or.length > 0 && snapshot.slug) {
@@ -178,7 +210,7 @@ const createWaitlistRequest = async (req, res) => {
           success: true,
           message:
             "You are already on the waitlist for this product. We will contact you when it is available.",
-          data: existingRequest,
+          data: serializePublicWaitlist(existingRequest),
         });
       }
     }
@@ -186,7 +218,7 @@ const createWaitlistRequest = async (req, res) => {
     const waitlistRequest = await Waitlist.create({
       product: foundProduct?._id || null,
       productSnapshot: snapshot,
-      name: name.trim(),
+      name: String(name).trim(),
       phone: cleanPhone,
       email: cleanEmail,
       status: "waiting",
@@ -198,13 +230,13 @@ const createWaitlistRequest = async (req, res) => {
       success: true,
       message:
         "Waitlist request added successfully. We will contact you when this product is available.",
-      data: waitlistRequest,
+      data: serializePublicWaitlist(waitlistRequest),
     });
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-      message: error.message || "Failed to create waitlist request.",
-    });
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({ success: false, message: "Invalid waitlist request." });
+    }
+    return sendInternalError(res, error, "Waitlist creation failed", "Failed to create waitlist request.");
   }
 };
 
@@ -284,7 +316,7 @@ const getAdminWaitlist = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch waitlist.",
+      message: getSafeInternalMessage(error, "Failed to fetch waitlist."),
     });
   }
 };
@@ -316,7 +348,7 @@ const getAdminWaitlistRequestById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch waitlist request.",
+      message: getSafeInternalMessage(error, "Failed to fetch waitlist request."),
     });
   }
 };
@@ -433,6 +465,7 @@ const deleteAdminWaitlistRequest = async (req, res) => {
 };
 
 module.exports = {
+  serializePublicWaitlist,
   createWaitlistRequest,
   getAdminWaitlist,
   getAdminWaitlistRequestById,

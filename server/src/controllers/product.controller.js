@@ -1,3 +1,4 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 
 const Product = require("../models/Product");
@@ -68,7 +69,11 @@ const getPagination = (query = {}) => {
 
 const getSearchSuggestions = async (req, res) => {
   try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ success: false, message: "Database is unavailable." });
+    }
     const term = String(req.query.q || "").trim();
+    if (term.length > 100) return res.status(400).json({ success: false, message: "Search term is too long." });
     if (term.length < 2) return res.status(200).json({ success: true, data: { products: [], categories: [] } });
     const expression = new RegExp(escapeRegex(term), "i");
     const categories = await Category.find({ isActive: true, $or: [{ name: expression }, { description: expression }] })
@@ -661,15 +666,9 @@ const buildAdminProductFilter = async (query = {}) => {
 const getProducts = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit: Number(req.query.limit) || 12,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -702,7 +701,7 @@ const getProducts = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch products.",
+      message: getSafeInternalMessage(error, "Failed to fetch products."),
     });
   }
 };
@@ -710,9 +709,9 @@ const getProducts = async (req, res) => {
 const getFeaturedProducts = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -739,7 +738,7 @@ const getFeaturedProducts = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch featured products.",
+      message: getSafeInternalMessage(error, "Failed to fetch featured products."),
     });
   }
 };
@@ -747,9 +746,9 @@ const getFeaturedProducts = async (req, res) => {
 const getProductBySlug = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Product not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 
@@ -775,7 +774,7 @@ const getProductBySlug = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch product.",
+      message: getSafeInternalMessage(error, "Failed to fetch product."),
     });
   }
 };
@@ -828,7 +827,7 @@ const getAdminProducts = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch admin products.",
+      message: getSafeInternalMessage(error, "Failed to fetch admin products."),
     });
   }
 };
@@ -862,7 +861,7 @@ const getAdminProductById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch admin product.",
+      message: getSafeInternalMessage(error, "Failed to fetch admin product."),
     });
   }
 };

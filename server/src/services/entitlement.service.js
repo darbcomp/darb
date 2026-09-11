@@ -141,6 +141,7 @@ const restoreEntitlement = (order, session) => {
 };
 
 module.exports = {
+  buildEntitlementOwnerFilter: ownerFilter,
   createFirstOrderEntitlement,
   getAvailableEntitlements,
   findAvailableEntitlementByCode,

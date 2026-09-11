@@ -15,6 +15,7 @@ const { protect } = require("../middleware/auth.middleware");
 const { requireAdmin } = require("../middleware/admin.middleware");
 const { uploadProductImages } = require("../middleware/upload.middleware");
 const { validateProductRequest } = require("../validators/product.validator");
+const { searchSuggestionLimiter } = require("../middleware/security.middleware");
 
 const router = express.Router();
 router.get("/admin", protect, requireAdmin, getAdminProducts);
@@ -24,7 +25,7 @@ router.put("/admin/:id", protect, requireAdmin, uploadProductImages, validatePro
 router.delete("/admin/:id", protect, requireAdmin, deleteProduct);
 router.delete("/admin/:id/image", protect, requireAdmin, deleteProductImage);
 router.get("/featured", getFeaturedProducts);
-router.get("/search/suggestions", getSearchSuggestions);
+router.get("/search/suggestions", searchSuggestionLimiter, getSearchSuggestions);
 router.get("/", getProducts);
 router.get("/:slug", getProductBySlug);
 module.exports = router;

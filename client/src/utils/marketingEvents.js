@@ -2,6 +2,7 @@ import { mirrorMarketingEvent } from "../api/marketingApi";
 
 const trackedOnce = new Set();
 const pendingEvents = [];
+let configurationResolved = false;
 
 let channels = {
   meta: { enabled: false, id: "", ready: false },
@@ -30,10 +31,18 @@ export const getMetaBrowserContext = (eventId = createMarketingEventId()) => {
 };
 
 export const configureMarketingChannels = (nextChannels) => {
-  channels = {
-    meta: { ...channels.meta, ...nextChannels.meta },
-    tiktok: { ...channels.tiktok, ...nextChannels.tiktok },
+  const mergeChannel = (name) => {
+    const previous = channels[name];
+    const next = { ...previous, ...nextChannels[name] };
+    const sameConfiguration = previous.enabled === next.enabled && previous.id === next.id;
+    return { ...next, ready: next.enabled && sameConfiguration ? previous.ready : false };
   };
+  channels = {
+    meta: mergeChannel("meta"),
+    tiktok: mergeChannel("tiktok"),
+  };
+  configurationResolved = true;
+  if (!channels.meta.enabled && !channels.tiktok.enabled) pendingEvents.splice(0);
 };
 
 export const markMarketingChannelReady = (channel, ready = true) => {
@@ -66,10 +75,10 @@ export const normalizeEcommercePayload = ({ items = [], value = 0, contentName =
   };
 };
 
-function deliverMarketingEvent(name, payload, options, eventId) {
+function deliverMarketingEvent(name, payload, options, eventId, targetChannels = ["meta", "tiktok"]) {
   try {
-    if (isMetaReady()) window.fbq("track", name, payload, { eventID: eventId });
-    if (channels.tiktok.enabled && channels.tiktok.ready) window.ttq?.track?.(name, payload);
+    if (targetChannels.includes("meta") && isMetaReady()) window.fbq("track", name, payload, { eventID: eventId });
+    if (targetChannels.includes("tiktok") && channels.tiktok.enabled && channels.tiktok.ready) window.ttq?.track?.(name, payload);
   } catch {
     // Measurement must never interfere with the storefront.
   }
@@ -81,19 +90,46 @@ function deliverMarketingEvent(name, payload, options, eventId) {
 }
 
 export const flushPendingMarketingEvents = () => {
-  const hasReadyChannel = isMetaReady() || (channels.tiktok.enabled && channels.tiktok.ready);
-  if (!hasReadyChannel || !pendingEvents.length) return;
+  if (!pendingEvents.length) return;
   const queued = pendingEvents.splice(0);
-  queued.forEach(({ name, payload, options, eventId }) => deliverMarketingEvent(name, payload, options, eventId));
+  queued.forEach(({ name, payload, options, eventId, targetChannels }) => {
+    const readyTargets = targetChannels.filter((channel) =>
+      channel === "meta" ? isMetaReady() : channels.tiktok.enabled && channels.tiktok.ready
+    );
+    const waitingTargets = targetChannels.filter((channel) => !readyTargets.includes(channel) && channels[channel]?.enabled);
+    if (readyTargets.length) deliverMarketingEvent(name, payload, options, eventId, readyTargets);
+    if (waitingTargets.length) {
+      pendingEvents.push({
+        name,
+        payload,
+        options: readyTargets.length ? { ...options, mirrorMeta: false } : options,
+        eventId,
+        targetChannels: waitingTargets,
+      });
+    }
+  });
 };
 
 export const trackMarketingEvent = (name, payload = {}, options = {}) => {
   const eventId = options.eventId || createMarketingEventId();
 
-  const hasReadyChannel = isMetaReady() || (channels.tiktok.enabled && channels.tiktok.ready);
-  if (hasReadyChannel) deliverMarketingEvent(name, payload, options, eventId);
-  else {
-    pendingEvents.push({ name, payload, options, eventId });
+  if (!configurationResolved) {
+    pendingEvents.push({ name, payload, options, eventId, targetChannels: ["meta", "tiktok"] });
+    if (pendingEvents.length > 100) pendingEvents.shift();
+    return eventId;
+  }
+
+  if (!channels.meta.enabled && !channels.tiktok.enabled) return eventId;
+
+  const enabledChannels = ["meta", "tiktok"].filter((channel) => channels[channel].enabled);
+  const readyChannels = enabledChannels.filter((channel) =>
+    channel === "meta" ? isMetaReady() : channels.tiktok.ready
+  );
+  const waitingChannels = enabledChannels.filter((channel) => !readyChannels.includes(channel));
+
+  deliverMarketingEvent(name, payload, options, eventId, readyChannels);
+  if (waitingChannels.length) {
+    pendingEvents.push({ name, payload, options: { ...options, mirrorMeta: false }, eventId, targetChannels: waitingChannels });
     if (pendingEvents.length > 100) pendingEvents.shift();
   }
 

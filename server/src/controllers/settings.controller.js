@@ -1,3 +1,4 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const StoreSettings = require("../models/StoreSettings");
 
@@ -798,15 +799,10 @@ const getPublicSettings =
         !isDatabaseConnected()
       ) {
         return res
-          .status(200)
+          .status(503)
           .json({
-            success: true,
-
-            message:
-              "Database not connected. Returning default public settings.",
-
-            data:
-              defaultSettings,
+            success: false,
+            message: "Database is unavailable.",
           });
       }
 
@@ -865,8 +861,7 @@ const getPublicSettings =
           success: false,
 
           message:
-            error.message ||
-            "Failed to fetch public settings.",
+            getSafeInternalMessage(error, "Failed to fetch public settings."),
         });
     }
   };
@@ -911,8 +906,7 @@ const getAdminSettings =
           success: false,
 
           message:
-            error.message ||
-            "Failed to fetch admin settings.",
+            getSafeInternalMessage(error, "Failed to fetch admin settings."),
         });
     }
   };

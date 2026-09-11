@@ -5,6 +5,8 @@ const { createFirstOrderEntitlement } = require("../services/entitlement.service
 const { ensureSignupSpinGrant, getUserAvailableSpinCount } = require("../services/spinGrant.service");
 const { cookieSameSite } = require("../middleware/security.middleware");
 const { extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
+const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
+const { sendInternalError } = require("../utils/httpError");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 const authCookieOptions = () => ({
@@ -27,7 +29,7 @@ const publicUser = async (user) => {
     _id: user._id,
     name: user.name,
     email: user.email || "",
-    phone: user.phone || "",
+    phone: formatEgyptPhoneForDisplay(user.phone),
     role: user.role,
     addresses: user.addresses || [],
     spinAvailable,
@@ -51,12 +53,17 @@ const registerCustomer = async (req, res) => {
     const { name, email, phone, password, marketingConsent = false, trackingContext } = req.body;
     const metaContext = extractMetaContext(trackingContext, req);
     if (!name || !password || (!email && !phone)) return res.status(400).json({ success: false, message: "Name, password, and either email or phone are required." });
+    if (String(name).trim().length > 120) return res.status(400).json({ success: false, message: "Name is too long." });
+    if (phone && String(phone).length > 40) return res.status(400).json({ success: false, message: "Phone number is too long." });
     if (String(password).length < 8) return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+    if (String(password).length > 128) return res.status(400).json({ success: false, message: "Password must be 128 characters or fewer." });
     const cleanEmail = email ? String(email).toLowerCase().trim() : undefined;
-    const cleanPhone = phone ? String(phone).trim() : undefined;
+    if (cleanEmail && (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))) return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    const cleanPhone = phone ? normalizeEgyptPhone(phone) : undefined;
+    if (phone && !cleanPhone) return res.status(400).json({ success: false, message: "Enter a valid Egyptian mobile number." });
     const existingUser = await User.findOne({ $or: [
       ...(cleanEmail ? [{ email: cleanEmail }] : []),
-      ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+      ...(cleanPhone ? [{ phone: { $in: getEgyptPhoneIdentityVariants(cleanPhone) } }] : []),
     ] });
     if (existingUser) return res.status(409).json({ success: false, message: "An account with this email or phone already exists." });
     const user = await User.create({
@@ -96,7 +103,8 @@ const registerCustomer = async (req, res) => {
 
     return sendAuthResponse(res, user, "Account created successfully.", metaContext?.eventId || "");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || "Registration failed." });
+    if (error?.code === 11000) return res.status(409).json({ success: false, message: "An account with this email or phone already exists." });
+    return sendInternalError(res, error, "Customer registration failed", "Registration failed.");
   }
 };
 
@@ -106,8 +114,12 @@ const loginCustomer = async (req, res) => {
     const { identifier, email, phone, password } = req.body;
     const loginValue = identifier || email || phone;
     if (!loginValue || !password) return res.status(400).json({ success: false, message: "Email/phone and password are required." });
+    if (String(loginValue).length > 254 || String(password).length > 128) return res.status(400).json({ success: false, message: "Invalid login details." });
     const cleanValue = String(loginValue).trim().toLowerCase();
-    const user = await User.findOne({ role: "customer", isActive: true, $or: [{ email: cleanValue }, { phone: String(loginValue).trim() }] }).select("+password");
+    const normalizedPhone = normalizeEgyptPhone(loginValue);
+    const identities = [{ email: cleanValue }];
+    if (normalizedPhone) identities.push({ phone: { $in: getEgyptPhoneIdentityVariants(normalizedPhone) } });
+    const user = await User.findOne({ role: "customer", isActive: true, $or: identities }).select("+password");
     if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, message: "Invalid login details." });
     user.lastLoginAt = new Date();
     await user.save();
@@ -116,7 +128,7 @@ const loginCustomer = async (req, res) => {
     });
     return sendAuthResponse(res, user, "Logged in successfully.");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || "Login failed." });
+    return sendInternalError(res, error, "Customer login failed", "Login failed.");
   }
 };
 
@@ -126,14 +138,18 @@ const loginAdmin = async (req, res) => {
     const { identifier, email, phone, password } = req.body;
     const loginValue = identifier || email || phone;
     if (!loginValue || !password) return res.status(400).json({ success: false, message: "Email/phone and password are required." });
+    if (String(loginValue).length > 254 || String(password).length > 128) return res.status(400).json({ success: false, message: "Invalid admin login details." });
     const cleanValue = String(loginValue).trim().toLowerCase();
-    const user = await User.findOne({ role: "admin", isActive: true, $or: [{ email: cleanValue }, { phone: String(loginValue).trim() }] }).select("+password");
+    const normalizedPhone = normalizeEgyptPhone(loginValue);
+    const identities = [{ email: cleanValue }];
+    if (normalizedPhone) identities.push({ phone: { $in: getEgyptPhoneIdentityVariants(normalizedPhone) } });
+    const user = await User.findOne({ role: "admin", isActive: true, $or: identities }).select("+password");
     if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, message: "Invalid admin login details." });
     user.lastLoginAt = new Date();
     await user.save();
     return sendAuthResponse(res, user, "Admin logged in successfully.");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || "Admin login failed." });
+    return sendInternalError(res, error, "Admin login failed", "Admin login failed.");
   }
 };
 

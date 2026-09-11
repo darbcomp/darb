@@ -1701,6 +1701,7 @@ function Home() {
 
                     <input
                       name="displayName"
+                      maxLength={80}
                       value={
                         reviewForm.displayName
                       }

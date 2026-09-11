@@ -41,15 +41,43 @@ function installMetaPixel(pixelId) {
 }
 
 function installTikTokPixel(pixelId) {
-  if (!window.ttq) window.ttq = { track: () => {} };
-  if (!document.querySelector('script[data-darb-tiktok-pixel]')) {
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = `https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=${encodeURIComponent(pixelId)}&lib=ttq`;
-    script.dataset.darbTiktokPixel = "true";
-    document.head.appendChild(script);
+  window.TiktokAnalyticsObject = "ttq";
+  const ttq = window.ttq = window.ttq || [];
+  const methods = ["page", "track", "identify", "instances", "debug", "on", "off", "once", "ready", "alias", "group", "enableCookie", "disableCookie", "holdConsent", "revokeConsent", "grantConsent"];
+  ttq.methods = ttq.methods || methods;
+  ttq.setAndDefer = ttq.setAndDefer || ((target, method) => {
+    target[method] = (...args) => target.push([method, ...args]);
+  });
+  methods.forEach((method) => {
+    if (!ttq[method]) ttq.setAndDefer(ttq, method);
+  });
+
+  const script = document.querySelector('script[data-darb-tiktok-pixel]');
+  const markReady = () => {
+    markMarketingChannelReady("tiktok", true);
+    flushPendingMarketingEvents();
+  };
+  if (!script) {
+    const newScript = document.createElement("script");
+    newScript.async = true;
+    newScript.src = `https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=${encodeURIComponent(pixelId)}&lib=ttq`;
+    newScript.dataset.darbTiktokPixel = "true";
+    newScript.dataset.pixelId = pixelId;
+    newScript.addEventListener("load", () => {
+      newScript.dataset.loaded = "true";
+      markReady();
+    }, { once: true });
+    newScript.addEventListener("error", () => markMarketingChannelReady("tiktok", false), { once: true });
+    document.head.appendChild(newScript);
+    return;
   }
-  markMarketingChannelReady("tiktok", true);
+  if (script.dataset.loaded === "true") markReady();
+  else {
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      markReady();
+    }, { once: true });
+  }
 }
 
 export default function MarketingPixels() {
@@ -72,19 +100,21 @@ export default function MarketingPixels() {
   }, [pixels]);
 
   useEffect(() => {
+    if (!settingsQuery.isFetched) return;
     configureMarketingChannels(config);
     if (config.tiktok.enabled) installTikTokPixel(config.tiktok.id);
     if (config.meta.enabled) installMetaPixel(config.meta.id);
     flushPendingMarketingEvents();
-  }, [config]);
+  }, [config, settingsQuery.isFetched]);
 
   useEffect(() => {
+    if (!settingsQuery.isFetched) return;
     if (!config.meta.enabled && !config.tiktok.enabled) return;
     const navigation = `${location.key}:${location.pathname}${location.search}`;
     if (lastPageViewNavigation.current === navigation) return;
     lastPageViewNavigation.current = navigation;
     trackMarketingEvent("PageView", {}, { mirrorMeta: true });
-  }, [config.meta.enabled, config.meta.id, config.tiktok.enabled, config.tiktok.id, location.key, location.pathname, location.search]);
+  }, [config.meta.enabled, config.meta.id, config.tiktok.enabled, config.tiktok.id, location.key, location.pathname, location.search, settingsQuery.isFetched]);
 
   return null;
 }

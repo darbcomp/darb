@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 
 const Order = require("../models/Order");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
+const { sendInternalError } = require("../utils/httpError");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -16,36 +18,6 @@ const normalizeOrderNumber = (value) => {
   }
 
   return clean;
-};
-
-const normalizePhone = (value) => {
-  let digits = String(value || "").replace(
-    /\D/g,
-    ""
-  );
-
-  // +20 10xxxxxxxx
-  // 0020 10xxxxxxxx
-  // 20 10xxxxxxxx
-  // 010xxxxxxxx
-  if (digits.startsWith("0020")) {
-    digits = digits.slice(4);
-  } else if (
-    digits.startsWith("20") &&
-    digits.length >= 12
-  ) {
-    digits = digits.slice(2);
-  }
-
-  // 10xxxxxxxx -> 010xxxxxxxx
-  if (
-    digits.length === 10 &&
-    digits.startsWith("1")
-  ) {
-    digits = `0${digits}`;
-  }
-
-  return digits;
 };
 
 const buildSafeTrackingOrder = (order) => {
@@ -142,7 +114,7 @@ const trackOrder = async (
       );
 
     const phone =
-      normalizePhone(
+      normalizeEgyptPhone(
         req.body.phone
       );
 
@@ -160,9 +132,7 @@ const trackOrder = async (
     }
 
     if (
-      !phone ||
-      phone.length < 10 ||
-      phone.length > 15
+      !phone
     ) {
       return res.status(400).json({
         success: false,
@@ -202,7 +172,7 @@ const trackOrder = async (
         .lean();
 
     const storedPhone =
-      normalizePhone(
+      normalizeEgyptPhone(
         order?.customerSnapshot?.phone
       );
 
@@ -237,13 +207,7 @@ const trackOrder = async (
         ),
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-
-      message:
-        error.message ||
-        "Failed to track order.",
-    });
+    return sendInternalError(res, error, "Order tracking failed", "Failed to track order.");
   }
 };
 

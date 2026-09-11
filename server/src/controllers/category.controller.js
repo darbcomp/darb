@@ -1,8 +1,10 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const slugify = require("../utils/slugify");
+const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -64,10 +66,6 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
   const uploadedImage = await uploadCategoryImage(file, name);
 
   if (uploadedImage) {
-    if (existingCategory?.image?.publicId) {
-      await deletePublicMedia(existingCategory.image.publicId).catch(() => {});
-    }
-
     payload.image = {
       ...uploadedImage,
       alt: body.imageAlt?.trim() || uploadedImage.alt || name,
@@ -93,10 +91,9 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
 const getCategories = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        message: "Database not connected. Returning empty categories.",
-        data: [],
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -113,7 +110,7 @@ const getCategories = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch categories",
+      message: getSafeInternalMessage(error, "Failed to fetch categories"),
     });
   }
 };
@@ -121,9 +118,9 @@ const getCategories = async (req, res) => {
 const getCategoryBySlug = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Category not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 
@@ -148,7 +145,7 @@ const getCategoryBySlug = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch category",
+      message: getSafeInternalMessage(error, "Failed to fetch category"),
     });
   }
 };
@@ -234,7 +231,7 @@ const getAdminCategories = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch admin categories",
+      message: getSafeInternalMessage(error, "Failed to fetch admin categories"),
     });
   }
 };
@@ -295,12 +292,14 @@ const getAdminCategoryById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch category.",
+      message: getSafeInternalMessage(error, "Failed to fetch category."),
     });
   }
 };
 
 const createCategory = async (req, res) => {
+  let uploadedImagePublicId = "";
+  let categoryPersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -311,12 +310,14 @@ const createCategory = async (req, res) => {
     }
 
     const payload = await buildCategoryPayload(req.body, req.file || null);
+    if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
 
     const existingCategory = await Category.findOne({
       $or: [{ slug: payload.slug }, { name: new RegExp(`^${payload.name}$`, "i") }],
     });
 
     if (existingCategory) {
+      if (uploadedImagePublicId) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
       return res.status(409).json({
         success: false,
         message: "A category with this name or slug already exists.",
@@ -324,6 +325,7 @@ const createCategory = async (req, res) => {
     }
 
     const category = await Category.create(payload);
+    categoryPersisted = true;
 
     return res.status(201).json({
       success: true,
@@ -331,6 +333,7 @@ const createCategory = async (req, res) => {
       data: category,
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedImagePublicId, persisted: categoryPersisted })) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
     return res.status(400).json({
       success: false,
       message: error.message || "Failed to create category.",
@@ -339,6 +342,8 @@ const createCategory = async (req, res) => {
 };
 
 const updateCategory = async (req, res) => {
+  let uploadedImagePublicId = "";
+  let categoryPersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -358,6 +363,7 @@ const updateCategory = async (req, res) => {
     }
 
     const payload = await buildCategoryPayload(req.body, req.file || null, category);
+    if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
 
     if (payload.slug) {
       const duplicateCategory = await Category.findOne({
@@ -366,6 +372,7 @@ const updateCategory = async (req, res) => {
       });
 
       if (duplicateCategory) {
+        if (uploadedImagePublicId) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
         return res.status(409).json({
           success: false,
           message: "A category with this slug already exists.",
@@ -373,6 +380,7 @@ const updateCategory = async (req, res) => {
       }
     }
 
+    const previousImagePublicId = category.image?.publicId || "";
     const oldSnapshot = {
       name: category.name,
       slug: category.slug,
@@ -381,6 +389,10 @@ const updateCategory = async (req, res) => {
     Object.assign(category, payload);
 
     const updatedCategory = await category.save();
+    categoryPersisted = true;
+    if (shouldDeleteReplacedMedia({ previousKey: previousImagePublicId, nextKey: updatedCategory.image?.publicId || "", persisted: categoryPersisted })) {
+      await deletePublicMedia(previousImagePublicId).catch(() => {});
+    }
 
     if (
       oldSnapshot.name !== updatedCategory.name ||
@@ -403,6 +415,7 @@ const updateCategory = async (req, res) => {
       data: updatedCategory,
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedImagePublicId, persisted: categoryPersisted })) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
     return res.status(400).json({
       success: false,
       message: error.message || "Failed to update category.",

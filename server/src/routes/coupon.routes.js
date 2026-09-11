@@ -11,10 +11,11 @@ const {
 
 const { protect } = require("../middleware/auth.middleware");
 const { requireAdmin } = require("../middleware/admin.middleware");
+const { couponValidationLimiter } = require("../middleware/security.middleware");
 
 const router = express.Router();
 
-router.post("/validate", validateCoupon);
+router.post("/validate", couponValidationLimiter, validateCoupon);
 
 router.get("/admin", protect, requireAdmin, getAdminCoupons);
 router.get("/admin/:id", protect, requireAdmin, getAdminCouponById);

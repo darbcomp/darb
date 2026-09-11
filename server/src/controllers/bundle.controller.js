@@ -1,8 +1,10 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Bundle = require("../models/Bundle");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
+const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -451,9 +453,9 @@ const populateBundle = (query) =>
 const getPublicBundles = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -473,8 +475,7 @@ const getPublicBundles = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to fetch bundles.",
+        getSafeInternalMessage(error, "Failed to fetch bundles."),
     });
   }
 };
@@ -541,8 +542,7 @@ const getAdminBundles = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to fetch admin bundles.",
+        getSafeInternalMessage(error, "Failed to fetch admin bundles."),
     });
   }
 };
@@ -572,8 +572,7 @@ const getAdminBundleById = async (
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to fetch bundle.",
+        getSafeInternalMessage(error, "Failed to fetch bundle."),
     });
   }
 };
@@ -582,6 +581,8 @@ const createBundle = async (
   req,
   res
 ) => {
+  let uploadedImagePublicId = "";
+  let bundlePersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -591,14 +592,14 @@ const createBundle = async (
       });
     }
 
-    const bundle =
-      await Bundle.create(
-        await buildBundlePayload(
+    const payload = await buildBundlePayload(
           req.body,
           null,
           req.file
-        )
-      );
+        );
+    if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
+    const bundle = await Bundle.create(payload);
+    bundlePersisted = true;
 
     const populated =
       await populateBundle(
@@ -613,6 +614,7 @@ const createBundle = async (
         serializeBundle(populated),
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedImagePublicId, persisted: bundlePersisted })) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
     return res.status(400).json({
       success: false,
       message:
@@ -626,6 +628,8 @@ const updateBundle = async (
   req,
   res
 ) => {
+  let uploadedImagePublicId = "";
+  let bundlePersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -646,17 +650,17 @@ const updateBundle = async (
     }
 
     const previousImagePublicId = bundle.image?.publicId || "";
-    Object.assign(
-      bundle,
-      await buildBundlePayload(
+    const payload = await buildBundlePayload(
         req.body,
         bundle,
         req.file
-      )
-    );
+      );
+    if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
+    Object.assign(bundle, payload);
 
     await bundle.save();
-    if (previousImagePublicId && previousImagePublicId !== bundle.image?.publicId) {
+    bundlePersisted = true;
+    if (shouldDeleteReplacedMedia({ previousKey: previousImagePublicId, nextKey: bundle.image?.publicId, persisted: bundlePersisted })) {
       await deletePublicMedia(previousImagePublicId).catch(() => {});
     }
 
@@ -673,6 +677,7 @@ const updateBundle = async (
         serializeBundle(populated),
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedImagePublicId, persisted: bundlePersisted })) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
     return res.status(400).json({
       success: false,
       message:

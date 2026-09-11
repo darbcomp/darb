@@ -1,3 +1,4 @@
+const { getSafeInternalMessage, sendInternalError } = require("../utils/httpError");
 const mongoose = require("mongoose");
 
 const Order = require("../models/Order");
@@ -29,6 +30,8 @@ const { buildReserveStockOperation, buildRestoreStockOperation } = require("../u
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, findAvailableEntitlementByCode } = require("../services/entitlement.service");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
+const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
+const { normalizeIdempotencyKey, isValidIdempotencyKey, isDuplicateKeyError, isOrderReplayOwner } = require("../utils/idempotency");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -43,6 +46,23 @@ const orderStatuses = [
 ];
 
 const paymentStatuses = ["pending", "paid", "failed", "refunded"];
+
+const isSafeOrderClientError = (error) =>
+  !error?.code && /required|invalid|enter a valid|valid order request|not available|not found|not enough stock|requires a valid|does not have|coupon|reward|guest checkout|payment|sender name|too long|too many order items|already used|usage limit|settings changed/i.test(error?.message || "");
+
+const sendOrderRequestError = (res, error, fallback) =>
+  isSafeOrderClientError(error)
+    ? res.status(400).json({ success: false, message: error.message })
+    : sendInternalError(res, error, "Order request failed", fallback);
+
+const cleanupPaymentProof = async (proof) => {
+  if (!proof) return;
+  try {
+    await deletePaymentProofFromR2(proof);
+  } catch (error) {
+    console.error("Failed to clean up unreferenced payment proof:", error.message);
+  }
+};
 
 const paymentMethodKeys = {
   cash_on_delivery: "cashOnDelivery",
@@ -227,6 +247,7 @@ const validateOrderItems = async (items = [], session = null) => {
   if (!Array.isArray(items) || !items.length) {
     throw new Error("Order items are required.");
   }
+  if (items.length > 50) throw new Error("Too many order items were submitted.");
 
   const validatedItems = [];
 
@@ -339,6 +360,21 @@ const validateCustomerAndAddress = ({ customer, shippingAddress }) => {
   if (!shippingAddress?.street?.trim()) {
     throw new Error("Street address is required.");
   }
+
+  const limits = [
+    [customer.name, 120, "Customer name"],
+    [customer.email, 254, "Customer email"],
+    [shippingAddress.governorate, 80, "Governorate"],
+    [shippingAddress.city, 120, "City"],
+    [shippingAddress.street, 300, "Street address"],
+    [shippingAddress.building, 80, "Building"],
+    [shippingAddress.floor, 40, "Floor"],
+    [shippingAddress.apartment, 40, "Apartment"],
+    [shippingAddress.notes, 1000, "Address notes"],
+  ];
+  for (const [value, max, label] of limits) {
+    if (String(value || "").length > max) throw new Error(`${label} is too long.`);
+  }
 };
 
 const parseOrderCreateBody = (req) => {
@@ -394,8 +430,43 @@ const sanitizeOrderForClient = (order) => {
 
   const plain = typeof order.toObject === "function" ? order.toObject() : { ...order };
   plain.paymentProof = sanitizePaymentProof(plain.paymentProof);
+  if (plain.customerSnapshot?.phone) {
+    plain.customerSnapshot = {
+      ...plain.customerSnapshot,
+      phone: formatEgyptPhoneForDisplay(plain.customerSnapshot.phone),
+    };
+  }
   delete plain.birthday;
+  delete plain.requestId;
+  delete plain.metaPurchaseEventId;
   return plain;
+};
+
+const findOrderByRequestId = (requestId) =>
+  Order.findOne({ requestId }).select("+requestId +metaPurchaseEventId");
+
+const sendOrderReplay = (req, res, order, phone) => {
+  if (!isOrderReplayOwner(order, { userId: req.user?._id || null, phone })) {
+    return res.status(409).json({
+      success: false,
+      message: "This order request ID is already in use. Please start a new checkout attempt.",
+    });
+  }
+  return sendOrderSuccess(res, order, { replay: true });
+};
+
+const sendOrderSuccess = (res, order, { replay = false } = {}) => {
+  const hasProof = order?.paymentProof?.status && order.paymentProof.status !== "not_required";
+  return res.status(replay ? 200 : 201).json({
+    success: true,
+    message: replay
+      ? "Order already created successfully."
+      : hasProof
+        ? "Order created successfully. Your payment proof is awaiting review."
+        : "Order created successfully.",
+    data: sanitizeOrderForClient(order),
+    ...(order?.metaPurchaseEventId ? { metaEventId: order.metaPurchaseEventId } : {}),
+  });
 };
 
 const enforceCouponPerCustomerLimit = async ({
@@ -438,9 +509,10 @@ const enforceCouponPerCustomerLimit = async ({
   }
 
   if (customer.phone?.trim()) {
-    identityConditions.push({
-      "customerSnapshot.phone": customer.phone.trim(),
-    });
+    const phoneVariants = getEgyptPhoneIdentityVariants(customer.phone);
+    if (phoneVariants.length) {
+      identityConditions.push({ "customerSnapshot.phone": { $in: phoneVariants } });
+    }
   }
 
   if (!identityConditions.length) {
@@ -523,10 +595,7 @@ const previewOrder = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-      message: error.message || "Failed to preview order.",
-    });
+    return sendOrderRequestError(res, error, "Failed to preview order.");
   }
 };
 
@@ -541,9 +610,27 @@ const createOrder = async (req, res) => {
   let body;
   let uploadedPaymentProof = null;
   let transactionCommitted = false;
+  let requestId = "";
+  let metaContext = null;
 
   try {
     body = parseOrderCreateBody(req);
+    requestId = normalizeIdempotencyKey(body.requestId);
+    if (!isValidIdempotencyKey(requestId)) {
+      throw new Error("A valid order request ID is required.");
+    }
+    const canonicalPhone = normalizeEgyptPhone(body.customer?.phone);
+    if (String(body.customer?.phone || "").length > 40) throw new Error("Customer phone is too long.");
+    if (!canonicalPhone) throw new Error("Enter a valid Egyptian mobile number.");
+    body.customer = { ...body.customer, phone: canonicalPhone };
+    const existingOrder = await findOrderByRequestId(requestId);
+    if (existingOrder) return sendOrderReplay(req, res, existingOrder, canonicalPhone);
+    if (body.customer.email && (String(body.customer.email).trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.customer.email).trim()))) {
+      throw new Error("Enter a valid customer email address.");
+    }
+    if (String(body.customerNotes || "").length > 1000) throw new Error("Customer notes are too long.");
+    if (String(body.paymentSenderName || "").length > 120) throw new Error("Sender name is too long.");
+    metaContext = extractMetaContext(body.trackingContext, req);
     validateCustomerAndAddress({
       customer: body.customer,
       shippingAddress: body.shippingAddress,
@@ -581,13 +668,10 @@ const createOrder = async (req, res) => {
     }
   } catch (error) {
     if (uploadedPaymentProof) {
-      await deletePaymentProofFromR2(uploadedPaymentProof);
+      await cleanupPaymentProof(uploadedPaymentProof);
     }
 
-    return res.status(400).json({
-      success: false,
-      message: error.message || "Invalid order request.",
-    });
+    return sendOrderRequestError(res, error, "Invalid order request.");
   }
 
   const {
@@ -663,6 +747,8 @@ const createOrder = async (req, res) => {
 
       const order = new Order({
         orderNumber,
+        requestId,
+        metaPurchaseEventId: metaContext?.eventId || "",
         customer: req.user?._id || null,
         customerSnapshot: {
           name: customer.name.trim(),
@@ -753,7 +839,6 @@ const createOrder = async (req, res) => {
       );
     }
 
-    const metaContext = extractMetaContext(body.trackingContext, req);
     if (metaContext) {
       await sendMetaEvent({
         eventName: "Purchase",
@@ -764,23 +849,18 @@ const createOrder = async (req, res) => {
       });
     }
 
-    return res.status(201).json({
-      success: true,
-      message: uploadedPaymentProof
-        ? "Order created successfully. Your payment proof is awaiting review."
-        : "Order created successfully.",
-      data: sanitizeOrderForClient(createdOrder),
-      ...(metaContext ? { metaEventId: metaContext.eventId } : {}),
-    });
+    return sendOrderSuccess(res, createdOrder);
   } catch (error) {
     if (uploadedPaymentProof && !transactionCommitted) {
-      await deletePaymentProofFromR2(uploadedPaymentProof);
+      await cleanupPaymentProof(uploadedPaymentProof);
     }
 
-    return res.status(400).json({
-      success: false,
-      message: error.message || "Failed to create order.",
-    });
+    if (requestId && isDuplicateKeyError(error)) {
+      const existingOrder = await findOrderByRequestId(requestId);
+      if (existingOrder) return sendOrderReplay(req, res, existingOrder, body?.customer?.phone || "");
+    }
+
+    return sendOrderRequestError(res, error, "Failed to create order.");
   } finally {
     if (session) {
       await session.endSession();
@@ -809,7 +889,7 @@ const getMyOrders = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch your orders.",
+      message: getSafeInternalMessage(error, "Failed to fetch your orders."),
     });
   }
 };
@@ -842,7 +922,7 @@ const getMyOrderById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch order.",
+      message: getSafeInternalMessage(error, "Failed to fetch order."),
     });
   }
 };
@@ -927,7 +1007,7 @@ const getAdminOrders = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch admin orders.",
+      message: getSafeInternalMessage(error, "Failed to fetch admin orders."),
     });
   }
 };
@@ -957,7 +1037,7 @@ const getAdminOrderById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch order.",
+      message: getSafeInternalMessage(error, "Failed to fetch order."),
     });
   }
 };

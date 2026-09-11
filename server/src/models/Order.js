@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
+const { isValidIdempotencyKey } = require("../utils/idempotency");
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -51,7 +53,13 @@ const orderItemSchema = new mongoose.Schema(
 const customerSnapshotSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    phone: {
+      type: String,
+      required: true,
+      trim: true,
+      set: normalizeEgyptPhone,
+      validate: { validator: (value) => Boolean(normalizeEgyptPhone(value)), message: "Enter a valid Egyptian mobile number." },
+    },
     email: { type: String, trim: true, lowercase: true, default: "" },
   },
   { _id: false }
@@ -206,6 +214,23 @@ const orderSchema = new mongoose.Schema(
       type: String,
       unique: true,
       index: true,
+    },
+    requestId: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      index: true,
+      select: false,
+      maxlength: 128,
+      validate: { validator: (value) => !value || isValidIdempotencyKey(value), message: "Invalid order request ID." },
+    },
+    metaPurchaseEventId: {
+      type: String,
+      trim: true,
+      default: "",
+      select: false,
+      maxlength: 128,
     },
     customer: {
       type: mongoose.Schema.Types.ObjectId,

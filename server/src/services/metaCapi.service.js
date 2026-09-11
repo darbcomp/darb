@@ -1,4 +1,5 @@
 const { createHash } = require("crypto");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
 const GRAPH_API_VERSION = "v26.0";
 const EVENT_ID_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -6,12 +7,7 @@ const EVENT_ID_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 const cleanString = (value, maxLength = 500) => String(value || "").trim().slice(0, maxLength);
 
 const normalizeEmail = (value) => cleanString(value).toLowerCase();
-const normalizePhone = (value) => {
-  const digits = cleanString(value).replace(/\D/g, "");
-  if (digits.startsWith("00")) return digits.slice(2);
-  if (digits.startsWith("0") && digits.length === 11) return `20${digits.slice(1)}`;
-  return digits;
-};
+const normalizePhone = normalizeEgyptPhone;
 const sha256 = (value) => createHash("sha256").update(String(value)).digest("hex");
 const hashNormalized = (value) => value ? sha256(value) : "";
 

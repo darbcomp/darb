@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
 const addressSchema = new mongoose.Schema({
   label: { type: String, trim: true, default: "Address" },
@@ -16,7 +17,15 @@ const addressSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, trim: true, lowercase: true, unique: true, sparse: true, default: undefined },
-  phone: { type: String, trim: true, unique: true, sparse: true, default: undefined },
+  phone: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true,
+    default: undefined,
+    set: (value) => value ? normalizeEgyptPhone(value) || String(value).trim() : undefined,
+    validate: { validator: (value) => !value || Boolean(normalizeEgyptPhone(value)), message: "Enter a valid Egyptian mobile number." },
+  },
   password: { type: String, required: true, minlength: 6, select: false },
   role: { type: String, enum: ["customer", "admin"], default: "customer", index: true },
   addresses: { type: [addressSchema], default: [] },

@@ -94,6 +94,26 @@ const marketingEventLimiter = makeLimiter({
   limit: 120,
   message: "Too many measurement events. Please try again later.",
 });
+const waitlistLimiter = makeLimiter({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  message: "Too many waitlist requests. Please try again later.",
+});
+const couponValidationLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  message: "Too many coupon checks. Please wait and try again.",
+});
+const orderPreviewLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  message: "Too many checkout previews. Please wait and try again.",
+});
+const searchSuggestionLimiter = makeLimiter({
+  windowMs: 10 * 60 * 1000,
+  limit: 120,
+  message: "Too many searches. Please wait and try again.",
+});
 
 module.exports = {
   cookieSameSite,
@@ -106,4 +126,8 @@ module.exports = {
   guestRewardLimiter,
   orderCreateLimiter,
   marketingEventLimiter,
+  waitlistLimiter,
+  couponValidationLimiter,
+  orderPreviewLimiter,
+  searchSuggestionLimiter,
 };

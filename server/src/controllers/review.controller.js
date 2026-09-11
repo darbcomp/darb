@@ -1,9 +1,12 @@
+const { getSafeInternalMessage, sendInternalError } = require("../utils/httpError");
 const mongoose = require("mongoose");
 
 const Review = require("../models/Review");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
+const { getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
+const { shouldCleanupUploadedMedia } = require("../utils/mediaLifecycle");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -37,6 +40,40 @@ const parseRating = (value) => {
   }
 
   return rating;
+};
+
+const validateCustomerReviewInput = ({ rating, text, displayName } = {}) => {
+  const parsedRating = parseRating(rating);
+  const cleanReviewText = cleanText(text);
+  const cleanDisplayName = cleanText(displayName);
+
+  if (cleanDisplayName.length > 80) {
+    const error = new Error("Display name must be 80 characters or fewer.");
+    error.code = "CUSTOMER_REVIEW_VALIDATION";
+    throw error;
+  }
+  if (cleanReviewText.length < 5) {
+    const error = new Error("Please write a little more about your experience.");
+    error.code = "CUSTOMER_REVIEW_VALIDATION";
+    throw error;
+  }
+  if (cleanReviewText.length > 1200) {
+    const error = new Error("Review text must be 1200 characters or fewer.");
+    error.code = "CUSTOMER_REVIEW_VALIDATION";
+    throw error;
+  }
+
+  return { rating: parsedRating, text: cleanReviewText, displayName: cleanDisplayName };
+};
+
+const getCustomerReviewValidationMessage = (error) => {
+  if (error?.code === "CUSTOMER_REVIEW_VALIDATION" || error?.message === "Rating must be between 1 and 5.") {
+    return error.message;
+  }
+  if (error?.name === "ValidationError") {
+    return "Please check your review details and try again.";
+  }
+  return "";
 };
 
 const getPagination = (
@@ -85,10 +122,8 @@ const buildCustomerIdentityConditions = (
   }
 
   if (user?.phone) {
-    conditions.push({
-      "customerSnapshot.phone":
-        String(user.phone).trim(),
-    });
+    const phoneVariants = getEgyptPhoneIdentityVariants(user.phone);
+    if (phoneVariants.length) conditions.push({ "customerSnapshot.phone": { $in: phoneVariants } });
   }
 
   return conditions;
@@ -108,9 +143,7 @@ const buildEligibleOrderFilter = (
   }
 
   const filter = {
-    orderStatus: {
-      $ne: "cancelled",
-    },
+    orderStatus: "delivered",
 
     $or: identityConditions,
   };
@@ -208,17 +241,9 @@ const getPublicReviews = async (
 ) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit:
-            Number(req.query.limit) ||
-            12,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -308,8 +333,7 @@ const getPublicReviews = async (
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to load reviews.",
+        getSafeInternalMessage(error, "Failed to load reviews."),
     });
   }
 };
@@ -353,9 +377,7 @@ const getReviewEligibility = async (
 
     const orders =
       await Order.find({
-        orderStatus: {
-          $ne: "cancelled",
-        },
+        orderStatus: "delivered",
 
         $or: identityConditions,
       })
@@ -497,8 +519,7 @@ const getReviewEligibility = async (
     return res.status(500).json({
       success: false,
       message:
-        error.message ||
-        "Failed to check review eligibility.",
+        getSafeInternalMessage(error, "Failed to check review eligibility."),
     });
   }
 };
@@ -511,6 +532,8 @@ const createCustomerReview = async (
   req,
   res
 ) => {
+  let uploadedMedia = null;
+  let reviewPersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -546,21 +569,7 @@ const createCustomerReview = async (
       });
     }
 
-    const rating = parseRating(
-      req.body.rating
-    );
-
-    const text = cleanText(
-      req.body.text
-    );
-
-    if (text.length < 5) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Please write a little more about your experience.",
-      });
-    }
+    const { rating, text, displayName } = validateCustomerReviewInput(req.body);
 
     const requestedProductId =
       cleanText(
@@ -624,6 +633,7 @@ const createCustomerReview = async (
     }
 
     const media = await uploadReviewImage(req.file);
+    uploadedMedia = media?.publicId ? media : null;
 
     const review =
       await Review.create({
@@ -636,9 +646,7 @@ const createCustomerReview = async (
           product?._id || null,
 
         displayName:
-          cleanText(
-            req.body.displayName
-          ) ||
+          displayName ||
           cleanText(req.user.name) ||
           "Darb Customer",
 
@@ -658,6 +666,7 @@ const createCustomerReview = async (
         reviewDate: new Date(),
         media,
       });
+    reviewPersisted = true;
 
     return res.status(201).json({
       success: true,
@@ -668,13 +677,10 @@ const createCustomerReview = async (
       data: review,
     });
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-
-      message:
-        error.message ||
-        "Failed to submit review.",
-    });
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedMedia?.publicId, persisted: reviewPersisted })) await deletePublicMedia(uploadedMedia.publicId).catch(() => {});
+    const validationMessage = getCustomerReviewValidationMessage(error);
+    if (validationMessage) return res.status(400).json({ success: false, message: validationMessage });
+    return sendInternalError(res, error, "Customer review submission failed", "Failed to submit review.");
   }
 };
 
@@ -714,8 +720,7 @@ const getMyReview = async (
       success: false,
 
       message:
-        error.message ||
-        "Failed to load your review.",
+        getSafeInternalMessage(error, "Failed to load your review."),
     });
   }
 };
@@ -856,8 +861,7 @@ const getAdminReviews = async (
       success: false,
 
       message:
-        error.message ||
-        "Failed to load admin reviews.",
+        getSafeInternalMessage(error, "Failed to load admin reviews."),
     });
   }
 };
@@ -1348,6 +1352,9 @@ const deleteAdminReview = async (
 };
 
 module.exports = {
+  buildEligibleOrderFilter,
+  validateCustomerReviewInput,
+  getCustomerReviewValidationMessage,
   getPublicReviews,
 
   getReviewEligibility,

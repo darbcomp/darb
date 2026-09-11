@@ -1,3 +1,4 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Offer = require("../models/Offer");
 const Product = require("../models/Product");
@@ -222,9 +223,9 @@ const populateOffer = (query) =>
 const getPublicOffers = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -243,7 +244,7 @@ const getPublicOffers = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch offers.",
+      message: getSafeInternalMessage(error, "Failed to fetch offers."),
     });
   }
 };
@@ -294,7 +295,7 @@ const getAdminOffers = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch admin offers.",
+      message: getSafeInternalMessage(error, "Failed to fetch admin offers."),
     });
   }
 };
@@ -317,7 +318,7 @@ const getAdminOfferById = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to fetch offer.",
+      message: getSafeInternalMessage(error, "Failed to fetch offer."),
     });
   }
 };

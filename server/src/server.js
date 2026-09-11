@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/error.middleware");
 const { ensureCsrfCookie, csrfProtection } = require("./middleware/security.middleware");
+const { buildHealthResponse } = require("./utils/health");
 
 dotenv.config();
 
@@ -35,14 +36,17 @@ app.use(cors({
   credentials: true,
   exposedHeaders: ["x-csrf-token"],
 }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "256kb" }));
+app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 app.use(cookieParser());
 app.use(ensureCsrfCookie);
 app.use(csrfProtection);
 if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
 
-app.get("/api/health", (_req, res) => res.status(200).json({ success: true, message: "Darb API is running", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" }));
+app.get("/api/health", (_req, res) => {
+  const health = buildHealthResponse(mongoose.connection.readyState === 1);
+  return res.status(health.statusCode).json(health.body);
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);

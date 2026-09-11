@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 
 const Order = require("../models/Order");
+const { normalizeEgyptPhone, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
+const { sendInternalError } = require("../utils/httpError");
 
 const {
   uploadPaymentProofToR2,
@@ -12,6 +14,17 @@ const isDatabaseConnected = () =>
 
 const PAYMENT_PROOF_PRIVATE_SELECT =
   "+paymentProof.publicId +paymentProof.assetId +paymentProof.resourceType +paymentProof.deliveryType +paymentProof.format";
+
+const isSafeProofError = (error) =>
+  !error?.code && /order not found|cancelled order|already marked as paid|only be uploaded after|choose a payment screenshot/i.test(error?.message || "");
+
+const sendProofError = (res, error) => {
+  if (isSafeProofError(error)) {
+    const status = error.message === "Order not found." ? 404 : 400;
+    return res.status(status).json({ success: false, message: error.message });
+  }
+  return sendInternalError(res, error, "Payment proof resubmission failed", "Failed to resubmit payment proof.");
+};
 
 const sanitizePaymentProof = (paymentProof) => {
   if (!paymentProof) {
@@ -60,6 +73,13 @@ const sanitizeOrderForClient = (order) => {
     sanitizePaymentProof(
       plain.paymentProof
     );
+
+  if (plain.customerSnapshot?.phone) {
+    plain.customerSnapshot = {
+      ...plain.customerSnapshot,
+      phone: formatEgyptPhoneForDisplay(plain.customerSnapshot.phone),
+    };
+  }
 
   return plain;
 };
@@ -217,11 +237,7 @@ const getGuestPaymentProofStatus =
           .trim()
           .toUpperCase();
 
-      const phone =
-        String(
-          req.body.phone ||
-            ""
-        ).trim();
+      const phone = normalizeEgyptPhone(req.body.phone);
 
       if (
         !orderNumber ||
@@ -237,15 +253,9 @@ const getGuestPaymentProofStatus =
           });
       }
 
-      const order =
-        await Order.findOne({
-          orderNumber,
+      const order = await Order.findOne({ orderNumber }).lean();
 
-          "customerSnapshot.phone":
-            phone,
-        }).lean();
-
-      if (!order) {
+      if (!order || normalizeEgyptPhone(order.customerSnapshot?.phone) !== phone) {
         return res
           .status(404)
           .json({
@@ -284,15 +294,7 @@ const getGuestPaymentProofStatus =
           },
         });
     } catch (error) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-
-          message:
-            error.message ||
-            "Failed to load payment proof status.",
-        });
+      return sendInternalError(res, error, "Payment proof status lookup failed", "Failed to load payment proof status.");
     }
   };
 
@@ -328,11 +330,7 @@ const resubmitGuestPaymentProof =
           .trim()
           .toUpperCase();
 
-      const phone =
-        String(
-          req.body.phone ||
-            ""
-        ).trim();
+      const phone = normalizeEgyptPhone(req.body.phone);
 
       if (
         !orderNumber ||
@@ -354,17 +352,9 @@ const resubmitGuestPaymentProof =
         exact checkout phone.
       */
 
-      const order =
-        await Order.findOne({
-          orderNumber,
+      const order = await Order.findOne({ orderNumber }).select(PAYMENT_PROOF_PRIVATE_SELECT);
 
-          "customerSnapshot.phone":
-            phone,
-        }).select(
-          PAYMENT_PROOF_PRIVATE_SELECT
-        );
-
-      if (!order) {
+      if (!order || normalizeEgyptPhone(order.customerSnapshot?.phone) !== phone) {
         return res
           .status(404)
           .json({
@@ -397,21 +387,7 @@ const resubmitGuestPaymentProof =
             ),
         });
     } catch (error) {
-      const status =
-        error.message ===
-        "Order not found."
-          ? 404
-          : 400;
-
-      return res
-        .status(status)
-        .json({
-          success: false,
-
-          message:
-            error.message ||
-            "Failed to resubmit payment proof.",
-        });
+      return sendProofError(res, error);
     }
   };
 
@@ -481,21 +457,7 @@ const resubmitMyPaymentProof =
             ),
         });
     } catch (error) {
-      const status =
-        error.message ===
-        "Order not found."
-          ? 404
-          : 400;
-
-      return res
-        .status(status)
-        .json({
-          success: false,
-
-          message:
-            error.message ||
-            "Failed to resubmit payment proof.",
-        });
+      return sendProofError(res, error);
     }
   };
 

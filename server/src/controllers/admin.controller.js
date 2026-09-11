@@ -1,3 +1,4 @@
+const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
@@ -308,7 +309,7 @@ const getAdminDashboard = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to load admin dashboard.",
+      message: getSafeInternalMessage(error, "Failed to load admin dashboard."),
     });
   }
 };

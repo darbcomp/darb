@@ -1,3 +1,23 @@
+const multer = require("multer");
+
+const classifyUploadError = (err) => {
+  if (err instanceof multer.MulterError) {
+    const tooLarge = ["LIMIT_FILE_SIZE", "LIMIT_FILE_COUNT", "LIMIT_PART_COUNT"].includes(err.code);
+    const messages = {
+      LIMIT_FILE_SIZE: "The uploaded file is too large.",
+      LIMIT_FILE_COUNT: "Too many files were uploaded.",
+      LIMIT_UNEXPECTED_FILE: "An unexpected file field was uploaded.",
+      LIMIT_PART_COUNT: "Too many form parts were submitted.",
+      LIMIT_FIELD_VALUE: "A form field is too large.",
+    };
+    return { statusCode: tooLarge ? 413 : 400, message: messages[err.code] || "The upload could not be accepted." };
+  }
+  if (err?.code === "UNSUPPORTED_IMAGE_TYPE") {
+    return { statusCode: 400, message: "Only JPG, PNG, and WEBP images are allowed." };
+  }
+  return null;
+};
+
 const notFound = (req, res, next) => {
   const error = new Error(`Route not found - ${req.originalUrl}`);
   res.status(404);
@@ -5,6 +25,11 @@ const notFound = (req, res, next) => {
 };
 
 const errorHandler = (err, _req, res, _next) => {
+  const uploadError = classifyUploadError(err);
+  if (uploadError) {
+    return res.status(uploadError.statusCode).json({ success: false, message: uploadError.message });
+  }
+
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   if (statusCode >= 500) console.error(err);
   const message =
@@ -18,4 +43,4 @@ const errorHandler = (err, _req, res, _next) => {
   });
 };
 
-module.exports = { notFound, errorHandler };
+module.exports = { classifyUploadError, notFound, errorHandler };

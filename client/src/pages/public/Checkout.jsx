@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Copy, ImagePlus, Trash2 } from "lucide-react";
@@ -10,6 +10,7 @@ import { useCart } from "../../context/useCart";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { formatCurrency } from "../../utils/formatCurrency";
+import { createOrderRequestId } from "../../utils/orderRequestId";
 import {
     createMarketingEventId,
     getMetaBrowserContext,
@@ -120,6 +121,7 @@ function Checkout() {
     const [paymentProofError, setPaymentProofError] = useState("");
     const [isProofDragging, setIsProofDragging] = useState(false);
     const [copyStatus, setCopyStatus] = useState("idle");
+    const orderRequestIdRef = useRef(createOrderRequestId());
     const copyResetRef = useRef(null);
     const paymentProofPreview = useMemo(() => (paymentProof ? URL.createObjectURL(paymentProof) : ""), [paymentProof]);
     useEffect(() => {
@@ -130,6 +132,17 @@ function Checkout() {
         };
     }, [paymentProofPreview]);
     useEffect(() => () => window.clearTimeout(copyResetRef.current), []);
+    useEffect(() => {
+        if (!user) return;
+        // Account details arrive asynchronously and should only fill untouched fields.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFormData((current) => ({
+            ...current,
+            name: current.name || user.name || "",
+            email: current.email || user.email || "",
+            phone: current.phone || user.phone || "",
+        }));
+    }, [user]);
     /* =========================
        ORDER ITEMS
     ========================== */
@@ -153,14 +166,16 @@ function Checkout() {
         retry: 1,
     });
     const rewardsQuery = useQuery({ queryKey: ["my-rewards"], queryFn: getMyRewards, enabled: Boolean(user) });
+    const previewPhone = useDeferredValue(formData.phone.trim());
     /* =========================
        ORDER PREVIEW
     ========================== */
     const previewQuery = useQuery({
-        queryKey: ["checkout-preview", checkoutItems, appliedCouponCode, formData.entitlementId, formData.governorate],
+        queryKey: ["checkout-preview", checkoutItems, appliedCouponCode, formData.entitlementId, formData.governorate, previewPhone],
         queryFn: () => previewOrder({
             items: checkoutItems,
             couponCode: appliedCouponCode,
+            customer: { phone: previewPhone },
             shippingAddress: { governorate: formData.governorate },
             entitlementId: formData.entitlementId,
         }),
@@ -287,6 +302,7 @@ function Checkout() {
                 });
             }
             clearCart();
+            orderRequestIdRef.current = createOrderRequestId();
             navigate("/order-success", {
                 replace: true,
                 state: {
@@ -440,6 +456,7 @@ function Checkout() {
             giftMessage: formData.isGift ? formData.giftMessage.trim() : "",
             birthday: formData.birthday || null,
             entitlementId: formData.entitlementId || "",
+            requestId: orderRequestIdRef.current,
             marketingConsent: formData.marketingConsent,
             ...(trackingContext ? { trackingContext } : {}),
         };

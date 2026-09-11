@@ -83,6 +83,13 @@ async function fetchPublic(endpoint) {
   return response.json();
 }
 
+async function verifyApiReadiness() {
+  const health = await fetchPublic("/health");
+  if (health?.success !== true || health?.database !== "connected") {
+    throw new Error("SEO prerender API is not ready.");
+  }
+}
+
 async function fetchProducts() {
   const products = [];
   let page = 1;
@@ -116,6 +123,7 @@ let publicSettings = {};
 
 if (apiUrl) {
   try {
+    await verifyApiReadiness();
     [products, categories, publicSettings] = await Promise.all([
       fetchProducts(),
       fetchPublic("/categories").then((payload) => payload.data || []),
