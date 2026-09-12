@@ -6,6 +6,7 @@ const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/m
 const slugify = require("../utils/slugify");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
 const { preserveOptionalString } = require("../utils/preserveOptionalField");
+const { sanitizePublicCategoryMedia } = require("../utils/mediaResponse");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -74,14 +75,16 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
   } else if (!existingCategory) {
     payload.image = {
       url: body.imageUrl?.trim() || "",
-      publicId: body.imagePublicId?.trim() || "",
+      publicId: "",
       alt: body.imageAlt?.trim() || name,
     };
   } else if (body.imageUrl !== undefined) {
+    const requestedUrl = body.imageUrl?.trim() || existingCategory.image?.url || "";
     payload.image = {
-      url: body.imageUrl?.trim() || existingCategory.image?.url || "",
-      publicId:
-        body.imagePublicId?.trim() || existingCategory.image?.publicId || "",
+      url: requestedUrl,
+      publicId: requestedUrl === existingCategory.image?.url
+        ? existingCategory.image?.publicId || ""
+        : "",
       alt: body.imageAlt?.trim() || existingCategory.image?.alt || name,
     };
   }
@@ -106,7 +109,7 @@ const getCategories = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: categories.length,
-      data: categories,
+      data: categories.map(sanitizePublicCategoryMedia),
     });
   } catch (error) {
     return res.status(500).json({
@@ -141,7 +144,7 @@ const getCategoryBySlug = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: category,
+      data: sanitizePublicCategoryMedia(category),
     });
   } catch (error) {
     return res.status(500).json({
@@ -456,11 +459,9 @@ const deleteCategory = async (req, res) => {
         });
       }
 
-      if (category.image?.publicId) {
-        await deletePublicMedia(category.image.publicId).catch(() => {});
-      }
-
+      const imagePublicId = category.image?.publicId || "";
       await category.deleteOne();
+      if (imagePublicId) await deletePublicMedia(imagePublicId).catch(() => {});
 
       return res.status(200).json({
         success: true,

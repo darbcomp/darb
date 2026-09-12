@@ -15,6 +15,9 @@ const classifyUploadError = (err) => {
   if (err?.code === "UNSUPPORTED_IMAGE_TYPE") {
     return { statusCode: 400, message: "Only JPG, PNG, and WEBP images are allowed." };
   }
+  if (err?.code === "INVALID_IMAGE_DATA") {
+    return { statusCode: 400, message: err.message || "The uploaded image is invalid or corrupt." };
+  }
   return null;
 };
 
@@ -28,6 +31,10 @@ const errorHandler = (err, _req, res, _next) => {
   const uploadError = classifyUploadError(err);
   if (uploadError) {
     return res.status(uploadError.statusCode).json({ success: false, message: uploadError.message });
+  }
+
+  if (Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 500) {
+    return res.status(err.statusCode).json({ success: false, message: err.message || "The request could not be accepted." });
   }
 
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;

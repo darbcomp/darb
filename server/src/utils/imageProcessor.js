@@ -15,6 +15,9 @@ const PRODUCT_MAX_HEIGHT = 1800;
 
 const PRODUCT_WEBP_QUALITY = 85;
 
+const PAYMENT_PROOF_MAX_WIDTH = 3000;
+const PAYMENT_PROOF_MAX_HEIGHT = 3000;
+
 /*
   Protects the server from absurdly
   large/decompression-heavy images.
@@ -23,6 +26,13 @@ const PRODUCT_WEBP_QUALITY = 85;
   Darb actually needs for product photos.
 */
 const MAX_INPUT_PIXELS = 40_000_000;
+
+const createInvalidImageError = (message) => {
+  const error = new Error(message);
+  error.code = "INVALID_IMAGE_DATA";
+  error.statusCode = 400;
+  return error;
+};
 
 /* =========================
    BASIC VALIDATION
@@ -35,7 +45,7 @@ const ensureImageBuffer = (
     !Buffer.isBuffer(buffer) ||
     buffer.length === 0
   ) {
-    throw new Error(
+    throw createInvalidImageError(
       "The uploaded image is empty or invalid."
     );
   }
@@ -72,7 +82,7 @@ const getImageMetadata = async (
         metadata.format
       )
     ) {
-      throw new Error(
+      throw createInvalidImageError(
         "Unsupported image format."
       );
     }
@@ -81,7 +91,7 @@ const getImageMetadata = async (
       !metadata.width ||
       !metadata.height
     ) {
-      throw new Error(
+      throw createInvalidImageError(
         "The uploaded image does not have valid dimensions."
       );
     }
@@ -97,7 +107,7 @@ const getImageMetadata = async (
       throw error;
     }
 
-    throw new Error(
+    throw createInvalidImageError(
       "The uploaded file is not a valid JPG, PNG, or WEBP image."
     );
   }
@@ -204,7 +214,7 @@ const processProductImage =
           metadata.height,
       };
     } catch {
-      throw new Error(
+      throw createInvalidImageError(
         "The product image could not be processed."
       );
     }
@@ -238,6 +248,19 @@ const processPaymentProof =
             MAX_INPUT_PIXELS,
         })
           .rotate()
+
+          .resize({
+            width:
+              PAYMENT_PROOF_MAX_WIDTH,
+
+            height:
+              PAYMENT_PROOF_MAX_HEIGHT,
+
+            fit: "inside",
+
+            withoutEnlargement:
+              true,
+          })
 
           /*
             Lossless because transaction
@@ -289,7 +312,7 @@ const processPaymentProof =
           metadata.height,
       };
     } catch {
-      throw new Error(
+      throw createInvalidImageError(
         "The payment screenshot could not be processed."
       );
     }
@@ -305,6 +328,8 @@ module.exports = {
   PRODUCT_MAX_WIDTH,
   PRODUCT_MAX_HEIGHT,
   PRODUCT_WEBP_QUALITY,
+  PAYMENT_PROOF_MAX_WIDTH,
+  PAYMENT_PROOF_MAX_HEIGHT,
 
   getImageMetadata,
   processProductImage,

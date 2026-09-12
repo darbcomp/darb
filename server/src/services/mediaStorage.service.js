@@ -8,6 +8,9 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { getR2Client, getR2Config } = require("../config/r2");
 const { processProductImage } = require("../utils/imageProcessor");
 
+const PUBLIC_MEDIA_NAMESPACES = new Set(["products", "categories", "bundles", "reviews"]);
+const PRIVATE_MEDIA_NAMESPACES = new Set(["payment-proofs"]);
+
 const sanitizeKeyPart = (value = "media") =>
   String(value)
     .toLowerCase()
@@ -15,7 +18,23 @@ const sanitizeKeyPart = (value = "media") =>
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "media";
 
+const isSafeManagedKey = (key, namespaces) => {
+  const clean = String(key || "");
+  if (!clean || clean !== clean.trim() || clean.includes("\\") || clean.includes("..")) return false;
+  if (!/^[a-z0-9][a-z0-9._/-]*\.webp$/.test(clean)) return false;
+  return namespaces.has(clean.split("/")[0]);
+};
+
+const isManagedPublicMediaKey = (key) => isSafeManagedKey(key, PUBLIC_MEDIA_NAMESPACES);
+const isManagedPrivateMediaKey = (key) => isSafeManagedKey(key, PRIVATE_MEDIA_NAMESPACES);
+
+const buildPublicMediaKey = ({ folder, baseName, id = randomUUID() } = {}) => {
+  const safeFolder = String(folder || "media").split("/").map(sanitizeKeyPart).join("/");
+  return `${safeFolder}/${sanitizeKeyPart(baseName || "image")}-${sanitizeKeyPart(id)}.webp`;
+};
+
 const publicUrlForKey = (key) => {
+  if (!isManagedPublicMediaKey(key)) throw new Error("Invalid public media key.");
   const { publicBaseUrl } = getR2Config();
   const encoded = String(key)
     .split("/")
@@ -25,6 +44,9 @@ const publicUrlForKey = (key) => {
 };
 
 const putPublicObject = async ({ buffer, key, contentType = "image/webp", cacheControl = "public, max-age=31536000, immutable" }) => {
+  if (!isManagedPublicMediaKey(key) || contentType !== "image/webp") {
+    throw new Error("Invalid public media object.");
+  }
   const { publicBucket } = getR2Config();
   await getR2Client().send(new PutObjectCommand({
     Bucket: publicBucket,
@@ -42,6 +64,9 @@ const putPublicObject = async ({ buffer, key, contentType = "image/webp", cacheC
 };
 
 const putPrivateObject = async ({ buffer, key, contentType = "image/webp" }) => {
+  if (!isManagedPrivateMediaKey(key) || contentType !== "image/webp") {
+    throw new Error("Invalid private media object.");
+  }
   const { privateBucket } = getR2Config();
   await getR2Client().send(new PutObjectCommand({
     Bucket: privateBucket,
@@ -54,19 +79,21 @@ const putPrivateObject = async ({ buffer, key, contentType = "image/webp" }) => 
 };
 
 const deletePublicMedia = async (key) => {
-  if (!key) return;
+  if (!isManagedPublicMediaKey(key)) return false;
   const { publicBucket } = getR2Config();
   await getR2Client().send(new DeleteObjectCommand({ Bucket: publicBucket, Key: key }));
+  return true;
 };
 
 const deletePrivateMedia = async (key) => {
-  if (!key) return;
+  if (!isManagedPrivateMediaKey(key)) return false;
   const { privateBucket } = getR2Config();
   await getR2Client().send(new DeleteObjectCommand({ Bucket: privateBucket, Key: key }));
+  return true;
 };
 
 const getPrivateMediaUrl = async (key, expiresIn = 300) => {
-  if (!key) throw new Error("Private media key is required.");
+  if (!isManagedPrivateMediaKey(key)) throw new Error("Private media file is unavailable.");
   const { privateBucket } = getR2Config();
   const command = new GetObjectCommand({ Bucket: privateBucket, Key: key });
   return getSignedUrl(getR2Client(), command, {
@@ -77,8 +104,8 @@ const getPrivateMediaUrl = async (key, expiresIn = 300) => {
 const uploadOptimizedPublicImage = async (file, { folder, baseName, alt = "Darb image" } = {}) => {
   if (!file?.buffer) throw new Error("Image file is required.");
   const processed = await processProductImage(file.buffer);
-  const safeFolder = String(folder || "media").split("/").map(sanitizeKeyPart).join("/");
-  const key = `${safeFolder}/${sanitizeKeyPart(baseName || "image")}-${randomUUID()}.webp`;
+  const key = buildPublicMediaKey({ folder, baseName });
+  if (!isManagedPublicMediaKey(key)) throw new Error("Invalid public media namespace.");
   const stored = await putPublicObject({
     buffer: processed.buffer,
     key,
@@ -95,6 +122,9 @@ const uploadOptimizedPublicImage = async (file, { folder, baseName, alt = "Darb 
 
 module.exports = {
   sanitizeKeyPart,
+  buildPublicMediaKey,
+  isManagedPublicMediaKey,
+  isManagedPrivateMediaKey,
   publicUrlForKey,
   putPublicObject,
   putPrivateObject,

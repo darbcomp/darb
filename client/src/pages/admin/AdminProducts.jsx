@@ -1613,7 +1613,7 @@ function AdminProducts() {
                 <ImagePlus size={30} className="text-darb-green" />
                 <span className="mt-3 font-display text-2xl text-darb-green">Drop product images here</span>
                 <span className="mt-1 text-sm text-darb-muted">or <span className="font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">Browse files</span></span>
-                <span className="mt-3 text-xs text-darb-muted">JPG / PNG / WEBP · up to {MAX_IMAGES}</span>
+                <span className="mt-3 text-xs text-darb-muted">JPG / PNG / WEBP · 5 MB per file · up to {MAX_IMAGES}</span>
                 <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handleImageChange} className="sr-only" />
               </label>}
 

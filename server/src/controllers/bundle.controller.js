@@ -5,6 +5,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
+const { sanitizePublicBundleMedia } = require("../utils/mediaResponse");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -469,7 +470,7 @@ const getPublicBundles = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: bundles.length,
-      data: bundles.map(serializeBundle),
+      data: bundles.map((bundle) => sanitizePublicBundleMedia(serializeBundle(bundle))),
     });
   } catch (error) {
     return res.status(500).json({

@@ -14,6 +14,13 @@ const getSafeInternalMessage = (error, fallback = INTERNAL_ERROR_MESSAGE, contex
 };
 
 const sendInternalError = (res, error, context, fallback) => {
+  if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+    return res.status(error.statusCode).json({
+      success: false,
+      message: error.message || "The request could not be accepted.",
+    });
+  }
+
   return res.status(500).json({
     success: false,
     message: getSafeInternalMessage(error, fallback, context),

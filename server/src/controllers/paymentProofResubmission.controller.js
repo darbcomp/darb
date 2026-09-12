@@ -4,6 +4,7 @@ const Order = require("../models/Order");
 const { normalizeEgyptPhone, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
 const { sendInternalError } = require("../utils/httpError");
 const { sendPaymentProofSubmittedEmails } = require("../services/transactionalEmail.service");
+const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse");
 
 const {
   uploadPaymentProofToR2,
@@ -27,39 +28,6 @@ const sendProofError = (res, error) => {
   return sendInternalError(res, error, "Payment proof resubmission failed", "Failed to resubmit payment proof.");
 };
 
-const sanitizePaymentProof = (paymentProof) => {
-  if (!paymentProof) {
-    return {
-      status: "not_required",
-    };
-  }
-
-  return {
-    status: paymentProof.status || "not_required",
-
-    originalName:
-      paymentProof.originalName || "",
-
-    bytes:
-      Number(paymentProof.bytes) || 0,
-
-    width:
-      Number(paymentProof.width) || 0,
-
-    height:
-      Number(paymentProof.height) || 0,
-
-    uploadedAt:
-      paymentProof.uploadedAt || null,
-
-    reviewedAt:
-      paymentProof.reviewedAt || null,
-
-    rejectionReason:
-      paymentProof.rejectionReason || "",
-  };
-};
-
 const sanitizeOrderForClient = (order) => {
   if (!order) {
     return order;
@@ -71,7 +39,7 @@ const sanitizeOrderForClient = (order) => {
       : { ...order };
 
   plain.paymentProof =
-    sanitizePaymentProof(
+    sanitizePaymentProofForClient(
       plain.paymentProof
     );
 
@@ -291,7 +259,7 @@ const getGuestPaymentProofStatus =
               order.total,
 
             paymentProof:
-              sanitizePaymentProof(
+              sanitizePaymentProofForClient(
                 order.paymentProof
               ),
           },

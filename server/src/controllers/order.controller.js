@@ -29,6 +29,7 @@ const {
   decrementDiscountUsage,
 } = require("../utils/calculateCart");
 const { findProductVariant } = require("../utils/productVariants");
+const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse");
 const { getGovernorateDeliveryFee } = require("../utils/shipping");
 const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, resolveEntitlementCodeForCheckout } = require("../services/entitlement.service");
@@ -433,33 +434,13 @@ const parseOrderCreateBody = (req) => {
   return req.body || {};
 };
 
-const sanitizePaymentProof = (paymentProof) => {
-  if (!paymentProof) {
-    return {
-      status: "not_required",
-    };
-  }
-
-  return {
-    status: paymentProof.status || "not_required",
-    originalName: paymentProof.originalName || "",
-    bytes: Number(paymentProof.bytes) || 0,
-    width: Number(paymentProof.width) || 0,
-    height: Number(paymentProof.height) || 0,
-    uploadedAt: paymentProof.uploadedAt || null,
-    reviewedAt: paymentProof.reviewedAt || null,
-    rejectionReason: paymentProof.rejectionReason || "",
-    senderName: paymentProof.senderName || "",
-  };
-};
-
 const sanitizeOrderForClient = (order) => {
   if (!order) {
     return order;
   }
 
   const plain = typeof order.toObject === "function" ? order.toObject() : { ...order };
-  plain.paymentProof = sanitizePaymentProof(plain.paymentProof);
+  plain.paymentProof = sanitizePaymentProofForClient(plain.paymentProof, { includeSenderName: true });
   if (plain.customerSnapshot?.phone) {
     plain.customerSnapshot = {
       ...plain.customerSnapshot,

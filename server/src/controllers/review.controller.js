@@ -7,6 +7,7 @@ const Product = require("../models/Product");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const { getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
+const { sanitizePublicReviewMedia } = require("../utils/mediaResponse");
 const {
   assertCustomerReviewUpdateAllowed,
   assertNoDirectVerificationFlag,
@@ -238,7 +239,7 @@ const serializePublicReview = (
       review.reviewDate,
 
     createdAt: review.createdAt,
-    media: review.media || { type: "none", url: "" },
+    media: sanitizePublicReviewMedia(review.media),
   };
 };
 

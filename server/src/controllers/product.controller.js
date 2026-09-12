@@ -6,6 +6,7 @@ const Category = require("../models/Category");
 const slugify = require("../utils/slugify");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const { preserveOptionalBoolean, preserveOptionalString } = require("../utils/preserveOptionalField");
+const { sanitizePublicProductMedia, sanitizePublicCategoryMedia } = require("../utils/mediaResponse");
 
 const MAX_PRODUCT_IMAGES = 10;
 
@@ -91,7 +92,13 @@ const getSearchSuggestions = async (req, res) => {
       ],
     }).select("name arabicName slug shortDescription arabicShortDescription price compareAtPrice stock images category categories variants size sizeMl")
       .populate("category", "name arabicName slug").populate("categories", "name arabicName slug").limit(8).lean();
-    return res.status(200).json({ success: true, data: { products, categories } });
+    return res.status(200).json({
+      success: true,
+      data: {
+        products: products.map(sanitizePublicProductMedia),
+        categories: categories.map(sanitizePublicCategoryMedia),
+      },
+    });
   } catch {
     return res.status(500).json({ success: false, message: "Search is temporarily unavailable." });
   }
@@ -132,7 +139,7 @@ const destroyStoredImage = async (key) => {
   try {
     await deletePublicMedia(key);
   } catch (error) {
-    console.error(`R2 cleanup failed for ${key}:`, error.message);
+    console.error("R2 public-media cleanup failed:", error.message);
   }
 };
 
@@ -693,7 +700,7 @@ const getProducts = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: products.length,
-      data: products,
+      data: products.map(sanitizePublicProductMedia),
       pagination: {
         page,
         limit,
@@ -736,7 +743,7 @@ const getFeaturedProducts = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: products.length,
-      data: products,
+      data: products.map(sanitizePublicProductMedia),
     });
   } catch (error) {
     return res.status(500).json({
@@ -772,7 +779,7 @@ const getProductBySlug = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: product,
+      data: sanitizePublicProductMedia(product),
     });
   } catch (error) {
     return res.status(500).json({

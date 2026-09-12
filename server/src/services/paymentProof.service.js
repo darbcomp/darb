@@ -8,10 +8,13 @@ const {
 
 const PAYMENT_PROOF_URL_TTL_SECONDS = 5 * 60;
 
+const buildPaymentProofKey = ({ now = new Date(), id = randomUUID() } = {}) =>
+  `payment-proofs/${now.toISOString().slice(0, 10)}/proof-${now.getTime()}-${id}.webp`;
+
 const uploadPaymentProofToR2 = async (file) => {
   if (!file?.buffer) throw new Error("Payment proof image is required.");
   const processed = await processPaymentProof(file.buffer);
-  const key = `payment-proofs/${new Date().toISOString().slice(0, 10)}/proof-${Date.now()}-${randomUUID()}.webp`;
+  const key = buildPaymentProofKey();
   const stored = await putPrivateObject({
     buffer: processed.buffer,
     key,
@@ -41,7 +44,7 @@ const deletePaymentProofFromR2 = async (proof) => {
   try {
     await deletePrivateMedia(key);
   } catch (error) {
-    console.error(`R2 payment-proof cleanup failed for ${key}:`, error.message);
+    console.error("R2 payment-proof cleanup failed:", error.message);
   }
 };
 
@@ -53,6 +56,7 @@ const getPaymentProofTemporaryUrl = (proof, ttlSeconds = PAYMENT_PROOF_URL_TTL_S
 
 module.exports = {
   PAYMENT_PROOF_URL_TTL_SECONDS,
+  buildPaymentProofKey,
   uploadPaymentProofToR2,
   deletePaymentProofFromR2,
   getPaymentProofTemporaryUrl,

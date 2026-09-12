@@ -19,6 +19,9 @@ import AdminPagination from "../../components/admin/AdminPagination";
 import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
 import { useFeedback } from "../../context/FeedbackContext";
 
+const MAX_CATEGORY_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_CATEGORY_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 const emptyForm = {
   name: "",
   arabicName: "",
@@ -244,7 +247,19 @@ function AdminCategories() {
   };
 
   const handleImageChange = (event) => {
-    setImageFile(event.target.files?.[0] || null);
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+    if (!file) return;
+    if (!ALLOWED_CATEGORY_IMAGE_TYPES.has(file.type)) {
+      setFormError("Category image must be JPG, PNG or WebP.");
+      return;
+    }
+    if (file.size > MAX_CATEGORY_IMAGE_SIZE) {
+      setFormError("Category image must be 5 MB or smaller.");
+      return;
+    }
+    setFormError("");
+    setImageFile(file);
   };
 
   const validateForm = () => {
@@ -490,12 +505,12 @@ function AdminCategories() {
                     Upload category image
                   </span>
                   <span className="mt-1 text-sm text-darb-muted">
-                    JPG, PNG, WEBP
+                    JPG, PNG or WebP · 5 MB max
                   </span>
 
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
                     onChange={handleImageChange}
                     className="hidden"
                   />
