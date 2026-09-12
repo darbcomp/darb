@@ -9,6 +9,7 @@ import {
 } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
 import AdminPagination from "../../components/admin/AdminPagination";
+import AdminEntitySelector from "../../components/admin/AdminEntitySelector";
 import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
 import { useFeedback } from "../../context/FeedbackContext";
 
@@ -20,9 +21,9 @@ const emptyForm = {
   arabicDescription: "",
   bundleType: "any_products",
   requiredQuantity: "2",
-  specificItems: "",
-  allowedProducts: "",
-  allowedCategories: "",
+  specificItems: [],
+  allowedProducts: [],
+  allowedCategories: [],
   discountType: "percentage",
   discountValue: "",
   fixedBundlePrice: "",
@@ -81,53 +82,16 @@ const formatDateInput = (date) => {
   return parsedDate.toISOString().slice(0, 10);
 };
 
-const splitCommaText = (value = "") => {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
+const relatedItemsToValues = (items = []) => Array.isArray(items)
+  ? items.map((item) => String(item?._id || item || "")).filter(Boolean)
+  : [];
 
-const relatedItemsToText = (items = []) => {
-  if (!Array.isArray(items)) return "";
-
-  return items
-    .map((item) => item.slug || item.sku || item.name || item._id)
-    .filter(Boolean)
-    .join(", ");
-};
-
-const specificItemsToText = (items = []) => {
-  if (!Array.isArray(items)) return "";
-
-  return items
-    .map((item) => {
-      const product = item.product;
-      const productRef =
-        product?.slug || product?.sku || product?.name || product?._id || product;
-
-      if (!productRef) return "";
-
-      return `${productRef}:${item.quantity || 1}`;
-    })
-    .filter(Boolean)
-    .join(", ");
-};
-
-const parseSpecificItems = (value = "") => {
-  return splitCommaText(value)
-    .map((item) => {
-      const [product, quantity] = item.split(":").map((part) => part.trim());
-
-      if (!product) return null;
-
-      return {
-        product,
-        quantity: Number(quantity) || 1,
-      };
-    })
-    .filter(Boolean);
-};
+const specificItemsToRows = (items = []) => Array.isArray(items)
+  ? items.map((item) => ({
+      product: String(item.product?._id || item.product || ""),
+      quantity: item.quantity || 1,
+    })).filter((item) => item.product)
+  : [];
 
 const bundleToForm = (bundle) => {
   return {
@@ -138,11 +102,12 @@ const bundleToForm = (bundle) => {
     arabicDescription: bundle.arabicDescription || "",
     bundleType: bundle.bundleType || "any_products",
     requiredQuantity: bundle.requiredQuantity || "2",
-    specificItems: specificItemsToText(bundle.specificItems),
-    allowedProducts: relatedItemsToText(bundle.allowedProducts),
+    specificItems: specificItemsToRows(bundle.specificItems),
+    allowedProducts: relatedItemsToValues(bundle.allowedProducts),
     allowedCategories:
-      relatedItemsToText(bundle.allowedCategories) ||
-      relatedItemsToText(bundle.categories),
+      relatedItemsToValues(bundle.allowedCategories).length
+        ? relatedItemsToValues(bundle.allowedCategories)
+        : relatedItemsToValues(bundle.categories),
     discountType: bundle.discountType || "percentage",
     discountValue: bundle.discountValue || "",
     fixedBundlePrice: bundle.fixedBundlePrice || "",
@@ -170,10 +135,10 @@ const createPayload = (form) => {
     arabicDescription: form.arabicDescription.trim(),
     bundleType: form.bundleType,
     requiredQuantity: Number(form.requiredQuantity) || 2,
-    specificItems: parseSpecificItems(form.specificItems),
-    allowedProducts: splitCommaText(form.allowedProducts),
-    allowedCategories: splitCommaText(form.allowedCategories),
-    categories: splitCommaText(form.allowedCategories),
+    specificItems: form.specificItems.filter((item) => item.product).map((item) => ({ product: item.product, quantity: Number(item.quantity) || 1 })),
+    allowedProducts: form.allowedProducts,
+    allowedCategories: form.allowedCategories,
+    categories: form.allowedCategories,
     discountType: form.discountType,
     discountValue: Number(form.discountValue) || 0,
     fixedBundlePrice: Number(form.fixedBundlePrice) || 0,
@@ -346,6 +311,29 @@ function AdminBundles() {
     }));
   };
 
+  const addSpecificItem = () => {
+    setForm((current) => ({
+      ...current,
+      specificItems: [...current.specificItems, { product: "", quantity: 1 }],
+    }));
+  };
+
+  const updateSpecificItem = (index, changes) => {
+    setForm((current) => ({
+      ...current,
+      specificItems: current.specificItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...changes } : item
+      ),
+    }));
+  };
+
+  const removeSpecificItem = (index) => {
+    setForm((current) => ({
+      ...current,
+      specificItems: current.specificItems.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
   const selectBundleImage = (file) => {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
@@ -369,16 +357,16 @@ function AdminBundles() {
 
     if (
       form.bundleType === "specific_products" &&
-      parseSpecificItems(form.specificItems).length === 0
+      form.specificItems.filter((item) => item.product).length === 0
     ) {
-      return "Specific-products bundles need specific items like product-slug:1, another-product:1.";
+      return "Specific-products bundles need at least one product.";
     }
 
     if (
       form.bundleType === "category_products" &&
-      splitCommaText(form.allowedCategories).length === 0
+      form.allowedCategories.length === 0
     ) {
-      return "Category bundles need at least one category slug, name, or ID.";
+      return "Category bundles need at least one category.";
     }
 
     if (form.discountType === "fixed_bundle_price") {
@@ -733,7 +721,7 @@ function AdminBundles() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Max Applications
+                  Max uses per order
                 </label>
 
                 <input
@@ -743,8 +731,9 @@ function AdminBundles() {
                   type="number"
                   min="0"
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
-                  placeholder="0 means unlimited"
+                  placeholder="Leave empty for unlimited"
                 />
+                <p className="mt-2 text-xs leading-5 text-darb-muted">How many times this bundle may repeat in one cart. Leave empty for unlimited.</p>
               </div>
 
               <div>
@@ -851,53 +840,35 @@ function AdminBundles() {
                     Bundle Rules
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-darb-muted">
-                    Use slugs, SKUs, names, or IDs. For specific bundles, write
-                    items like: men-placeholder-01:1, musk-placeholder-02:1
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-darb-muted">Choose products and categories by name. Darb keeps the saved identifiers underneath.</p>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Specific Items
-                      </label>
-
-                      <input
-                        name="specificItems"
-                        value={form.specificItems}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="product-slug:1, another-product:1"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Allowed Products
-                      </label>
-
-                      <input
-                        name="allowedProducts"
-                        value={form.allowedProducts}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="product slugs, SKUs, names, IDs"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Allowed Categories
-                      </label>
-
-                      <input
-                        name="allowedCategories"
-                        value={form.allowedCategories}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="men, women, unisex, musk"
-                      />
-                    </div>
+                  <div className="mt-5 space-y-4">
+                    {form.bundleType === "specific_products" && (
+                      <div className="space-y-3">
+                        {form.specificItems.map((item, index) => (
+                          <div key={`${item.product || "new"}-${index}`} className="grid gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 md:grid-cols-[minmax(0,1fr)_8rem_auto] md:items-end">
+                            <AdminEntitySelector
+                              type="product"
+                              label="Product"
+                              value={item.product}
+                              multiple={false}
+                              initialOptions={(editingBundle?.specificItems || []).map((entry) => entry.product)}
+                              excludeValues={form.specificItems.filter((_, itemIndex) => itemIndex !== index).map((entry) => entry.product)}
+                              onChange={(product) => updateSpecificItem(index, { product })}
+                            />
+                            <label><span className="mb-2 block text-sm font-semibold text-darb-green">Quantity</span><input type="number" min="1" value={item.quantity} onChange={(event) => updateSpecificItem(index, { quantity: event.target.value })} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none focus:border-darb-green" /></label>
+                            <button type="button" onClick={() => removeSpecificItem(index)} className="inline-flex h-12 items-center justify-center rounded-full border border-red-200 px-4 text-red-700" aria-label="Remove bundle product"><Trash2 size={17} /></button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={addSpecificItem} className="inline-flex items-center gap-2 rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green"><Plus size={16} /> Add product</button>
+                      </div>
+                    )}
+                    {form.bundleType === "any_products" && (
+                      <AdminEntitySelector type="product" label="Limit to selected products (optional)" value={form.allowedProducts} initialOptions={editingBundle?.allowedProducts || []} onChange={(allowedProducts) => setForm((current) => ({ ...current, allowedProducts }))} />
+                    )}
+                    {form.bundleType === "category_products" && (
+                      <AdminEntitySelector type="category" label="Categories" value={form.allowedCategories} initialOptions={editingBundle?.allowedCategories || editingBundle?.categories || []} onChange={(allowedCategories) => setForm((current) => ({ ...current, allowedCategories }))} />
+                    )}
                   </div>
                 </div>
               </div>

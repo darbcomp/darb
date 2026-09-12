@@ -116,10 +116,6 @@ const createCategoryFormData = (form, imageFile) => {
   formData.append("arabicDescription", form.arabicDescription);
   formData.append("sortOrder", form.sortOrder);
   formData.append("isActive", String(form.isActive));
-  formData.append("seoTitle", form.seoTitle);
-  formData.append("seoDescription", form.seoDescription);
-  formData.append("arabicSeoTitle", form.arabicSeoTitle);
-  formData.append("arabicSeoDescription", form.arabicSeoDescription);
   formData.append("imageUrl", form.imageUrl);
   formData.append("imageAlt", form.imageAlt);
 
@@ -374,6 +370,7 @@ function AdminCategories() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">Basic Information</p><p className="mt-1 text-sm text-darb-muted">Names, descriptions, image, and storefront visibility.</p></div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -403,6 +400,9 @@ function AdminCategories() {
                 />
               </div>
 
+              <details className="group order-last border-y border-darb-gold/20 py-1 md:col-span-2">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4"><span><span className="block text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">Advanced</span><span className="mt-1 block text-sm text-darb-muted">Optional catalog controls.</span></span><span aria-hidden="true" className="text-xl text-darb-green transition-transform group-open:rotate-45">+</span></summary>
+                <div className="grid gap-4 pb-5 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Slug
@@ -432,6 +432,8 @@ function AdminCategories() {
                   placeholder="1"
                 />
               </div>
+                </div>
+              </details>
 
               <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-darb-gold/20 bg-darb-cream/60 px-4 py-3">
                 <span className="text-sm font-semibold text-darb-green">
@@ -516,6 +518,9 @@ function AdminCategories() {
                 )}
               </div>
 
+              <details className="group order-last border-y border-darb-gold/20 py-1 md:col-span-2">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4"><span><span className="block text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">Advanced image details</span><span className="mt-1 block text-sm text-darb-muted">Use an external URL or customize image text when needed.</span></span><span aria-hidden="true" className="text-xl text-darb-green transition-transform group-open:rotate-45">+</span></summary>
+                <div className="grid gap-4 pb-5 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Image URL
@@ -543,7 +548,10 @@ function AdminCategories() {
                   placeholder="Describe the image"
                 />
               </div>
+                </div>
+              </details>
 
+              <div className="hidden md:col-span-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   SEO Title
@@ -597,6 +605,7 @@ function AdminCategories() {
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
                   placeholder="وصف SEO بالعربية"
                 />
+              </div>
               </div>
             </div>
 

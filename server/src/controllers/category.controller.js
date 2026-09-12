@@ -5,6 +5,7 @@ const Product = require("../models/Product");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const slugify = require("../utils/slugify");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
+const { preserveOptionalString } = require("../utils/preserveOptionalField");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -47,14 +48,14 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
   const payload = {
     name,
     arabicName: body.arabicName?.trim() || existingCategory?.arabicName || "",
-    description: body.description?.trim() || "",
+    description: preserveOptionalString(body, "description", existingCategory?.description),
     arabicDescription: body.arabicDescription?.trim() || existingCategory?.arabicDescription || "",
     isActive: parseBoolean(body.isActive, true),
-    sortOrder: parseNumber(body.sortOrder, 0),
-    seoTitle: body.seoTitle?.trim() || "",
-    seoDescription: body.seoDescription?.trim() || "",
-    arabicSeoTitle: body.arabicSeoTitle?.trim() || existingCategory?.arabicSeoTitle || "",
-    arabicSeoDescription: body.arabicSeoDescription?.trim() || existingCategory?.arabicSeoDescription || "",
+    sortOrder: parseNumber(body.sortOrder, existingCategory?.sortOrder || 0),
+    seoTitle: preserveOptionalString(body, "seoTitle", existingCategory?.seoTitle),
+    seoDescription: preserveOptionalString(body, "seoDescription", existingCategory?.seoDescription),
+    arabicSeoTitle: preserveOptionalString(body, "arabicSeoTitle", existingCategory?.arabicSeoTitle),
+    arabicSeoDescription: preserveOptionalString(body, "arabicSeoDescription", existingCategory?.arabicSeoDescription),
   };
 
   if (body.slug) {

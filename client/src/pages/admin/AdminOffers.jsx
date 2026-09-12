@@ -9,6 +9,7 @@ import {
 } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
 import AdminPagination from "../../components/admin/AdminPagination";
+import AdminEntitySelector from "../../components/admin/AdminEntitySelector";
 import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
 import { useFeedback } from "../../context/FeedbackContext";
 
@@ -21,8 +22,8 @@ const emptyForm = {
   scope: "sitewide",
   discountType: "percentage",
   discountValue: "",
-  products: "",
-  categories: "",
+  products: [],
+  categories: [],
   minQuantity: "1",
   minOrderValue: "",
   maxDiscountAmount: "",
@@ -35,9 +36,9 @@ const emptyForm = {
 };
 
 const scopeOptions = [
-  { label: "Sitewide", value: "sitewide" },
-  { label: "Category", value: "category" },
-  { label: "Product", value: "product" },
+  { label: "All Products", value: "sitewide" },
+  { label: "Selected Categories", value: "category" },
+  { label: "Selected Products", value: "product" },
   { label: "Free Shipping", value: "free_shipping" },
 ];
 
@@ -75,21 +76,9 @@ const formatDateInput = (date) => {
   return parsedDate.toISOString().slice(0, 10);
 };
 
-const splitCommaText = (value = "") => {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-const relatedItemsToText = (items = []) => {
-  if (!Array.isArray(items)) return "";
-
-  return items
-    .map((item) => item.slug || item.sku || item.name || item._id)
-    .filter(Boolean)
-    .join(", ");
-};
+const relatedItemsToValues = (items = []) => Array.isArray(items)
+  ? items.map((item) => String(item?._id || item || "")).filter(Boolean)
+  : [];
 
 const offerToForm = (offer) => {
   return {
@@ -101,8 +90,8 @@ const offerToForm = (offer) => {
     scope: offer.scope || offer.offerType || "sitewide",
     discountType: offer.discountType || "percentage",
     discountValue: offer.discountValue || "",
-    products: relatedItemsToText(offer.products),
-    categories: relatedItemsToText(offer.categories),
+    products: relatedItemsToValues(offer.products),
+    categories: relatedItemsToValues(offer.categories),
     minQuantity: offer.minQuantity || "1",
     minOrderValue: offer.minOrderValue || "",
     maxDiscountAmount: offer.maxDiscountAmount || "",
@@ -126,8 +115,8 @@ const createPayload = (form) => {
     offerType: form.scope,
     discountType: form.discountType,
     discountValue: Number(form.discountValue) || 0,
-    products: splitCommaText(form.products),
-    categories: splitCommaText(form.categories),
+    products: form.products,
+    categories: form.categories,
     minQuantity: Number(form.minQuantity) || 1,
     minOrderValue: Number(form.minOrderValue) || 0,
     maxDiscountAmount: Number(form.maxDiscountAmount) || 0,
@@ -305,15 +294,15 @@ function AdminOffers() {
       return "Percentage discount cannot be more than 100%.";
     }
 
-    if (form.scope === "product" && splitCommaText(form.products).length === 0) {
-      return "Product offers need at least one product slug, SKU, name, or ID.";
+    if (form.scope === "product" && form.products.length === 0) {
+      return "Product offers need at least one product.";
     }
 
     if (
       form.scope === "category" &&
-      splitCommaText(form.categories).length === 0
+      form.categories.length === 0
     ) {
-      return "Category offers need at least one category slug, name, or ID.";
+      return "Category offers need at least one category.";
     }
 
     return "";
@@ -731,39 +720,13 @@ function AdminOffers() {
                     Targeting Rules
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-darb-muted">
-                    Add comma-separated slugs, SKUs, names, or IDs. For category
-                    offers use category slugs like men, women, unisex, musk.
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-darb-muted">Choose who receives this offer using readable storefront names.</p>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Products
-                      </label>
-
-                      <input
-                        name="products"
-                        value={form.products}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="product slugs, SKUs, names, IDs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Categories
-                      </label>
-
-                      <input
-                        name="categories"
-                        value={form.categories}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="men, women, unisex, musk"
-                      />
-                    </div>
+                  <div className="mt-5">
+                    {form.scope === "sitewide" && <p className="rounded-2xl bg-white px-4 py-3 text-sm text-darb-muted">Applies to all products.</p>}
+                    {form.scope === "product" && <AdminEntitySelector type="product" label="Selected products" value={form.products} initialOptions={editingOffer?.products || []} onChange={(products) => setForm((current) => ({ ...current, products }))} />}
+                    {form.scope === "category" && <AdminEntitySelector type="category" label="Selected categories" value={form.categories} initialOptions={editingOffer?.categories || []} onChange={(categories) => setForm((current) => ({ ...current, categories }))} />}
+                    {form.scope === "free_shipping" && <p className="rounded-2xl bg-white px-4 py-3 text-sm text-darb-muted">Applies storewide when the offer is eligible.</p>}
                   </div>
                 </div>
               </div>
@@ -775,12 +738,7 @@ function AdminOffers() {
                 onChange={handleFormChange}
               />
 
-              <ToggleField
-                label="Allow Stacking"
-                name="allowStacking"
-                checked={form.allowStacking}
-                onChange={handleFormChange}
-              />
+              <div className="rounded-2xl border border-darb-gold/20 bg-darb-cream/60 px-4 py-3 text-sm text-darb-muted">Darb applies one promotional benefit per order.</div>
             </div>
 
             <div className="flex flex-wrap gap-3">

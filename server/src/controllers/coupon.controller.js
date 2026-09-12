@@ -462,19 +462,19 @@ const populateCoupon = (query) =>
   query
     .populate(
       "allowedProducts",
-      "name slug price images category"
+      "name arabicName slug sku price images category"
     )
     .populate(
       "excludedProducts",
-      "name slug price images category"
+      "name arabicName slug sku price images category"
     )
     .populate(
       "allowedCategories",
-      "name slug"
+      "name arabicName slug"
     )
     .populate(
       "excludedCategories",
-      "name slug"
+      "name arabicName slug"
     );
 
 const getProductId = (product) =>

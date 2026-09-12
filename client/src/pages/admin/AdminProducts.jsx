@@ -43,7 +43,8 @@ const emptyForm = {
   sku: "",
   category: "",
   categories: [],
-  variants: [{ label: "50 ML", sizeMl: "50", sku: "", price: "1000", compareAtPrice: "", stock: "", isActive: true }],
+  variants: [],
+  multipleVariants: false,
   shortDescription: "",
   arabicShortDescription: "",
   description: "",
@@ -135,6 +136,7 @@ const productToForm = (product) => ({
     stock: variant.stock ?? "",
     isActive: variant.isActive !== false,
   })),
+  multipleVariants: (product.variants || []).length > 1,
   shortDescription: product.shortDescription || "",
   arabicShortDescription: product.arabicShortDescription || "",
   description: product.description || "",
@@ -564,17 +566,64 @@ function AdminProducts() {
       checked,
     } = event.target;
 
-    setForm(
-      (current) => ({
-        ...current,
+    const nextValue = type === "checkbox" ? checked : value;
+    const variantField = {
+      sku: "sku",
+      sizeLabel: "label",
+      sizeMl: "sizeMl",
+    }[name];
 
-        [name]:
-          type ===
-          "checkbox"
-            ? checked
-            : value,
-      })
-    );
+    setForm((current) => ({
+      ...current,
+      [name]: nextValue,
+      variants: variantField && !current.multipleVariants && current.variants.length === 1
+        ? current.variants.map((variant) => ({ ...variant, [variantField]: nextValue }))
+        : current.variants,
+    }));
+  };
+
+  const handleSimplePricingChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+      variants: !current.multipleVariants && current.variants.length === 1
+        ? current.variants.map((variant) => ({ ...variant, [name]: value }))
+        : current.variants,
+    }));
+  };
+
+  const toggleMultipleVariants = (event) => {
+    const enabled = event.target.checked;
+    if (!enabled && form.variants.length > 1) {
+      setFormError("Remove extra variant rows before switching to a single-size product.");
+      return;
+    }
+    setFormError("");
+    setForm((current) => {
+      const remainingVariant = current.variants.length === 1 ? current.variants[0] : null;
+      const visibleFields = !enabled && remainingVariant
+        ? {
+            price: remainingVariant.price ?? current.price,
+            compareAtPrice: remainingVariant.compareAtPrice ?? current.compareAtPrice,
+            stock: remainingVariant.stock ?? current.stock,
+            sku: remainingVariant.sku || current.sku,
+            sizeLabel: remainingVariant.label || current.sizeLabel,
+            sizeMl: remainingVariant.sizeMl === "" || remainingVariant.sizeMl == null
+              ? current.sizeMl
+              : remainingVariant.sizeMl,
+          }
+        : {};
+
+      return {
+        ...current,
+        ...visibleFields,
+        multipleVariants: enabled,
+        variants: enabled && current.variants.length === 0
+          ? [{ label: current.sizeLabel || "", sizeMl: current.sizeMl || "", sku: current.sku || "", price: current.price || "", compareAtPrice: current.compareAtPrice || "", stock: current.stock || "", isActive: true }]
+          : current.variants,
+      };
+    });
   };
 
   const handlePrimaryCategoryChange = (event) => {
@@ -897,6 +946,10 @@ function AdminProducts() {
         new FormData();
 
       const fields = { ...form };
+      delete fields.metaTitle;
+      delete fields.metaDescription;
+      delete fields.isPlaceholder;
+      delete fields.multipleVariants;
 
       Object.entries(
         fields
@@ -935,7 +988,7 @@ function AdminProducts() {
       );
 
       formData.set("categories", JSON.stringify(form.categories));
-      formData.set("variants", JSON.stringify(form.variants));
+      formData.set("variants", JSON.stringify(form.multipleVariants ? form.variants : form.variants.slice(0, 1)));
       formData.set("scentFamilies", JSON.stringify(splitCommaText(form.scentFamilies)));
       formData.set("bestFor", JSON.stringify(splitCommaText(form.bestFor)));
       formData.set("keyNotes", JSON.stringify(splitCommaText(form.keyNotes)));
@@ -1042,7 +1095,7 @@ function AdminProducts() {
       setFormError(
         validationError
       );
-      const sectionName = validationError.toLowerCase().includes("image") ? "media" : "essentials";
+      const sectionName = validationError.toLowerCase().includes("image") ? "images" : "price-stock";
       const section = document.querySelector(`[data-editor-section="${sectionName}"]`);
       if (section) {
         section.open = true;
@@ -1299,7 +1352,7 @@ function AdminProducts() {
             }
             className="space-y-7"
           >
-            <EditorSection title="Essentials" description="Identity, product type, collections and launch essentials." defaultOpen>
+            <EditorSection title="Basic Information" description="The product identity customers see first." defaultOpen>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field
                 label="English Name *"
@@ -1320,49 +1373,16 @@ function AdminProducts() {
 
               <label><span className="mb-2 block text-sm font-semibold text-darb-green">Product Type</span><select name="productType" value={form.productType} onChange={handleProductTypeChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green"><option value="perfume">Perfume</option><option value="musk">Musk</option></select></label>
 
-              <Field
-                label="Slug"
-                name="slug"
-                value={
-                  form.slug
-                }
-                onChange={
-                  handleFormChange
-                }
-                placeholder="auto if empty"
-              />
-
-              <Field
-                label="SKU"
-                name="sku"
-                value={
-                  form.sku
-                }
-                onChange={
-                  handleFormChange
-                }
-                placeholder="DARB-001"
-              />
-
               <label>
-                <span className="mb-2 block text-sm font-semibold text-darb-green">Primary Collection *</span>
+                <span className="mb-2 block text-sm font-semibold text-darb-green">Primary Category *</span>
                 <select value={form.category} onChange={handlePrimaryCategoryChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green">{categories.map((category) => <option key={category._id || category.slug} value={category.slug}>{category.name}</option>)}</select>
               </label>
+            </div>
+            </EditorSection>
 
-              <div className="md:col-span-2">
-                <span className="mb-2 block text-sm font-semibold text-darb-green">
-                  Also appears in
-                </span>
-                <div className="flex min-h-[50px] flex-wrap gap-2 rounded-2xl border border-darb-gold/30 bg-white p-2">
-                  {categories.filter((category) => category.slug !== form.category).map((category) => (
-                    <label key={category._id || category.slug} className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-sm text-darb-green">
-                      <input type="checkbox" checked={form.categories.includes(category.slug)} onChange={() => toggleCategory(category.slug)} />
-                      {category.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
+            <EditorSection title="Price & Stock" description="Use the simple fields for one-size products. Turn on variants only when customers have a real choice." defaultOpen>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {!form.multipleVariants && <>
               <Field
                 label="Price"
                 name="price"
@@ -1370,7 +1390,7 @@ function AdminProducts() {
                   form.price
                 }
                 onChange={
-                  handleFormChange
+                  handleSimplePricingChange
                 }
                 type="number"
                 min="0"
@@ -1384,25 +1404,11 @@ function AdminProducts() {
                   form.compareAtPrice
                 }
                 onChange={
-                  handleFormChange
+                  handleSimplePricingChange
                 }
                 type="number"
                 min="0"
                 placeholder="Old price"
-              />
-
-              <Field
-                label="Cost Price"
-                name="costPrice"
-                value={
-                  form.costPrice
-                }
-                onChange={
-                  handleFormChange
-                }
-                type="number"
-                min="0"
-                placeholder="Internal only"
               />
 
               <Field
@@ -1412,47 +1418,37 @@ function AdminProducts() {
                   form.stock
                 }
                 onChange={
-                  handleFormChange
+                  handleSimplePricingChange
                 }
                 type="number"
                 min="0"
                 placeholder="0"
               />
+              </>}
 
-              <Field
-                label="Low Stock Threshold"
-                name="lowStockThreshold"
-                value={
-                  form.lowStockThreshold
-                }
-                onChange={
-                  handleFormChange
-                }
-                type="number"
-                min="0"
-                placeholder="3"
-              />
-
-              <Field
-                label="Size"
-                name="sizeLabel"
-                value={form.sizeLabel}
-                onChange={handleFormChange}
-              />
-
-              <Field
-                label="Size ML"
-                name="sizeMl"
-                value={form.sizeMl}
-                onChange={handleFormChange}
-                type="number"
-                min="0"
-              />
-
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-darb-gold/20 bg-darb-cream/60 px-4 py-3">
+                <span><span className="block text-sm font-semibold text-darb-green">Multiple sizes / variants</span><span className="mt-1 block text-xs text-darb-muted">Enable only when customers choose between options.</span></span>
+                <input type="checkbox" checked={form.multipleVariants} onChange={toggleMultipleVariants} className="h-5 w-5 accent-darb-green" />
+              </label>
             </div>
+            {form.multipleVariants && <div className="mt-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-darb-muted">Each row is a purchasable option with its own price and stock.</p><button type="button" onClick={addVariant} className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-sm font-semibold text-darb-beige"><Plus size={16} /> Add variant</button></div>
+              {form.variants.map((variant, index) => (
+                <div key={variant._id || index} className="grid gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 md:grid-cols-4 xl:grid-cols-8">
+                  <Field label="Label" value={variant.label} onChange={(event) => updateVariant(index, "label", event.target.value)} placeholder="50 ML" />
+                  <Field label="Size ML" type="number" min="0" value={variant.sizeMl} onChange={(event) => updateVariant(index, "sizeMl", event.target.value)} />
+                  <Field label="SKU" value={variant.sku} onChange={(event) => updateVariant(index, "sku", event.target.value)} />
+                  <Field label="Price" type="number" min="0" value={variant.price} onChange={(event) => updateVariant(index, "price", event.target.value)} />
+                  <Field label="Compare at" type="number" min="0" value={variant.compareAtPrice} onChange={(event) => updateVariant(index, "compareAtPrice", event.target.value)} />
+                  <Field label="Stock" type="number" min="0" value={variant.stock} onChange={(event) => updateVariant(index, "stock", event.target.value)} />
+                  <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-darb-green"><input type="checkbox" checked={variant.isActive} onChange={(event) => updateVariant(index, "isActive", event.target.checked)} /> Active</label>
+                  <button type="button" onClick={() => removeVariant(index)} className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-red-200 text-red-700" aria-label={`Remove ${variant.label || `variant ${index + 1}`}`}><Trash2 size={16} /></button>
+                </div>
+              ))}
+            </div>}
             </EditorSection>
 
-            <EditorSection title="Scent Profile" description="Use Top / Middle / Base for a pyramid, or Key Notes when only key notes are supplied. You do not need both.">
+            <EditorSection title="Product Details" description="Storefront scent details, use occasions, and notes in English and Arabic.">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 
               <Field
@@ -1581,54 +1577,10 @@ function AdminProducts() {
                 </label>
               </div>
 
-              <div className="md:col-span-2 xl:col-span-3">
-                <Field
-                  label="Tags"
-                  name="tags"
-                  value={
-                    form.tags
-                  }
-                  onChange={
-                    handleFormChange
-                  }
-                  placeholder="musk, fresh, gift"
-                />
-              </div>
             </div>
             </EditorSection>
 
-            <EditorSection title="Arabic Content" description="Arabic fields stay paired beside their English equivalents so the owner can compare them safely.">
-              <p className="text-sm leading-6 text-darb-muted">Arabic identity is in Essentials; Arabic story and note fields are paired in Story and Scent Profile. Empty Arabic fields remain optional and are never fabricated.</p>
-            </EditorSection>
-
-            <EditorSection title="Variants & Pricing" description="Set each purchasable size, SKU, price and stock independently.">
-            <div className="p-1">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">Variants</p>
-                  <h3 className="mt-1 font-display text-2xl text-darb-green">Purchasable sizes</h3>
-                  <p className="mt-1 text-sm text-darb-muted">Set each size, SKU, price and stock independently.</p>
-                </div>
-                <button type="button" onClick={addVariant} className="inline-flex items-center gap-2 rounded-full bg-darb-green px-4 py-2 text-sm font-semibold text-darb-beige"><Plus size={16} /> Add Size</button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {form.variants.map((variant, index) => (
-                  <div key={variant._id || index} className="grid gap-3 rounded-2xl border border-darb-gold/20 bg-white p-4 md:grid-cols-4 xl:grid-cols-8">
-                    <Field label="Label" value={variant.label} onChange={(event) => updateVariant(index, "label", event.target.value)} placeholder="50 ML" />
-                    <Field label="Size ML" type="number" min="0" value={variant.sizeMl} onChange={(event) => updateVariant(index, "sizeMl", event.target.value)} />
-                    <Field label="SKU" value={variant.sku} onChange={(event) => updateVariant(index, "sku", event.target.value)} />
-                    <Field label="Price" type="number" min="0" value={variant.price} onChange={(event) => updateVariant(index, "price", event.target.value)} />
-                    <Field label="Compare at" type="number" min="0" value={variant.compareAtPrice} onChange={(event) => updateVariant(index, "compareAtPrice", event.target.value)} />
-                    <Field label="Stock" type="number" min="0" value={variant.stock} onChange={(event) => updateVariant(index, "stock", event.target.value)} />
-                    <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-darb-green"><input type="checkbox" checked={variant.isActive} onChange={(event) => updateVariant(index, "isActive", event.target.checked)} /> Active</label>
-                    <button type="button" onClick={() => removeVariant(index)} className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-red-200 text-red-700" aria-label={`Remove ${variant.label || `size ${index + 1}`}`}><Trash2 size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            </EditorSection>
-
-            <EditorSection title="Media" description="Optimized product artwork, up to 10 images.">
+            <EditorSection title="Images" description="Product artwork, up to 10 images.">
             <div className="p-1">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
@@ -1773,24 +1725,13 @@ function AdminProducts() {
             </div>
             </EditorSection>
 
-            <EditorSection title="Visibility" description="Choose where this product appears in the storefront.">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <EditorSection title="Storefront" description="Choose where this product appears in the store.">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <ToggleField
                 label="Active"
                 name="isActive"
                 checked={
                   form.isActive
-                }
-                onChange={
-                  handleFormChange
-                }
-              />
-
-              <ToggleField
-                label="Placeholder"
-                name="isPlaceholder"
-                checked={
-                  form.isPlaceholder
                 }
                 onChange={
                   handleFormChange
@@ -1832,39 +1773,23 @@ function AdminProducts() {
             </div>
             </EditorSection>
 
-            <EditorSection title="SEO" description="Optional search and sharing copy.">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field
-                label="Meta Title"
-                name="metaTitle"
-                value={
-                  form.metaTitle
-                }
-                onChange={
-                  handleFormChange
-                }
-                placeholder="SEO title"
-              />
-
-              <label>
-                <span className="mb-2 block text-sm font-semibold text-darb-green">
-                  Meta
-                  Description
-                </span>
-
-                <textarea
-                  name="metaDescription"
-                  value={
-                    form.metaDescription
-                  }
-                  onChange={
-                    handleFormChange
-                  }
-                  rows={3}
-                  className="w-full rounded-3xl border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
-                  placeholder="SEO description"
-                />
-              </label>
+            <EditorSection title="Advanced" description="Optional inventory and catalog controls.">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <Field label="Slug" name="slug" value={form.slug} onChange={handleFormChange} placeholder="Generated automatically if empty" />
+              <Field label="SKU" name="sku" value={form.sku} onChange={handleFormChange} placeholder="DARB-001" />
+              <Field label="Cost Price" name="costPrice" value={form.costPrice} onChange={handleFormChange} type="number" min="0" placeholder="Internal only" />
+              <Field label="Low Stock Threshold" name="lowStockThreshold" value={form.lowStockThreshold} onChange={handleFormChange} type="number" min="0" placeholder="3" />
+              <Field label="Size Label" name="sizeLabel" value={form.sizeLabel} onChange={handleFormChange} placeholder="50 ML" />
+              <Field label="Size ML" name="sizeMl" value={form.sizeMl} onChange={handleFormChange} type="number" min="0" />
+              <div className="md:col-span-2 xl:col-span-3">
+                <span className="mb-2 block text-sm font-semibold text-darb-green">Secondary categories</span>
+                <div className="flex min-h-[50px] flex-wrap gap-2 rounded-2xl border border-darb-gold/30 bg-white p-2">
+                  {categories.filter((category) => category.slug !== form.category).map((category) => (
+                    <label key={category._id || category.slug} className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-sm text-darb-green"><input type="checkbox" checked={form.categories.includes(category.slug)} onChange={() => toggleCategory(category.slug)} />{category.name}</label>
+                  ))}
+                </div>
+              </div>
+              <div className="md:col-span-2 xl:col-span-3"><Field label="Tags" name="tags" value={form.tags} onChange={handleFormChange} placeholder="musk, fresh, gift" /></div>
             </div>
             </EditorSection>
 

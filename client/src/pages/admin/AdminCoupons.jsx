@@ -16,6 +16,7 @@ import {
 } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
 import AdminPagination from "../../components/admin/AdminPagination";
+import AdminEntitySelector from "../../components/admin/AdminEntitySelector";
 import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
 import { useFeedback } from "../../context/FeedbackContext";
 
@@ -27,10 +28,10 @@ const emptyForm = {
   discountValue: "",
   minOrderValue: "",
   maxDiscountAmount: "",
-  allowedProducts: "",
-  excludedProducts: "",
-  allowedCategories: "",
-  excludedCategories: "",
+  allowedProducts: [],
+  excludedProducts: [],
+  allowedCategories: [],
+  excludedCategories: [],
   usageLimit: "",
   usedCount: "0",
   perCustomerLimit: "",
@@ -75,21 +76,9 @@ const formatDateInput = (date) => {
   return parsedDate.toISOString().slice(0, 10);
 };
 
-const splitCommaText = (value = "") => {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-const relatedItemsToText = (items = []) => {
-  if (!Array.isArray(items)) return "";
-
-  return items
-    .map((item) => item.slug || item.sku || item.name || item._id)
-    .filter(Boolean)
-    .join(", ");
-};
+const relatedItemsToValues = (items = []) => Array.isArray(items)
+  ? items.map((item) => String(item?._id || item || "")).filter(Boolean)
+  : [];
 
 const couponToForm = (coupon) => {
   return {
@@ -100,10 +89,10 @@ const couponToForm = (coupon) => {
     discountValue: coupon.discountValue || "",
     minOrderValue: coupon.minOrderValue || "",
     maxDiscountAmount: coupon.maxDiscountAmount || "",
-    allowedProducts: relatedItemsToText(coupon.allowedProducts),
-    excludedProducts: relatedItemsToText(coupon.excludedProducts),
-    allowedCategories: relatedItemsToText(coupon.allowedCategories),
-    excludedCategories: relatedItemsToText(coupon.excludedCategories),
+    allowedProducts: relatedItemsToValues(coupon.allowedProducts),
+    excludedProducts: relatedItemsToValues(coupon.excludedProducts),
+    allowedCategories: relatedItemsToValues(coupon.allowedCategories),
+    excludedCategories: relatedItemsToValues(coupon.excludedCategories),
     usageLimit: coupon.usageLimit || "",
     usedCount: coupon.usedCount || "0",
     perCustomerLimit: coupon.perCustomerLimit || "",
@@ -124,12 +113,11 @@ const createPayload = (form) => {
     discountValue: Number(form.discountValue) || 0,
     minOrderValue: Number(form.minOrderValue) || 0,
     maxDiscountAmount: Number(form.maxDiscountAmount) || 0,
-    allowedProducts: splitCommaText(form.allowedProducts),
-    excludedProducts: splitCommaText(form.excludedProducts),
-    allowedCategories: splitCommaText(form.allowedCategories),
-    excludedCategories: splitCommaText(form.excludedCategories),
+    allowedProducts: form.allowedProducts,
+    excludedProducts: form.excludedProducts,
+    allowedCategories: form.allowedCategories,
+    excludedCategories: form.excludedCategories,
     usageLimit: Number(form.usageLimit) || 0,
-    usedCount: Number(form.usedCount) || 0,
     perCustomerLimit: Number(form.perCustomerLimit) || 0,
     startsAt: form.startsAt || null,
     endsAt: form.endsAt || null,
@@ -575,18 +563,19 @@ function AdminCoupons() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
-                  Used Count
+                  Used count
                 </label>
 
                 <input
                   name="usedCount"
                   value={form.usedCount}
-                  onChange={handleFormChange}
                   type="number"
                   min="0"
-                  className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+                  readOnly
+                  className="w-full cursor-not-allowed rounded-full border border-darb-gold/20 bg-darb-cream/80 px-5 py-3 text-darb-muted outline-none"
                   placeholder="0"
                 />
+                <p className="mt-2 text-xs text-darb-muted">Updated automatically when customers use this coupon.</p>
               </div>
 
               <div>
@@ -654,67 +643,13 @@ function AdminCoupons() {
                     Product / Category Rules
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-darb-muted">
-                    Add comma-separated slugs, SKUs, names, or IDs. Example:
-                    men-placeholder-01, DARB-MEN-01, musk
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-darb-muted">Leave allowed lists empty for all products. Exclusions always take priority.</p>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Allowed Products
-                      </label>
-
-                      <input
-                        name="allowedProducts"
-                        value={form.allowedProducts}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="optional"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Excluded Products
-                      </label>
-
-                      <input
-                        name="excludedProducts"
-                        value={form.excludedProducts}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="optional"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Allowed Categories
-                      </label>
-
-                      <input
-                        name="allowedCategories"
-                        value={form.allowedCategories}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="men, women, unisex, musk"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-darb-green">
-                        Excluded Categories
-                      </label>
-
-                      <input
-                        name="excludedCategories"
-                        value={form.excludedCategories}
-                        onChange={handleFormChange}
-                        className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-                        placeholder="optional"
-                      />
-                    </div>
+                    <AdminEntitySelector type="product" label="Allowed products" value={form.allowedProducts} initialOptions={editingCoupon?.allowedProducts || []} onChange={(allowedProducts) => setForm((current) => ({ ...current, allowedProducts }))} />
+                    <AdminEntitySelector type="product" label="Excluded products" value={form.excludedProducts} initialOptions={editingCoupon?.excludedProducts || []} onChange={(excludedProducts) => setForm((current) => ({ ...current, excludedProducts }))} />
+                    <AdminEntitySelector type="category" label="Allowed categories" value={form.allowedCategories} initialOptions={editingCoupon?.allowedCategories || []} onChange={(allowedCategories) => setForm((current) => ({ ...current, allowedCategories }))} />
+                    <AdminEntitySelector type="category" label="Excluded categories" value={form.excludedCategories} initialOptions={editingCoupon?.excludedCategories || []} onChange={(excludedCategories) => setForm((current) => ({ ...current, excludedCategories }))} />
                   </div>
                 </div>
               </div>
@@ -726,19 +661,7 @@ function AdminCoupons() {
                 onChange={handleFormChange}
               />
 
-              <ToggleField
-                label="Allow With Offers"
-                name="allowWithOffers"
-                checked={form.allowWithOffers}
-                onChange={handleFormChange}
-              />
-
-              <ToggleField
-                label="Allow With Bundles"
-                name="allowWithBundles"
-                checked={form.allowWithBundles}
-                onChange={handleFormChange}
-              />
+              <div className="rounded-2xl border border-darb-gold/20 bg-darb-cream/60 px-4 py-3 text-sm text-darb-muted">Darb applies one promotional benefit per order. Coupon stacking is not available.</div>
             </div>
 
             <div className="flex flex-wrap gap-3">

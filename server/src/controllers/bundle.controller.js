@@ -439,11 +439,11 @@ const populateBundle = (query) =>
   query
     .populate(
       "allowedProducts",
-      "name slug price images"
+      "name arabicName slug sku price images"
     )
     .populate(
       "allowedCategories",
-      "name slug"
+      "name arabicName slug"
     )
     .populate(
       "specificItems.product",

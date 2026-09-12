@@ -5,6 +5,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const slugify = require("../utils/slugify");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
+const { preserveOptionalBoolean, preserveOptionalString } = require("../utils/preserveOptionalField");
 
 const MAX_PRODUCT_IMAGES = 10;
 
@@ -350,9 +351,11 @@ const buildProductPayload = async (
   });
   const tags = parseStringArray(body.tags);
 
-  const isPlaceholder = parseBoolean(
-    body.isPlaceholder,
-    existingProduct?.isPlaceholder || false
+  const isPlaceholder = preserveOptionalBoolean(
+    body,
+    "isPlaceholder",
+    existingProduct?.isPlaceholder,
+    parseBoolean
   );
 
   const isActive = parseBoolean(
@@ -388,7 +391,7 @@ const buildProductPayload = async (
     name,
     arabicName: body.arabicName !== undefined ? body.arabicName?.trim() || "" : existingProduct?.arabicName || "",
     slug: productSlug,
-    sku: body.sku?.trim() || "",
+    sku: preserveOptionalString(body, "sku", existingProduct?.sku),
     productType,
     category: category._id,
     categories: categories.map((entry) => entry._id),
@@ -398,13 +401,13 @@ const buildProductPayload = async (
     },
     inspiredBy: body.inspiredBy !== undefined ? body.inspiredBy?.trim() || "" : existingProduct?.inspiredBy || "",
     arabicInspiredBy: body.arabicInspiredBy !== undefined ? body.arabicInspiredBy?.trim() || "" : existingProduct?.arabicInspiredBy || "",
-    shortDescription: body.shortDescription?.trim() || "",
+    shortDescription: preserveOptionalString(body, "shortDescription", existingProduct?.shortDescription),
     arabicShortDescription: body.arabicShortDescription?.trim() || existingProduct?.arabicShortDescription || "",
-    description: body.description?.trim() || "",
+    description: preserveOptionalString(body, "description", existingProduct?.description),
     arabicDescription: body.arabicDescription?.trim() || existingProduct?.arabicDescription || "",
     price: primaryVariant?.price || price,
     compareAtPrice: primaryVariant?.compareAtPrice || parseNumber(body.compareAtPrice, 0),
-    costPrice: parseNumber(body.costPrice, 0),
+    costPrice: parseNumber(body.costPrice, existingProduct?.costPrice || 0),
     sizeLabel: body.sizeLabel !== undefined
       ? body.sizeLabel?.trim() || ""
       : existingProduct?.sizeLabel || "",
@@ -434,16 +437,16 @@ const buildProductPayload = async (
     variants: cleanVariants,
     stock: cleanVariants.length
       ? cleanVariants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
-      : parseNumber(body.stock, 0),
-    lowStockThreshold: parseNumber(body.lowStockThreshold, 3),
-    tags,
+      : parseNumber(body.stock, existingProduct?.stock || 0),
+    lowStockThreshold: parseNumber(body.lowStockThreshold, existingProduct?.lowStockThreshold ?? 3),
+    tags: body.tags === undefined ? existingProduct?.tags || [] : tags,
     isActive,
     isPlaceholder,
-    isFeatured: parseBoolean(body.isFeatured, false),
-    isBestSeller: parseBoolean(body.isBestSeller, false),
-    isNewArrival: parseBoolean(body.isNewArrival, false),
-    metaTitle: body.metaTitle?.trim() || "",
-    metaDescription: body.metaDescription?.trim() || "",
+    isFeatured: preserveOptionalBoolean(body, "isFeatured", existingProduct?.isFeatured, parseBoolean),
+    isBestSeller: preserveOptionalBoolean(body, "isBestSeller", existingProduct?.isBestSeller, parseBoolean),
+    isNewArrival: preserveOptionalBoolean(body, "isNewArrival", existingProduct?.isNewArrival, parseBoolean),
+    metaTitle: preserveOptionalString(body, "metaTitle", existingProduct?.metaTitle),
+    metaDescription: preserveOptionalString(body, "metaDescription", existingProduct?.metaDescription),
   };
 
   return {

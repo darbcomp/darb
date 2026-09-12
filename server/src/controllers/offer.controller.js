@@ -217,8 +217,8 @@ const buildOfferFilter = (query = {}) => {
 
 const populateOffer = (query) =>
   query
-    .populate("products", "name slug price images")
-    .populate("categories", "name slug");
+    .populate("products", "name arabicName slug sku price images")
+    .populate("categories", "name arabicName slug");
 
 const getPublicOffers = async (req, res) => {
   try {
