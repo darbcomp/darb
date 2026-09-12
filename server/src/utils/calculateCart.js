@@ -1898,6 +1898,7 @@ const decrementDiscountUsage =
 
 module.exports = {
   calculateOrderTotals,
+  calculateBundleDiscount,
   calculateCartPricing,
   incrementDiscountUsage,
   decrementDiscountUsage,

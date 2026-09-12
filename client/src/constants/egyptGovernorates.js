@@ -1,0 +1,32 @@
+export const EGYPT_GOVERNORATES = [
+  { value: "Cairo", en: "Cairo", ar: "القاهرة" },
+  { value: "Giza", en: "Giza", ar: "الجيزة" },
+  { value: "Alexandria", en: "Alexandria", ar: "الإسكندرية" },
+  { value: "Dakahlia", en: "Dakahlia", ar: "الدقهلية" },
+  { value: "Red Sea", en: "Red Sea", ar: "البحر الأحمر" },
+  { value: "Beheira", en: "Beheira", ar: "البحيرة" },
+  { value: "Fayoum", en: "Fayoum", ar: "الفيوم" },
+  { value: "Gharbia", en: "Gharbia", ar: "الغربية" },
+  { value: "Ismailia", en: "Ismailia", ar: "الإسماعيلية" },
+  { value: "Monufia", en: "Monufia", ar: "المنوفية" },
+  { value: "Minya", en: "Minya", ar: "المنيا" },
+  { value: "Qalyubia", en: "Qalyubia", ar: "القليوبية" },
+  { value: "New Valley", en: "New Valley", ar: "الوادي الجديد" },
+  { value: "Suez", en: "Suez", ar: "السويس" },
+  { value: "Aswan", en: "Aswan", ar: "أسوان" },
+  { value: "Assiut", en: "Assiut", ar: "أسيوط" },
+  { value: "Beni Suef", en: "Beni Suef", ar: "بني سويف" },
+  { value: "Port Said", en: "Port Said", ar: "بورسعيد" },
+  { value: "Damietta", en: "Damietta", ar: "دمياط" },
+  { value: "Sharqia", en: "Sharqia", ar: "الشرقية" },
+  { value: "South Sinai", en: "South Sinai", ar: "جنوب سيناء" },
+  { value: "Kafr El Sheikh", en: "Kafr El Sheikh", ar: "كفر الشيخ" },
+  { value: "Matrouh", en: "Matrouh", ar: "مطروح" },
+  { value: "Luxor", en: "Luxor", ar: "الأقصر" },
+  { value: "Qena", en: "Qena", ar: "قنا" },
+  { value: "North Sinai", en: "North Sinai", ar: "شمال سيناء" },
+  { value: "Sohag", en: "Sohag", ar: "سوهاج" },
+];
+
+export const getGovernorateLabel = (governorate, language) =>
+  language === "ar" ? governorate.ar : governorate.en;

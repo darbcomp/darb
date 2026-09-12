@@ -42,6 +42,9 @@ const buildSafeTrackingOrder = (order) => {
     paymentStatus:
       order.paymentStatus,
 
+    paymentMethod:
+      order.paymentMethod,
+
     createdAt: order.createdAt,
 
     updatedAt: order.updatedAt,
@@ -159,6 +162,7 @@ const trackOrder = async (
             "customerSnapshot.phone",
             "orderStatus",
             "paymentStatus",
+            "paymentMethod",
             "items",
             "subtotal",
             "discountTotal",

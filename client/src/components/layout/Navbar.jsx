@@ -147,6 +147,9 @@ function Navbar() {
   const adminRef =
     useRef(null);
 
+  const overlayTriggerRef =
+    useRef(null);
+
   const [
     categoriesOpen,
     setCategoriesOpen,
@@ -280,13 +283,19 @@ function Navbar() {
   ]);
 
   useEffect(() => {
-    if (!searchOpen) return undefined;
+    if (!searchOpen && !mobileMenuOpen) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setSearchOpen(false);
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setMobileMenuOpen(false);
+        setMobileCategoriesOpen(false);
+        setMobileAdminOpen(false);
+        window.requestAnimationFrame(() => overlayTriggerRef.current?.focus());
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [searchOpen]);
+  }, [mobileMenuOpen, searchOpen]);
 
   /* =========================
      HELPERS
@@ -307,24 +316,31 @@ function Navbar() {
       );
 
       setMobileAdminOpen(false);
+
+      window.requestAnimationFrame(() => overlayTriggerRef.current?.focus());
     };
 
   const openMobileMenu =
     () => {
+      overlayTriggerRef.current = document.activeElement;
       setSearchOpen(false);
 
       setMobileMenuOpen(true);
     };
 
   const openSearch = () => {
+    overlayTriggerRef.current = document.activeElement;
     closeDesktopMenus();
-    closeMobileMenu();
+    setMobileMenuOpen(false);
+    setMobileCategoriesOpen(false);
+    setMobileAdminOpen(false);
 
     setSearchOpen(true);
   };
 
   const closeSearch = () => {
     setSearchOpen(false);
+    window.requestAnimationFrame(() => overlayTriggerRef.current?.focus());
   };
 
   const handleSearchSubmit = (
@@ -995,7 +1011,7 @@ function Navbar() {
           MOBILE DRAWER
       ========================== */}
 
-        <div data-open={mobileMenuOpen} aria-hidden={!mobileMenuOpen} inert={mobileMenuOpen ? undefined : ""} className="darb-mobile-layer fixed inset-0 z-[80] md:hidden">
+        {mobileMenuOpen && <div data-open="true" className="darb-mobile-layer fixed inset-0 z-[80] md:hidden">
           <button
             type="button"
             aria-label={t("Close menu")}
@@ -1306,13 +1322,13 @@ function Navbar() {
               </p>
             </div>
           </aside>
-        </div>
+        </div>}
 
       {/* =========================
           SEARCH OVERLAY
       ========================== */}
 
-        <div data-open={searchOpen} aria-hidden={!searchOpen} inert={searchOpen ? undefined : ""} className="darb-search-layer fixed inset-0 z-[90] flex items-start justify-center bg-darb-black/50 px-4 pt-20 backdrop-blur-sm sm:pt-28">
+        {searchOpen && <div data-open="true" className="darb-search-layer fixed inset-0 z-[90] flex items-start justify-center bg-darb-black/50 px-4 pt-20 backdrop-blur-sm sm:pt-28">
           <button
             type="button"
             aria-label={t("Close search")}
@@ -1450,7 +1466,7 @@ function Navbar() {
               </div>
             </form>
           </div>
-        </div>
+        </div>}
     </>
   );
 }

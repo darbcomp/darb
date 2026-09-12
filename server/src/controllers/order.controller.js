@@ -27,7 +27,7 @@ const {
 const { findProductVariant } = require("../utils/productVariants");
 const { getGovernorateDeliveryFee } = require("../utils/shipping");
 const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
-const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, findAvailableEntitlementByCode } = require("../services/entitlement.service");
+const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, resolveEntitlementCodeForCheckout } = require("../services/entitlement.service");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
@@ -299,23 +299,49 @@ const validateOrderItems = async (items = [], session = null) => {
 const getSubtotal = (items = []) =>
   items.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0);
 
-const buildPricingForItems = async ({ items, couponCode, entitlementId = "", userId = null, customerPhone = "", governorate = "", session = null }) => {
+const buildPricingForItems = async ({ items, couponCode, entitlementId = "", userId = null, customerPhone = "", governorate = "", deliveryConfirmed = true, session = null }) => {
   const subtotal = getSubtotal(items);
   const settings = await getSettings(session);
-  const baseDeliveryFee = getBaseDeliveryFee(subtotal, settings, governorate);
+  const baseDeliveryFee = deliveryConfirmed
+    ? getBaseDeliveryFee(subtotal, settings, governorate)
+    : 0;
 
-  const codedEntitlement = !entitlementId
-    ? await findAvailableEntitlementByCode(userId, couponCode, session, customerPhone)
-    : null;
+  const codeResolution = !entitlementId
+    ? await resolveEntitlementCodeForCheckout({
+        userId,
+        guestPhone: customerPhone,
+        code: couponCode,
+        session,
+      })
+    : { isEntitlementCode: false, entitlement: null };
+  if (codeResolution.isEntitlementCode && !codeResolution.entitlement) {
+    if (codeResolution.reason === "checkout_details_required") {
+      throw new Error("Enter or use the checkout details tied to this reward.");
+    }
+    throw new Error("This reward is not available for these checkout details.");
+  }
+  const codedEntitlement = codeResolution.entitlement;
   const selectedEntitlementId = entitlementId || codedEntitlement?._id;
   let pricing = await calculateCartPricing({
     items,
-    couponCode: codedEntitlement ? "" : couponCode,
+    couponCode: codeResolution.isEntitlementCode ? "" : couponCode,
     baseDeliveryFee,
     session,
   });
   const applied = await applySelectedEntitlement({ pricing, items, entitlementId: selectedEntitlementId, userId, guestPhone: customerPhone, session });
-  pricing = applied.pricing;
+  pricing = deliveryConfirmed
+    ? { ...applied.pricing, deliveryConfirmed: true }
+    : {
+        ...applied.pricing,
+        baseDeliveryFee: null,
+        deliveryFee: null,
+        total: null,
+        totalBeforeDelivery: Math.max(
+          applied.pricing.subtotal - applied.pricing.discountTotal,
+          0
+        ),
+        deliveryConfirmed: false,
+      };
   return { pricing, settings, entitlement: applied.entitlement, freeTester: applied.freeTester };
 };
 
@@ -577,13 +603,15 @@ const previewOrder = async (req, res) => {
     }
 
     const items = await validateOrderItems(req.body.items);
+    const pricingOnly = req.body.pricingOnly === true;
     const { pricing } = await buildPricingForItems({
       items,
-      couponCode: req.body.couponCode,
-      entitlementId: req.body.entitlementId,
+      couponCode: pricingOnly ? "" : req.body.couponCode,
+      entitlementId: pricingOnly ? "" : req.body.entitlementId,
       userId: req.user?._id || null,
-      customerPhone: req.body.customer?.phone || "",
-      governorate: req.body.shippingAddress?.governorate,
+      customerPhone: pricingOnly ? "" : req.body.customer?.phone || "",
+      governorate: pricingOnly ? "" : req.body.shippingAddress?.governorate,
+      deliveryConfirmed: !pricingOnly,
     });
 
     return res.status(200).json({

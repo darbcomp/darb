@@ -10,6 +10,7 @@ import { useCart } from "../../context/useCart";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { formatCurrency } from "../../utils/formatCurrency";
+import { EGYPT_GOVERNORATES, getGovernorateLabel } from "../../constants/egyptGovernorates";
 import { createOrderRequestId } from "../../utils/orderRequestId";
 import {
     createMarketingEventId,
@@ -620,7 +621,14 @@ function Checkout() {
                   {t("Governorate")} *
                 </label>
 
-                <input name="governorate" value={formData.governorate} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green" placeholder={t("Cairo, Giza...")}/>
+                <select name="governorate" value={formData.governorate} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green">
+                  <option value="">{t("Select a governorate")}</option>
+                  {EGYPT_GOVERNORATES.map((governorate) => (
+                    <option key={governorate.value} value={governorate.value}>
+                      {getGovernorateLabel(governorate, language)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* City */}
@@ -684,16 +692,6 @@ function Checkout() {
               </div>
             </div>
 
-            {/* Delivery Info */}
-
-            <div className="mt-5 rounded-2xl bg-darb-cream/70 p-4 text-sm leading-6 text-darb-muted">
-              {settings.delivery
-            ?.estimatedDeliveryText ||
-            defaultSettings
-                .delivery
-                .estimatedDeliveryText}
-              <p className="mt-2 text-xs">{t("Egypt delivery only. You may inspect the package at delivery. Wrong or damaged/leaking items require photo or video proof and should be reported within 2 days or 1 day respectively.")}</p>
-            </div>
           </div>
 
           <div className="rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
@@ -710,12 +708,12 @@ function Checkout() {
           </div>
 
           {user && (rewardsQuery.data?.data?.available || []).length > 0 && (
-            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-beige p-6 shadow-soft">
-              <h2 className="font-display text-3xl text-darb-green">{t("Choose one reward")}</h2>
-              <p className="mt-2 text-sm text-darb-muted">{t("Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.")}</p>
+            <div className="rounded-[1.5rem] border border-darb-gold/45 bg-darb-green p-6 text-darb-beige shadow-soft">
+              <h2 className="font-display text-3xl text-darb-beige">{t("Choose one reward")}</h2>
+              <p className="mt-2 text-sm text-darb-beige/75">{t("Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.")}</p>
               <div className="mt-5 space-y-2">
-                <label className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange}/> {t("Use the best available store promotion")}</label>
-                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl bg-white/60 p-4 text-sm text-darb-green"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }}/> <span><strong>{t(reward.label)}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-muted">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
+                <label className="flex cursor-pointer gap-3 rounded-2xl border border-darb-gold/25 bg-white/10 p-4 text-sm text-darb-beige transition hover:bg-white/15"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange} className="mt-0.5 accent-darb-gold"/> {t("Use the best available store promotion")}</label>
+                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl border border-darb-gold/25 bg-white/10 p-4 text-sm text-darb-beige transition hover:bg-white/15"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }} className="mt-0.5 accent-darb-gold"/> <span><strong>{t(reward.label)}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-gold">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
               </div>
             </div>
           )}
@@ -799,9 +797,10 @@ function Checkout() {
                 {!paymentProof ? (<label onDragEnter={() => setIsProofDragging(true)} onDragLeave={() => setIsProofDragging(false)} onDragOver={(event) => event.preventDefault()} onDrop={handlePaymentProofDrop} className={`mt-3 flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border border-dashed px-6 py-10 text-center transition focus-within:ring-2 focus-within:ring-darb-gold focus-within:ring-offset-2 ${isProofDragging ? "border-darb-green bg-darb-green/10" : "border-darb-gold/55 bg-darb-surface/60 hover:border-darb-green hover:bg-darb-surface"}`}>
                     <span className="grid h-14 w-14 place-items-center rounded-full bg-darb-green text-darb-beige"><ImagePlus size={24} aria-hidden="true"/></span>
                     <span className="mt-4 font-semibold text-darb-green">{t("Choose screenshot")}</span>
-                    <span className="mt-2 max-w-md text-xs leading-5 text-darb-muted">{t("Upload a screenshot of your completed transfer. JPG, PNG, or WebP up to 10 MB.")}</span>
+                    <span id="payment-proof-help" className="mt-2 max-w-md text-xs leading-5 text-darb-muted">{t("Upload a clear screenshot of the successful transfer.")}</span>
+                    <span id="payment-proof-requirements" className="mt-1 text-[11px] text-darb-muted">{t("JPG, PNG or WebP, up to 10 MB.")}</span>
                     <span className="mt-2 text-[11px] text-darb-muted">{t("You can also drag and drop the file here.")}</span>
-                    <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
+                    <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-requirements payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
                   </label>) : (<div className="mt-3 grid min-h-64 gap-5 rounded-[1.25rem] border border-darb-gold/40 bg-darb-surface/60 p-5 sm:grid-cols-[160px_1fr_auto] sm:items-center">
                     <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green sm:w-40">
                       {paymentProofPreview ? (<img src={paymentProofPreview} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : null}
@@ -817,7 +816,6 @@ function Checkout() {
                       <button type="button" onClick={() => { setPaymentProof(null); setPaymentProofError(""); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>{t("Remove")}</button>
                     </div>
                   </div>)}
-                <p id="payment-proof-help" className="mt-3 text-xs leading-5 text-darb-muted">{t("Darb securely optimizes the screenshot before private storage and admin review.")}</p>
                 {paymentProofError && <p id="payment-proof-error" className="mt-2 text-sm font-semibold text-red-700" role="alert">{t(paymentProofError)}</p>}
                 {!pricing && (<p className="mt-2 text-xs font-semibold text-amber-700">{t("Wait for the server-confirmed total above before transferring.")}</p>)}
               </div>)}

@@ -32,24 +32,47 @@ const getAvailableEntitlements = async (userId, session = null) => {
 };
 
 const ownerFilter = (userId, guestPhone) => {
-  if (userId) return { user: userId };
   const phone = normalizeEgyptPhone(guestPhone || "");
-  if (!phone) return null;
-  return { user: null, ownerPhone: phone };
+  const owners = [];
+  if (userId) owners.push({ user: userId });
+  if (phone) owners.push({ user: null, ownerPhone: phone });
+  if (!owners.length) return null;
+  return owners.length === 1 ? owners[0] : { $or: owners };
 };
 
-const findAvailableEntitlementByCode = (userId, code, session = null, guestPhone = "") => {
+const resolveEntitlementCodeForCheckout = async ({
+  userId = null,
+  guestPhone = "",
+  code = "",
+  session = null,
+} = {}) => {
   const cleanCode = String(code || "").trim().toUpperCase();
+  if (!cleanCode) {
+    return { isEntitlementCode: false, entitlement: null, reason: "empty" };
+  }
+
   const owner = ownerFilter(userId, guestPhone);
-  if (!cleanCode || !owner) return Promise.resolve(null);
-  const query = Entitlement.findOne({
-    ...owner,
-    code: cleanCode,
-    status: "available",
-    $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-  });
-  if (session) query.session(session);
-  return query;
+  if (owner) {
+    const ownerQuery = Entitlement.findOne({ ...owner, code: cleanCode });
+    if (session) ownerQuery.session(session);
+    const entitlement = await ownerQuery;
+    if (entitlement) {
+      return { isEntitlementCode: true, entitlement, reason: "owner_match" };
+    }
+  }
+
+  const existenceQuery = Entitlement.exists({ code: cleanCode });
+  if (session) existenceQuery.session(session);
+  const entitlementExists = await existenceQuery;
+  if (entitlementExists) {
+    return {
+      isEntitlementCode: true,
+      entitlement: null,
+      reason: owner ? "different_checkout_details" : "checkout_details_required",
+    };
+  }
+
+  return { isEntitlementCode: false, entitlement: null, reason: "not_found" };
 };
 
 const categorySlugsForItem = (item) => [
@@ -98,7 +121,7 @@ const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId,
   });
   if (session) query.session(session);
   const entitlement = await query;
-  if (!entitlement) throw new Error("This reward is unavailable, expired, or belongs to different details.");
+  if (!entitlement) throw new Error("This reward is unavailable, expired, already used, or belongs to a different phone number or account.");
   const discount = priceEntitlement(entitlement, items, pricing.subtotal, pricing.baseDeliveryFee);
   if (!discount) throw new Error("This reward is not eligible for the current cart.");
   const deliveryFee = discount.freeShipping ? 0 : pricing.baseDeliveryFee;
@@ -144,7 +167,7 @@ module.exports = {
   buildEntitlementOwnerFilter: ownerFilter,
   createFirstOrderEntitlement,
   getAvailableEntitlements,
-  findAvailableEntitlementByCode,
+  resolveEntitlementCodeForCheckout,
   applySelectedEntitlement,
   consumeEntitlement,
   restoreEntitlement,

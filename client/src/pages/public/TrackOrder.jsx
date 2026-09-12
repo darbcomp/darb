@@ -471,8 +471,24 @@ function GuestPaymentProofPanel({
   );
 }
 
+function StatusField({ label, status }) {
+  const { t } = useLanguage();
+  if (!status) return null;
+
+  return (
+    <div className="rounded-2xl border border-darb-gold/20 bg-darb-cream/35 p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-darb-gold">
+        {t(label)}
+      </p>
+      <div className="mt-2">
+        <StatusBadge status={status} />
+      </div>
+    </div>
+  );
+}
+
 function TrackOrder() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [
     form,
     setForm,
@@ -563,10 +579,14 @@ function TrackOrder() {
       value,
     } = event.target;
 
+    const nextValue = name === "orderNumber"
+      ? value.replace(/^\s*DARB\s*-?\s*/i, "").replace(/\D/g, "")
+      : value;
+
     setForm(
       (current) => ({
         ...current,
-        [name]: value,
+        [name]: nextValue,
       })
     );
   };
@@ -576,10 +596,8 @@ function TrackOrder() {
   ) => {
     event.preventDefault();
 
-    const orderNumber =
-      form.orderNumber
-        .trim()
-        .toUpperCase();
+    const orderNumberDigits = form.orderNumber.trim();
+    const orderNumber = orderNumberDigits ? `DARB-${orderNumberDigits}` : "";
 
     const phone =
       form.phone.trim();
@@ -606,6 +624,10 @@ function TrackOrder() {
   const displayOrder =
     trackedOrder ||
     paymentProofData;
+
+  const canonicalOrderNumber = form.orderNumber
+    ? `DARB-${form.orderNumber}`
+    : "";
 
   const items =
     trackedOrder?.items ||
@@ -642,18 +664,22 @@ function TrackOrder() {
                 Order Number
               </span>
 
-              <input
-                name="orderNumber"
-                value={
-                  form.orderNumber
-                }
-                onChange={
-                  handleChange
-                }
-                placeholder="DARB-1001"
-                autoComplete="off"
-                className="w-full rounded-full border border-darb-gold/30 px-5 py-3 uppercase outline-none transition focus:border-darb-green"
-              />
+              <div dir="ltr" className="flex overflow-hidden rounded-full border border-darb-gold/30 bg-white transition focus-within:border-darb-green focus-within:ring-1 focus-within:ring-darb-green">
+                <span className="flex items-center border-e border-darb-gold/25 bg-darb-cream px-5 text-sm font-bold tracking-wide text-darb-green" aria-hidden="true">
+                  DARB-
+                </span>
+                <input
+                  name="orderNumber"
+                  value={form.orderNumber}
+                  onChange={handleChange}
+                  placeholder="1001"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  aria-label={t("Order number digits")}
+                  className="min-w-0 flex-1 px-4 py-3 outline-none"
+                />
+              </div>
             </label>
 
             <label className="mt-4 block">
@@ -742,8 +768,7 @@ function TrackOrder() {
                   </p>
 
                   <h2 className="mt-1 font-display text-4xl text-darb-green">
-                    {displayOrder.orderNumber ||
-                      form.orderNumber.toUpperCase()}
+                    {displayOrder.orderNumber || canonicalOrderNumber}
                   </h2>
 
                   {trackedOrder?.createdAt && (
@@ -756,26 +781,11 @@ function TrackOrder() {
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {displayOrder.orderStatus && (
-                    <StatusBadge
-                      status={
-                        displayOrder.orderStatus
-                      }
-                    />
-                  )}
-                  <a href={buildOrderWhatsAppUrl(displayOrder.orderNumber, ["pending", "confirmed"].includes(displayOrder.orderStatus) ? "cancellation or order support" : "return, exchange, or order support")} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-darb-green/25 px-4 py-2 text-sm font-semibold text-darb-green">
-                    WhatsApp support
-                  </a>
+              </div>
 
-                  {displayOrder.paymentStatus && (
-                    <StatusBadge
-                      status={
-                        displayOrder.paymentStatus
-                      }
-                    />
-                  )}
-                </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <StatusField label="Order status" status={displayOrder.orderStatus} />
+                <StatusField label="Payment status" status={displayOrder.paymentStatus} />
               </div>
 
               {items.length >
@@ -890,9 +900,7 @@ function TrackOrder() {
               </div>
 
               <GuestPaymentProofPanel
-                orderNumber={form.orderNumber
-                  .trim()
-                  .toUpperCase()}
+                orderNumber={canonicalOrderNumber}
                 phone={form.phone.trim()}
                 paymentProofData={
                   paymentProofData
@@ -901,6 +909,10 @@ function TrackOrder() {
                   setPaymentProofData
                 }
               />
+
+              <a href={buildOrderWhatsAppUrl(displayOrder.orderNumber, ["pending", "confirmed"].includes(displayOrder.orderStatus) ? "cancellation or order support" : "return, exchange, or order support")} target="_blank" rel="noreferrer" className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-darb-green/30 px-5 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-green hover:text-darb-beige">
+                {t("WhatsApp support")}
+              </a>
             </div>
           )}
         </div>

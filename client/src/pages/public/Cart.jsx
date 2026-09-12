@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   ArrowRight,
@@ -12,6 +14,7 @@ import {
 import { useCart } from "../../context/useCart";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
+import { previewOrder } from "../../api/orderApi";
 
 import {
   formatCurrency,
@@ -32,6 +35,23 @@ function Cart() {
     removeItem,
     clearCart,
   } = useCart();
+  const previewItems = useMemo(() => items.map((item) => ({
+    product: item.productId,
+    slug: item.slug,
+    quantity: item.quantity,
+    variant: item.variant,
+  })), [items]);
+  const pricingPreview = useQuery({
+    queryKey: ["cart-pricing-preview", previewItems],
+    queryFn: () => previewOrder({ items: previewItems, pricingOnly: true }),
+    enabled: previewItems.length > 0,
+    retry: 1,
+  });
+  const previewPricing = pricingPreview.data?.data?.pricing;
+  const automaticDiscounts = previewPricing?.discounts || [];
+  const estimatedBeforeDelivery = previewPricing?.deliveryConfirmed === false
+    ? previewPricing.totalBeforeDelivery
+    : subtotal;
   const localizedItemName = (item) =>
     language === "ar" && item.arabicName ? item.arabicName : item.name;
   const handleClearCart = async () => {
@@ -95,7 +115,7 @@ function Cart() {
 
       <section className="border-b border-darb-gold/20">
         <div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8">
-          <div className="flex items-end justify-between gap-6">
+          <div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">
                 {t("Your Selection")}
@@ -110,13 +130,6 @@ function Cart() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleClearCart}
-              className="hidden text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-red-700 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:block"
-            >
-              {t("Clear cart")}
-            </button>
           </div>
         </div>
       </section>
@@ -132,6 +145,14 @@ function Cart() {
           ========================== */}
 
           <div>
+            <Link
+              to="/shop"
+              className="mb-5 inline-flex items-center gap-2 text-xs font-semibold text-darb-green transition hover:text-darb-gold"
+            >
+              <span aria-hidden="true">←</span>
+              {t("Continue Shopping")}
+            </Link>
+
             <div className="divide-y divide-darb-gold/20 border-y border-darb-gold/20">
               {items.map(
                 (item) => {
@@ -377,23 +398,14 @@ function Cart() {
               )}
             </div>
 
-            <div className="mt-8 flex flex-col items-start gap-5">
+            <div className="mt-8">
               <button
                 type="button"
                 onClick={handleClearCart}
-                className="text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-red-700 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:hidden"
+                className="text-xs font-semibold text-darb-muted underline decoration-darb-gold underline-offset-4 transition hover:text-red-700 focus-visible:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
               >
                 {t("Clear cart")}
               </button>
-
-              <Link
-                to="/shop"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-darb-green transition hover:text-darb-gold"
-              >
-                <span>←</span>
-
-                {t("Continue Shopping")}
-              </Link>
             </div>
           </div>
 
@@ -447,13 +459,18 @@ function Cart() {
                   />
                 )}
 
-                <div className="border-t border-darb-gold/15 pt-4">
-                  <SummaryRow
-                    label={t("Offers & bundles")}
-                    value={t("Calculated at checkout")}
-                    subtle
-                  />
-                </div>
+                {automaticDiscounts.length > 0 && (
+                  <div className="space-y-3 border-t border-darb-gold/15 pt-4">
+                    {automaticDiscounts.map((discount, index) => (
+                      <SummaryRow
+                        key={`${discount.sourceType}-${discount.sourceId || index}`}
+                        label={discount.name || discount.title || t("Automatic promotion")}
+                        value={discount.amount > 0 ? `-${formatCurrency(discount.amount)}` : t("Applied")}
+                        saving
+                      />
+                    ))}
+                  </div>
+                )}
 
                 <SummaryRow
                   label={t("Delivery")}
@@ -472,17 +489,25 @@ function Cart() {
                     </p>
 
                     <p className="mt-1 text-[10px] leading-5 text-darb-muted">
-                      {t("Before delivery, offers and coupons.")}
+                      {t("Before delivery. Final pricing is confirmed at checkout.")}
                     </p>
                   </div>
 
                   <p className="shrink-0 font-display text-3xl text-darb-green">
                     {formatCurrency(
-                      subtotal
+                      estimatedBeforeDelivery
                     )}
                   </p>
                 </div>
               </div>
+
+              {(pricingPreview.isFetching || pricingPreview.isError) && (
+                <p className="mt-3 text-[10px] leading-5 text-darb-muted" aria-live="polite">
+                  {t(pricingPreview.isError
+                    ? "Promotional pricing will be confirmed at checkout."
+                    : "Checking current promotions...")}
+                </p>
+              )}
 
               {/* Checkout CTA */}
 
