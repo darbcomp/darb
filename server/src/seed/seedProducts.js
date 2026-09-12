@@ -11,12 +11,25 @@ const { putPublicObject } = require("../services/mediaStorage.service");
 
 const productRoot = path.resolve(__dirname, "../../../client/public/images/products");
 const groupFor = (product) => product.productType === "musk" ? "musk" : product.primaryCategory === "women" ? "female" : "male";
+const compareProductImageNames = (slug, a, b) => {
+  const base = String(slug).toLowerCase();
+  const position = (filename) => {
+    const stem = path.parse(filename).name.toLowerCase();
+    if (stem === base) return { group: 0, number: 0 };
+    const suffix = stem.startsWith(`${base}-`) ? stem.slice(base.length + 1) : "";
+    if (/^\d+$/.test(suffix)) return { group: 1, number: Number(suffix) };
+    return { group: 2, number: 0 };
+  };
+  const left = position(a);
+  const right = position(b);
+  return left.group - right.group || left.number - right.number || a.localeCompare(b, "en", { sensitivity: "base" }) || a.localeCompare(b, "en");
+};
 const imageFilesFor = (product) => {
   const dir = path.join(productRoot, groupFor(product), product.slug);
   if (!fs.existsSync(dir)) throw new Error(`Missing product image folder: ${dir}`);
   const files = fs.readdirSync(dir)
     .filter((name) => /\.(jpe?g|png|webp)$/i.test(name))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    .sort((a, b) => compareProductImageNames(product.slug, a, b));
   if (!files.length) throw new Error(`No product images found for ${product.name}: ${dir}`);
   if (files.length > 10) throw new Error(`${product.name} has ${files.length} images; max is 10.`);
   return { dir, files };
