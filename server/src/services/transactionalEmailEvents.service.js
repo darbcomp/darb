@@ -84,10 +84,22 @@ const getReviewApprovalPlan = ({ source, email = "", previousStatus, nextStatus 
   return [{ type: "customer_review_approved", audience: "customer", to: customerEmail }];
 };
 
+const getRewardClaimEmailPlan = ({ email = "", entitlement = null, isGuest = false } = {}) => {
+  const customerEmail = normalizeTransactionalEmail(email);
+  if (!customerEmail || !entitlement) return [];
+  return [{
+    type: "customer_reward_claimed",
+    audience: "customer",
+    to: customerEmail,
+    isGuest: Boolean(isGuest),
+  }];
+};
+
 module.exports = {
   getPaymentProofDecisionPlan,
   getPaymentProofSubmissionPlan,
   getRegistrationEmailPlan,
+  getRewardClaimEmailPlan,
   getReviewApprovalPlan,
   getReviewSubmissionPlan,
   normalizeTransactionalEmail,

@@ -1,5 +1,7 @@
 import {
   ArrowRight,
+  Check,
+  Copy,
   LogOut,
   Mail,
   Phone,
@@ -26,9 +28,11 @@ import SpinWheel from "../../components/rewards/SpinWheel";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LocalizedPublicContent } from "../../components/common/InfoPageShell";
+import { formatCurrency } from "../../utils/formatCurrency";
+import { copyRewardCode, getRewardDisplayStatus, getRewardUsageText } from "../../utils/rewardPresentation";
 
 function Account() {
-  const { confirm } = useFeedback();
+  const { confirm, notify } = useFeedback();
   const { language, t } = useLanguage();
   const {
     user,
@@ -43,8 +47,21 @@ function Account() {
     setIsLoggingOut,
   ] = useState(false);
   const [wheelOpen, setWheelOpen] = useState(false);
+  const [copiedRewardId, setCopiedRewardId] = useState("");
   const rewardsQuery = useQuery({ queryKey: ["my-rewards"], queryFn: getMyRewards });
   const rewards = rewardsQuery.data?.data;
+
+  const handleCopyRewardCode = async (reward) => {
+    const code = String(reward?.code || "").trim();
+    if (!code) return;
+    try {
+      if (!await copyRewardCode(code)) throw new Error("copy_failed");
+      setCopiedRewardId(String(reward._id));
+      notify({ type: "success", title: t("Copied") });
+    } catch {
+      notify({ type: "error", title: t("Could not copy code") });
+    }
+  };
 
   /* =========================
      ADMIN SAFETY
@@ -445,10 +462,16 @@ function Account() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-darb-gold">{t("Rewards")}</p>
               <h2 className="mt-2 font-display text-3xl text-darb-green">{t("Your available paths")}</h2>
               {rewards?.spinAvailable && <button type="button" onClick={() => setWheelOpen(true)} className="mt-5 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige">{t("Reveal your signup reward")}</button>}
-              <div className="mt-4 space-y-2">
-                {(rewards?.available || []).map((reward) => <div key={reward._id} className="rounded-2xl bg-white/60 px-4 py-3 text-sm"><strong className="text-darb-green">{reward.label}</strong>{reward.expiresAt && <p className="mt-1 text-xs text-darb-muted">{t("Expires")} {new Date(reward.expiresAt).toLocaleDateString(language === "ar" ? "ar-EG" : "en-EG")}</p>}</div>)}
+              <div className="mt-4 space-y-3">
+                {(rewards?.available || []).map((reward) => <article key={reward._id} className="rounded-2xl border border-darb-gold/15 bg-white/70 p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-base text-darb-green">{t(reward.label)}</strong><span className="rounded-full bg-darb-green/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-darb-green">{t("Available")}</span></div>
+                  {reward.expiresAt && <p className="mt-2 text-xs text-darb-muted">{t("Expires")} {new Date(reward.expiresAt).toLocaleDateString(language === "ar" ? "ar-EG" : "en-EG")}</p>}
+                  {Number(reward.minSubtotal) > 0 && <p className="mt-1 text-xs text-darb-muted">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</p>}
+                  {reward.code ? <div className="mt-4 rounded-xl bg-darb-green px-4 py-3 text-darb-beige"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-darb-gold">{t("Code")}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-3"><code className="break-all text-base font-bold tracking-wider" dir="ltr">{reward.code}</code><button type="button" onClick={() => handleCopyRewardCode(reward)} className="inline-flex min-h-10 items-center gap-2 rounded-full bg-darb-beige px-4 py-2 text-xs font-bold text-darb-green"><span aria-live="polite">{copiedRewardId === String(reward._id) ? t("Copied") : t("Copy code")}</span>{copiedRewardId === String(reward._id) ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}</button></div></div> : <p className="mt-3 font-semibold text-darb-green">{t("Saved to your account")}</p>}
+                  <p className="mt-3 text-xs leading-5 text-darb-muted">{getRewardUsageText(reward, t)}</p>
+                </article>)}
                 {!rewardsQuery.isLoading && !rewards?.spinAvailable && !rewards?.available?.length && <p className="text-sm text-darb-muted">{t("No unused rewards right now.")}</p>}
-                {(rewards?.history || []).filter((reward) => reward.status !== "available").slice(0, 5).map((reward) => <div key={reward._id} className="rounded-2xl border border-darb-gold/15 px-4 py-3 text-sm opacity-70"><strong className="text-darb-green">{reward.label}</strong><p className="mt-1 text-xs uppercase tracking-wide text-darb-muted">{reward.status}</p></div>)}
+                {(rewards?.history || []).filter((reward) => getRewardDisplayStatus(reward) !== "Available").slice(0, 5).map((reward) => <div key={reward._id} className="rounded-2xl border border-darb-gold/15 px-4 py-3 text-sm opacity-75"><div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-darb-green">{t(reward.label)}</strong><span className="text-[10px] font-bold uppercase tracking-wide text-darb-muted">{t(getRewardDisplayStatus(reward))}</span></div>{reward.code && <p className="mt-2 break-all font-mono text-xs text-darb-muted" dir="ltr">{reward.code}</p>}{reward.expiresAt && <p className="mt-1 text-xs text-darb-muted">{t("Expires")} {new Date(reward.expiresAt).toLocaleDateString(language === "ar" ? "ar-EG" : "en-EG")}</p>}</div>)}
               </div>
             </section>
             {/* My Orders */}

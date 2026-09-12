@@ -4,9 +4,11 @@ const {
   getPaymentProofDecisionPlan,
   getPaymentProofSubmissionPlan,
   getRegistrationEmailPlan,
+  getRewardClaimEmailPlan,
   getReviewApprovalPlan,
   getReviewSubmissionPlan,
 } = require("./transactionalEmailEvents.service");
+const { getRewardUsageDescription } = require("./rewardPresentation.service");
 
 const DEFAULT_BRAND = {
   darkGreen: "#0F3D2E",
@@ -58,19 +60,23 @@ const renderDetails = (details, color) => details
   .map((detail) => `<tr><td style="padding:8px 0;color:#756C62;font-size:13px;">${escapeHtml(detail.label)}</td><td align="right" style="padding:8px 0;color:${color};font-size:14px;font-weight:700;">${escapeHtml(detail.value)}</td></tr>`)
   .join("");
 
-const renderTransactionalEmail = ({ settings, title, intro, details = [], cta = null, footer = "A scent for every path." }) => {
+const renderTransactionalEmail = ({ settings, title, intro, details = [], highlight = null, cta = null, footer = "A scent for every path." }) => {
   const ctaMarkup = cta?.url
     ? `<div style="margin-top:24px;"><a href="${escapeHtml(cta.url)}" style="display:inline-block;padding:13px 22px;border-radius:999px;background:${settings.brand.darkGreen};color:${settings.brand.beige};font-size:14px;font-weight:700;text-decoration:none;">${escapeHtml(cta.label)}</a></div>`
     : "";
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:${settings.brand.cream};font-family:Arial,Helvetica,sans-serif;color:${settings.brand.black};"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:30px 14px;background:${settings.brand.cream};"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;overflow:hidden;border-radius:24px;background:#fff;"><tr><td align="center" style="padding:32px 24px;background:${settings.brand.darkGreen};"><div style="color:${settings.brand.softGold};font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:700;letter-spacing:5px;">DARB</div><div style="margin-top:7px;color:${settings.brand.beige};font-size:12px;letter-spacing:2px;">${escapeHtml(settings.tagline)}</div></td></tr><tr><td style="padding:36px 30px;"><h1 style="margin:0;color:${settings.brand.darkGreen};font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.25;">${escapeHtml(title)}</h1><p style="margin:15px 0 0;color:#756C62;font-size:15px;line-height:1.8;">${escapeHtml(intro)}</p>${details.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:22px;border-top:1px solid #E8E1D8;border-bottom:1px solid #E8E1D8;padding:10px 0;">${renderDetails(details, settings.brand.darkGreen)}</table>` : ""}${ctaMarkup}</td></tr><tr><td align="center" style="padding:25px 30px;background:${settings.brand.darkGreen};color:${settings.brand.beige};font-family:Georgia,'Times New Roman',serif;font-size:17px;">${escapeHtml(footer)}</td></tr></table></td></tr></table></body></html>`;
+  const highlightMarkup = highlight?.value
+    ? `<div style="margin-top:22px;padding:18px;border-radius:16px;background:${settings.brand.darkGreen};text-align:center;"><div style="color:${settings.brand.softGold};font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">${escapeHtml(highlight.label || "")}</div><div style="margin-top:9px;color:${settings.brand.beige};font-family:monospace;font-size:23px;font-weight:700;letter-spacing:2px;word-break:break-all;">${escapeHtml(highlight.value)}</div></div>`
+    : "";
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:${settings.brand.cream};font-family:Arial,Helvetica,sans-serif;color:${settings.brand.black};"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:30px 14px;background:${settings.brand.cream};"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;overflow:hidden;border-radius:24px;background:#fff;"><tr><td align="center" style="padding:32px 24px;background:${settings.brand.darkGreen};"><div style="color:${settings.brand.softGold};font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:700;letter-spacing:5px;">DARB</div><div style="margin-top:7px;color:${settings.brand.beige};font-size:12px;letter-spacing:2px;">${escapeHtml(settings.tagline)}</div></td></tr><tr><td style="padding:36px 30px;"><h1 style="margin:0;color:${settings.brand.darkGreen};font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.25;">${escapeHtml(title)}</h1><p style="margin:15px 0 0;color:#756C62;font-size:15px;line-height:1.8;">${escapeHtml(intro)}</p>${highlightMarkup}${details.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:22px;border-top:1px solid #E8E1D8;border-bottom:1px solid #E8E1D8;padding:10px 0;">${renderDetails(details, settings.brand.darkGreen)}</table>` : ""}${ctaMarkup}</td></tr><tr><td align="center" style="padding:25px 30px;background:${settings.brand.darkGreen};color:${settings.brand.beige};font-family:Georgia,'Times New Roman',serif;font-size:17px;">${escapeHtml(footer)}</td></tr></table></td></tr></table></body></html>`;
 };
 
-const buildText = ({ title, intro, details = [], cta = null }) => [
+const buildText = ({ title, intro, details = [], highlight = null, cta = null }) => [
   "DARB — درب",
   "A scent for every path.",
   "",
   title,
   intro,
+  ...(highlight?.value ? [`${highlight.label}: ${highlight.value}`] : []),
   ...details.filter((detail) => detail?.value).map((detail) => `${detail.label}: ${detail.value}`),
   ...(cta?.url ? ["", `${cta.label}: ${cta.url}`] : []),
 ].join("\n");
@@ -279,10 +285,47 @@ const sendReviewApprovalEmail = (review, { customerEmail = "", previousStatus = 
   });
 });
 
+const formatRewardExpiry = (value) => value
+  ? new Intl.DateTimeFormat("en-EG", { dateStyle: "long", timeZone: "Africa/Cairo" }).format(new Date(value))
+  : "";
+
+const buildRewardClaimMessage = (entitlement, { isGuest = false } = {}) => ({
+  subject: "Your Darb reward",
+  title: "Your Darb reward",
+  intro: getRewardUsageDescription(entitlement, { isGuest }),
+  highlight: entitlement?.code ? { label: "Reward code", value: entitlement.code } : null,
+  details: [
+    { label: "Reward", value: entitlement?.label || "Darb reward" },
+    { label: "Expires", value: formatRewardExpiry(entitlement?.expiresAt) },
+  ],
+  cta: {
+    label: isGuest ? "Shop Darb" : "My Account",
+    url: getSiteUrl(isGuest ? "/shop" : "/account"),
+  },
+});
+
+const sendRewardClaimEmail = (entitlement, { customerEmail = "", isGuest = false } = {}) => {
+  const plan = getRewardClaimEmailPlan({ email: customerEmail, entitlement, isGuest });
+  if (!plan.length) return Promise.resolve([]);
+  return safelyDeliver("Reward claim", async () => {
+    const { settings, adminEmail } = await getEmailContext();
+    return deliver({
+      plan,
+      settings,
+      adminEmail,
+      logLabel: "Reward claim",
+      buildMessage: () => buildRewardClaimMessage(entitlement, { isGuest }),
+    });
+  });
+};
+
 module.exports = {
   sendPaymentProofDecisionEmail,
   sendPaymentProofSubmittedEmails,
   sendRegistrationEmails,
+  sendRewardClaimEmail,
   sendReviewApprovalEmail,
   sendReviewSubmittedEmails,
+  buildRewardClaimMessage,
+  renderTransactionalEmail,
 };

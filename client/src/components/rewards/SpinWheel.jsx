@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Gift, X } from "lucide-react";
+import { Check, Copy, Gift, X } from "lucide-react";
 import { claimGuestOrderSpin, getMyRewards, spinReward } from "../../api/rewardApi";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
+import { copyRewardCode, getRewardUsageText } from "../../utils/rewardPresentation";
 
 const rewardOrder = ["spin-5", "spin-musk-20", "spin-free-shipping-1800", "spin-extra-tester", "spin-next-10"];
 const guestRewardKey = "darb_guest_rewards";
@@ -23,6 +24,7 @@ export default function SpinWheel({ onClose }) {
   const [phone, setPhone] = useState("");
   const [result, setResult] = useState(null);
   const [guestRewards, setGuestRewards] = useState(storedGuestRewards);
+  const [copied, setCopied] = useState(false);
 
   const rewardsQuery = useQuery({ queryKey: ["my-rewards"], queryFn: getMyRewards, enabled: isAuthenticated, staleTime: 15_000 });
   const availableSpins = rewardsQuery.data?.data?.spins?.filter((spin) => spin.status === "available") || [];
@@ -91,8 +93,17 @@ export default function SpinWheel({ onClose }) {
 
   const resetResult = () => {
     setResult(null);
+    setCopied(false);
     spinMutation.reset();
     guestMutation.reset();
+  };
+
+  const copyCode = async () => {
+    if (!result?.code) return;
+    try {
+      if (!await copyRewardCode(result.code)) throw new Error("copy_failed");
+      setCopied(true);
+    } catch { setCopied(false); }
   };
 
   return <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-darb-black/75 p-4" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -107,7 +118,7 @@ export default function SpinWheel({ onClose }) {
         <span className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-4 border-darb-green bg-darb-cream"><Gift className="text-darb-green" size={25}/></span>
       </div></div>
 
-      {result ? <div className="mt-6 rounded-2xl bg-darb-green p-5 text-darb-beige" aria-live="polite"><p className="text-xs uppercase tracking-[0.2em] text-darb-gold">{t("Your reward")}</p><strong className="mt-2 block font-display text-2xl">{t(result.label)}</strong>{result.code && <p className="mt-3 font-mono text-lg tracking-wider text-darb-gold">{result.code}</p>}<p className="mt-2 text-xs text-darb-beige/70">{t("Saved and ready for its eligible checkout.")}</p></div> : null}
+      {result ? <div className="mt-6 rounded-2xl bg-darb-green p-5 text-darb-beige" aria-live="polite"><p className="text-xs uppercase tracking-[0.2em] text-darb-gold">{t("Your reward")}</p><strong className="mt-2 block font-display text-2xl">{t(result.label)}</strong>{result.code ? <div className="mx-auto mt-4 max-w-sm rounded-xl border border-darb-gold/35 bg-black/10 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-darb-gold">{t("Code")}</p><code className="mt-2 block break-all text-lg font-bold tracking-wider text-darb-beige" dir="ltr">{result.code}</code><button type="button" onClick={copyCode} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-darb-beige px-4 py-2 text-xs font-bold text-darb-green"><span>{t(copied ? "Copied" : "Copy code")}</span>{copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}</button></div> : <p className="mt-3 font-semibold text-darb-gold">{t("Saved to your account")}</p>}<p className="mx-auto mt-3 max-w-sm text-xs leading-5 text-darb-beige/75">{getRewardUsageText(result, t)}</p>{result.expiresAt && <p className="mt-2 text-xs text-darb-beige/65">{t("Expires")} {new Date(result.expiresAt).toLocaleDateString(isArabic ? "ar-EG" : "en-EG")}</p>}</div> : null}
 
       {isAuthenticated ? <div className="mt-6">
         {rewardsQuery.isSuccess && availableSpins.length === 0 ? <div className="rounded-[1.5rem] border border-darb-gold/30 bg-darb-surface px-5 py-6 text-center sm:px-7" role="status">

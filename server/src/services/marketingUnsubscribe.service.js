@@ -8,7 +8,7 @@ const TOKEN_PURPOSE = "marketing_unsubscribe";
 const createUnsubscribeToken = ({ email, userId = null }) => {
   const normalizedEmail = normalizeMarketingEmail(email);
   if (!normalizedEmail || !process.env.JWT_SECRET) return "";
-  return jwt.sign({ purpose: TOKEN_PURPOSE, email: normalizedEmail, userId: userId ? String(userId) : "" }, process.env.JWT_SECRET, { expiresIn: "180d" });
+  return jwt.sign({ purpose: TOKEN_PURPOSE, email: normalizedEmail, userId: userId ? String(userId) : "" }, process.env.JWT_SECRET);
 };
 
 const verifyUnsubscribeToken = (token) => {
