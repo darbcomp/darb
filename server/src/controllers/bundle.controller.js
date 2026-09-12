@@ -447,7 +447,7 @@ const populateBundle = (query) =>
     )
     .populate(
       "specificItems.product",
-      "name slug price images"
+      "name arabicName slug sku price compareAtPrice sizeLabel sizeMl stock images variants categorySnapshot isActive isPlaceholder"
     );
 
 const getPublicBundles = async (req, res) => {

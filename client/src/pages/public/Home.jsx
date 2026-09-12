@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -16,8 +18,12 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronLeft,
+  ImagePlus,
+  LoaderCircle,
   ShieldCheck,
+  ShoppingBag,
   Star,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -37,7 +43,11 @@ import ProductCard from "../../components/product/ProductCard";
 import ReviewCarousel from "../../components/common/ReviewCarousel";
 import { getPublicBundles } from "../../api/bundleApi";
 import { useAuth } from "../../context/AuthContext";
+import { useCart } from "../../context/useCart";
+import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
+import { formatCurrency } from "../../utils/formatCurrency";
+import { getActiveProductVariants } from "../../utils/productVariants";
 import { localizeBundle, localizeCategory } from "../../utils/localizedContent";
 
 const categoryVisuals = {
@@ -69,6 +79,12 @@ const initialReviewForm = {
   text: "",
   imageFile: null,
 };
+
+const REVIEW_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 const reviewPrompts = [
   {
@@ -140,14 +156,157 @@ function CategoryCard({
   );
 }
 
+const getBundleCartPlan = (bundle, cartItems) => {
+  if (bundle.bundleType !== "specific_products") {
+    return { action: "choose_products", items: [] };
+  }
+
+  if (!Array.isArray(bundle.specificItems) || bundle.specificItems.length === 0) {
+    return { action: "unavailable", items: [] };
+  }
+
+  const plannedItems = [];
+
+  for (const item of bundle.specificItems) {
+    const product = item?.product;
+    const quantity = Number(item?.quantity);
+
+    if (
+      !product?._id ||
+      product.isActive === false ||
+      product.isPlaceholder === true ||
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      return { action: "unavailable", items: [] };
+    }
+
+    const purchasableVariants = getActiveProductVariants(product).filter(
+      (variant) =>
+        variant.isActive !== false &&
+        Number(variant.price) > 0 &&
+        Number(variant.stock) > 0
+    );
+
+    if (purchasableVariants.length > 1) {
+      return { action: "choose_options", items: [] };
+    }
+
+    if (purchasableVariants.length !== 1) {
+      return { action: "unavailable", items: [] };
+    }
+
+    plannedItems.push({
+      product,
+      quantity,
+      variant: purchasableVariants[0],
+    });
+  }
+
+  const requiredByCartItem = new Map();
+
+  for (const item of plannedItems) {
+    const cartItemId = `${item.product._id || item.product.slug}_${
+      item.variant.variantId || "default"
+    }`;
+    const current = requiredByCartItem.get(cartItemId) || {
+      required: 0,
+      stock: Number(item.variant.stock) || 0,
+    };
+    current.required += item.quantity;
+    requiredByCartItem.set(cartItemId, current);
+  }
+
+  for (const [cartItemId, requirement] of requiredByCartItem) {
+    const quantityInCart =
+      cartItems.find((item) => item.cartItemId === cartItemId)?.quantity || 0;
+
+    if (quantityInCart + requirement.required > requirement.stock) {
+      return { action: "unavailable", items: [] };
+    }
+  }
+
+  return { action: "add", items: plannedItems };
+};
+
 function BundleCard({ bundle: sourceBundle }) {
   const { language, t } = useLanguage();
+  const { addToCart, items: cartItems } = useCart();
+  const { notify } = useFeedback();
+  const addLockRef = useRef(false);
+  const unlockTimerRef = useRef(null);
+  const [isAdding, setIsAdding] = useState(false);
   const bundle = localizeBundle(sourceBundle, language);
   const price = Number(bundle.fixedBundlePrice || (bundle.discountType === "fixed_bundle_price" ? bundle.discountValue : 0));
   const detail = bundle.description || (bundle.requiredQuantity ? t(`Choose ${bundle.requiredQuantity} Darb fragrances.`) : "");
-  return <article className="flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-darb-surface shadow-soft">
+  const cartPlan = getBundleCartPlan(sourceBundle, cartItems);
+
+  useEffect(
+    () => () => window.clearTimeout(unlockTimerRef.current),
+    []
+  );
+
+  const handleAddBundle = () => {
+    if (cartPlan.action !== "add" || addLockRef.current) return;
+
+    addLockRef.current = true;
+    setIsAdding(true);
+
+    try {
+      cartPlan.items.forEach(({ product, quantity, variant }) => {
+        addToCart(product, quantity, variant.isLegacy ? null : variant);
+      });
+
+      notify({
+        type: "success",
+        title: t("Bundle added to cart"),
+        message: t("The bundle items are ready in your cart."),
+      });
+    } catch {
+      notify({
+        type: "error",
+        title: t("Bundle could not be added"),
+        message: t("Please choose the products from the shop."),
+      });
+    }
+
+    unlockTimerRef.current = window.setTimeout(() => {
+      addLockRef.current = false;
+      setIsAdding(false);
+    }, 600);
+  };
+
+  const action =
+    cartPlan.action === "add" ? (
+      <button
+        type="button"
+        onClick={handleAddBundle}
+        disabled={isAdding}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-wait disabled:opacity-65 sm:w-auto"
+      >
+        {isAdding ? (
+          <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+        ) : (
+          <ShoppingBag size={17} aria-hidden="true" />
+        )}
+        {t(isAdding ? "Adding bundle..." : "Add Bundle to Cart")}
+      </button>
+    ) : cartPlan.action === "unavailable" ? (
+      <span className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-full border border-darb-gold/25 bg-darb-cream/70 px-5 py-3 text-sm font-semibold text-darb-muted sm:w-auto">
+        {t("Currently unavailable")}
+      </span>
+    ) : (
+      <Link
+        to="/shop"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-darb-green/35 px-5 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-green hover:text-darb-beige sm:w-auto"
+      >
+        {t(cartPlan.action === "choose_options" ? "Choose Options" : "Choose Products")}
+      </Link>
+    );
+
+  return <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-darb-surface shadow-soft">
     <div className="aspect-[16/10] overflow-hidden bg-darb-green">{bundle.image?.url ? <img src={bundle.image.url} alt={bundle.image.alt || bundle.name} loading="lazy" className="h-full w-full object-cover"/> : <div className="grid h-full place-items-center font-display text-4xl text-darb-gold">Darb</div>}</div>
-    <div className="flex flex-1 flex-col p-5 sm:p-6"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">{t("Curated path")}</p><h3 className="mt-2 font-display text-3xl text-darb-green">{bundle.title || bundle.name}</h3>{detail && <p className="mt-3 text-sm leading-6 text-darb-muted">{detail}</p>}<div className="mt-4 flex flex-wrap items-center gap-3">{price > 0 && <p className="font-semibold text-darb-black">{price.toLocaleString("en-EG")} EGP</p>}{bundle.discountType === "percentage" && Number(bundle.discountValue) > 0 && <p className="text-sm font-semibold text-darb-green">{t(`Save ${bundle.discountValue}%`)}</p>}{bundle.freeDelivery && <span className="inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">{t("Free delivery")}</span>}</div><Link to="/shop" className="mt-auto inline-flex pt-6 text-sm font-semibold text-darb-green underline decoration-darb-gold underline-offset-4">{t("Explore bundle")}</Link></div>
+    <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold">{t("Curated path")}</p><h3 className="mt-2 line-clamp-2 break-words font-display text-3xl text-darb-green">{bundle.title || bundle.name}</h3>{detail && <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-darb-muted">{detail}</p>}<div className="mt-4 flex flex-wrap items-center gap-3">{price > 0 && <p className="font-semibold text-darb-black">{formatCurrency(price)}</p>}{bundle.discountType === "percentage" && Number(bundle.discountValue) > 0 && <p className="text-sm font-semibold text-darb-green">{t(`Save ${bundle.discountValue}%`)}</p>}{bundle.freeDelivery && <span className="inline-flex rounded-full bg-darb-green px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-darb-beige">{t("Free delivery")}</span>}</div><div className="mt-auto pt-6">{action}</div></div>
   </article>;
 }
 
@@ -356,6 +515,8 @@ function Home() {
     isAuthenticated,
   } = useAuth();
   const { language, t } = useLanguage();
+  const reviewImageInputRef = useRef(null);
+  const reviewImagePreviewUrlRef = useRef("");
 
   const [
     reviewForm,
@@ -388,6 +549,26 @@ function Home() {
     activePrompt,
     setActivePrompt,
   ] = useState(0);
+
+  const [reviewImagePreview, setReviewImagePreview] = useState("");
+
+  const clearReviewImagePreview = useCallback(() => {
+    if (reviewImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(reviewImagePreviewUrlRef.current);
+      reviewImagePreviewUrlRef.current = "";
+    }
+
+    setReviewImagePreview("");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (reviewImagePreviewUrlRef.current) {
+        URL.revokeObjectURL(reviewImagePreviewUrlRef.current);
+        reviewImagePreviewUrlRef.current = "";
+      }
+    };
+  }, []);
 
   const categoriesQuery =
     useQuery({
@@ -515,6 +696,9 @@ function Home() {
       if (
         event.key === "Escape"
       ) {
+        clearReviewImagePreview();
+        setReviewForm(initialReviewForm);
+        setReviewError("");
         setReviewModalOpen(
           false
         );
@@ -535,7 +719,7 @@ function Home() {
         handleKeyDown
       );
     };
-  }, [reviewModalOpen]);
+  }, [clearReviewImagePreview, reviewModalOpen]);
 
   const reviewMutation =
     useMutation({
@@ -558,6 +742,7 @@ function Home() {
 
         setReviewStep(1);
 
+        clearReviewImagePreview();
         setReviewForm(
           initialReviewForm
         );
@@ -592,6 +777,7 @@ function Home() {
     });
 
   const openReviewModal = () => {
+    clearReviewImagePreview();
     setReviewError("");
     setReviewMessage("");
     setReviewStep(1);
@@ -615,6 +801,9 @@ function Home() {
 
     setReviewModalOpen(false);
     setReviewStep(1);
+    clearReviewImagePreview();
+    setReviewForm(initialReviewForm);
+    if (reviewImageInputRef.current) reviewImageInputRef.current.value = "";
     setReviewError("");
   };
 
@@ -627,13 +816,47 @@ function Home() {
       files,
     } = event.target;
 
+    if (name === "imageFile") {
+      const file = files?.[0];
+      event.target.value = "";
+
+      if (!file) return;
+
+      if (!REVIEW_IMAGE_TYPES.has(file.type)) {
+        setReviewError("Choose a JPG, PNG, or WebP image.");
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setReviewError("Choose an image that is 5 MB or smaller.");
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      if (reviewImagePreviewUrlRef.current) {
+        URL.revokeObjectURL(reviewImagePreviewUrlRef.current);
+      }
+      reviewImagePreviewUrlRef.current = previewUrl;
+      setReviewImagePreview(previewUrl);
+      setReviewForm((current) => ({ ...current, imageFile: file }));
+      setReviewError("");
+      return;
+    }
+
     setReviewForm(
       (current) => ({
         ...current,
-        [name]: files?.[0] || value,
+        [name]: value,
       })
     );
 
+    setReviewError("");
+  };
+
+  const removeReviewImage = () => {
+    clearReviewImagePreview();
+    setReviewForm((current) => ({ ...current, imageFile: null }));
+    if (reviewImageInputRef.current) reviewImageInputRef.current.value = "";
     setReviewError("");
   };
 
@@ -1486,8 +1709,72 @@ function Home() {
 
                   <div className="mt-5">
                     <label className="mb-2 block text-sm font-semibold text-darb-green">{t("Photo (optional)")}</label>
-                    <input type="file" name="imageFile" accept="image/jpeg,image/png,image/webp,image/avif" onChange={handleReviewChange} className="w-full rounded-2xl border border-darb-gold/30 bg-white px-4 py-3 text-sm" />
-                    <p className="mt-2 text-xs text-darb-muted">{t("Images only. Videos are not accepted through this form.")}</p>
+                    <input
+                      ref={reviewImageInputRef}
+                      id="review-photo"
+                      type="file"
+                      name="imageFile"
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      onChange={handleReviewChange}
+                      className="peer sr-only"
+                      aria-describedby="review-photo-requirements"
+                    />
+
+                    {!reviewForm.imageFile ? (
+                      <label
+                        htmlFor="review-photo"
+                        className="group flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed border-darb-gold/35 bg-white/70 px-5 py-7 text-center transition hover:border-darb-green hover:bg-white peer-focus-visible:border-darb-green peer-focus-visible:ring-2 peer-focus-visible:ring-darb-green/25"
+                      >
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-darb-green text-darb-beige transition group-hover:bg-darb-black">
+                          <ImagePlus size={21} aria-hidden="true" />
+                        </span>
+                        <span className="mt-4 font-display text-2xl text-darb-green">
+                          {t("Add a photo")}
+                        </span>
+                        <span className="mt-1 text-xs text-darb-muted">
+                          {t("JPG, PNG or WebP")}
+                        </span>
+                        <span className="mt-4 inline-flex min-h-10 items-center justify-center rounded-full border border-darb-gold/35 bg-darb-cream px-5 text-sm font-semibold text-darb-green transition group-hover:border-darb-green">
+                          {t("Browse")}
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="flex min-w-0 flex-col gap-4 rounded-[1.5rem] border border-darb-gold/30 bg-white p-4 peer-focus-visible:border-darb-green peer-focus-visible:ring-2 peer-focus-visible:ring-darb-green/25 sm:flex-row sm:items-center">
+                        <img
+                          src={reviewImagePreview}
+                          alt={t("Selected review photo preview")}
+                          className="h-40 w-full rounded-2xl object-cover sm:h-28 sm:w-28 sm:shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-darb-green">
+                            {reviewForm.imageFile.name}
+                          </p>
+                          <p className="mt-1 text-xs text-darb-muted">
+                            {t("Ready to add to your review")}
+                          </p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <label
+                              htmlFor="review-photo"
+                              className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border border-darb-green/35 px-4 text-xs font-semibold text-darb-green transition hover:bg-darb-green hover:text-darb-beige"
+                            >
+                              {t("Replace photo")}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={removeReviewImage}
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-red-200 px-4 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                              {t("Remove photo")}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <p id="review-photo-requirements" className="mt-2 text-xs leading-5 text-darb-muted">
+                      {t("JPG, PNG or WebP, up to 5 MB. Photos are optional; videos are not accepted.")}
+                    </p>
                   </div>
 
                   <div className="mt-8 flex justify-end">

@@ -1,4 +1,5 @@
 import {
+  useRef,
   useState,
 } from "react";
 
@@ -489,6 +490,7 @@ function StatusField({ label, status }) {
 
 function TrackOrder() {
   const { language, t } = useLanguage();
+  const orderNumberInputRef = useRef(null);
   const [
     form,
     setForm,
@@ -664,11 +666,23 @@ function TrackOrder() {
                 Order Number
               </span>
 
-              <div dir="ltr" className="flex overflow-hidden rounded-full border border-darb-gold/30 bg-white transition focus-within:border-darb-green focus-within:ring-1 focus-within:ring-darb-green">
-                <span className="flex items-center border-e border-darb-gold/25 bg-darb-cream px-5 text-sm font-bold tracking-wide text-darb-green" aria-hidden="true">
+              <div
+                dir="ltr"
+                onMouseDown={(event) => {
+                  if (event.target === orderNumberInputRef.current) return;
+                  event.preventDefault();
+                  orderNumberInputRef.current?.focus();
+                }}
+                className="flex cursor-text overflow-hidden rounded-full border border-darb-gold/30 bg-white transition focus-within:border-darb-green focus-within:ring-1 focus-within:ring-darb-green"
+              >
+                <span
+                  className="flex cursor-text items-center border-e border-darb-gold/25 bg-darb-cream px-5 text-sm font-bold tracking-wide text-darb-green"
+                  aria-hidden="true"
+                >
                   DARB-
                 </span>
                 <input
+                  ref={orderNumberInputRef}
                   name="orderNumber"
                   value={form.orderNumber}
                   onChange={handleChange}
@@ -677,7 +691,7 @@ function TrackOrder() {
                   pattern="[0-9]*"
                   autoComplete="off"
                   aria-label={t("Order number digits")}
-                  className="min-w-0 flex-1 px-4 py-3 outline-none"
+                  className="min-w-0 flex-1 border-0 bg-transparent px-4 py-3 outline-none focus:outline-none focus:ring-0"
                 />
               </div>
             </label>

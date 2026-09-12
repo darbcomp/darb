@@ -11,7 +11,7 @@ function Stars({ rating, label }) {
 export function ReviewCard({ review }) {
   const { language, t } = useLanguage();
   const date = review.reviewDate || review.createdAt;
-  return <article className="flex w-full shrink-0 snap-start flex-col overflow-hidden rounded-[1.5rem] border border-darb-gold/20 bg-darb-surface p-5 shadow-soft sm:w-[calc(50%_-_0.5rem)] lg:w-[calc(25%_-_0.75rem)]">
+  return <article className="flex w-full shrink-0 snap-start flex-col overflow-hidden rounded-[1.5rem] border border-darb-gold/25 bg-darb-surface p-5 sm:w-[calc(50%_-_0.5rem)] lg:w-[calc(25%_-_0.75rem)]">
     {review.media?.url && review.media.type === "image" && <img src={review.media.url} alt={review.media.alt || `${t("Review shared by")} ${review.displayName}`} loading="lazy" className="mb-5 aspect-[4/3] w-full rounded-2xl object-cover" />}
     {review.media?.url && review.media.type === "video" && <video controls preload="metadata" poster={review.media.posterUrl || undefined} className="mb-5 aspect-video w-full rounded-2xl bg-darb-green" aria-label={`${t("Video review by")} ${review.displayName}`}><source src={review.media.url} /></video>}
     <Stars rating={review.rating} label={t(`${review.rating} out of 5 stars`)} />
@@ -26,11 +26,22 @@ export function ReviewCard({ review }) {
 export default function ReviewCarousel({ reviews, label = "Reviews" }) {
   const { isArabic, t } = useLanguage();
   const trackRef = useRef(null);
-  const [position, setPosition] = useState({ index: 0, visible: 1 });
+  const [controls, setControls] = useState({
+    index: 0,
+    visible: 1,
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
 
   const updateControls = useCallback(() => {
     const track = trackRef.current;
-    if (!track?.children.length) return;
+    if (!track?.children.length) {
+      setControls({ index: 0, visible: 1, canScroll: false, atStart: true, atEnd: true });
+      return;
+    }
+
+    const tolerance = 3;
     const trackRect = track.getBoundingClientRect();
     const start = isArabic ? trackRect.right : trackRect.left;
     const children = Array.from(track.children);
@@ -42,7 +53,27 @@ export default function ReviewCarousel({ reviews, label = "Reviews" }) {
       if (nextDistance < distance) { distance = nextDistance; closest = index; }
     });
     const width = children[0].getBoundingClientRect().width || track.clientWidth;
-    setPosition({ index: closest, visible: Math.max(1, Math.floor(track.clientWidth / width)) });
+    const firstRect = children[0].getBoundingClientRect();
+    const lastRect = children.at(-1).getBoundingClientRect();
+    const startGap = isArabic
+      ? trackRect.right - firstRect.right
+      : firstRect.left - trackRect.left;
+    const endGap = isArabic
+      ? lastRect.left - trackRect.left
+      : trackRect.right - lastRect.right;
+    const nextControls = {
+      index: closest,
+      visible: Math.max(1, Math.floor(track.clientWidth / width)),
+      canScroll: track.scrollWidth - track.clientWidth > tolerance,
+      atStart: Math.abs(startGap) <= tolerance,
+      atEnd: Math.abs(endGap) <= tolerance,
+    };
+
+    setControls((current) =>
+      Object.keys(nextControls).every((key) => current[key] === nextControls[key])
+        ? current
+        : nextControls
+    );
   }, [isArabic]);
 
   useEffect(() => {
@@ -52,25 +83,32 @@ export default function ReviewCarousel({ reviews, label = "Reviews" }) {
     const observer = new ResizeObserver(updateControls);
     observer.observe(track);
     track.addEventListener("scroll", updateControls, { passive: true });
-    return () => { observer.disconnect(); track.removeEventListener("scroll", updateControls); };
-  }, [reviews.length, updateControls]);
+    window.addEventListener("resize", updateControls);
+    return () => {
+      observer.disconnect();
+      track.removeEventListener("scroll", updateControls);
+      window.removeEventListener("resize", updateControls);
+    };
+  }, [reviews, updateControls]);
 
   const moveLogical = (direction) => {
     const track = trackRef.current;
     if (!track) return;
-    const target = Math.max(0, Math.min(reviews.length - 1, position.index + direction * position.visible));
+    const target = Math.max(0, Math.min(reviews.length - 1, controls.index + direction * controls.visible));
     track.children[target]?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest", inline: "start" });
   };
-  const canPrevious = position.index > 0;
-  const canNext = position.index < reviews.length - position.visible;
 
-  return <div className="relative">
-    <div ref={trackRef} className="darb-horizontal-scroll flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3" aria-label={t(label)} tabIndex="0">
+  return <div className="min-w-0">
+    <div ref={trackRef} dir={isArabic ? "rtl" : "ltr"} className="darb-horizontal-scroll flex max-w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-3" aria-label={t(label)} tabIndex={0}>
       {reviews.map((review, index) => <ReviewCard key={review._id || index} review={review} />)}
     </div>
-    {reviews.length > 1 && <>
-      <button type="button" onClick={() => moveLogical(isArabic ? 1 : -1)} disabled={isArabic ? !canNext : !canPrevious} className="absolute left-2 top-1/2 hidden -translate-y-1/2 rounded-full border border-darb-gold/40 bg-darb-cream/95 p-3 text-darb-green shadow-soft transition hover:bg-darb-surface md:block disabled:pointer-events-none disabled:opacity-25" aria-label={t(isArabic ? "Next reviews" : "Previous reviews")}><ArrowLeft size={18} /></button>
-      <button type="button" onClick={() => moveLogical(isArabic ? -1 : 1)} disabled={isArabic ? !canPrevious : !canNext} className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-full border border-darb-gold/40 bg-darb-cream/95 p-3 text-darb-green shadow-soft transition hover:bg-darb-surface md:block disabled:pointer-events-none disabled:opacity-25" aria-label={t(isArabic ? "Previous reviews" : "Next reviews")}><ArrowRight size={18} /></button>
-    </>}
+    {controls.canScroll && <div className="mt-3 flex items-center justify-end gap-2" dir="ltr">
+      <button type="button" onClick={() => moveLogical(-1)} disabled={controls.atStart} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition hover:border-darb-green hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Previous reviews")}>
+        {isArabic ? <ArrowRight size={18} aria-hidden="true" /> : <ArrowLeft size={18} aria-hidden="true" />}
+      </button>
+      <button type="button" onClick={() => moveLogical(1)} disabled={controls.atEnd} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition hover:border-darb-green hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Next reviews")}>
+        {isArabic ? <ArrowLeft size={18} aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}
+      </button>
+    </div>}
   </div>;
 }
