@@ -7,6 +7,7 @@ const { cookieSameSite } = require("../middleware/security.middleware");
 const { extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
 const { sendInternalError } = require("../utils/httpError");
+const { sendRegistrationEmails } = require("../services/transactionalEmail.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 const authCookieOptions = () => ({
@@ -100,6 +101,8 @@ const registerCustomer = async (req, res) => {
         },
       });
     }
+
+    await sendRegistrationEmails(user);
 
     return sendAuthResponse(res, user, "Account created successfully.", metaContext?.eventId || "");
   } catch (error) {

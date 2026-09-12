@@ -14,6 +14,10 @@ const {
   getReviewRelationshipIntent,
   validateReviewVerification,
 } = require("../services/reviewVerification.service");
+const {
+  sendReviewApprovalEmail,
+  sendReviewSubmittedEmails,
+} = require("../services/transactionalEmail.service");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -675,6 +679,8 @@ const createCustomerReview = async (
       });
     reviewPersisted = true;
 
+    await sendReviewSubmittedEmails(review, { customerEmail: req.user.email || "" });
+
     return res.status(201).json({
       success: true,
 
@@ -1098,6 +1104,8 @@ const updateAdminReview = async (
       });
     }
 
+    const previousStatus = review.status;
+
     assertNoDirectVerificationFlag(req.body);
     assertCustomerReviewUpdateAllowed({ review, body: req.body, file: req.file });
     const relationshipIntent = getReviewRelationshipIntent(req.body);
@@ -1357,6 +1365,11 @@ const updateAdminReview = async (
           "name slug"
         )
         .lean();
+
+    await sendReviewApprovalEmail(populated, {
+      customerEmail: populated?.customer?.email || "",
+      previousStatus,
+    });
 
     return res.status(200).json({
       success: true,

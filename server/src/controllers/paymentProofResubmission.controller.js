@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const { normalizeEgyptPhone, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
 const { sendInternalError } = require("../utils/httpError");
+const { sendPaymentProofSubmittedEmails } = require("../services/transactionalEmail.service");
 
 const {
   uploadPaymentProofToR2,
@@ -201,6 +202,8 @@ const replaceRejectedPaymentProof =
         );
       }
     }
+
+    await sendPaymentProofSubmittedEmails(order, { isResubmission: true });
 
     return order;
   };

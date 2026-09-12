@@ -11,6 +11,10 @@ const {
   sendOrderPlacedEmails,
   sendOrderStatusEmail,
 } = require("../services/orderEmail.service");
+const {
+  sendPaymentProofDecisionEmail,
+  sendPaymentProofSubmittedEmails,
+} = require("../services/transactionalEmail.service");
 
 const {
   uploadPaymentProofToR2,
@@ -867,6 +871,10 @@ const createOrder = async (req, res) => {
       );
     }
 
+    if (uploadedPaymentProof) {
+      await sendPaymentProofSubmittedEmails(createdOrder, { isResubmission: false });
+    }
+
     if (metaContext) {
       await sendMetaEvent({
         eventName: "Purchase",
@@ -1139,7 +1147,8 @@ const reviewAdminPaymentProof = async (req, res) => {
 
   const session = await mongoose.startSession();
   let updatedOrder = null;
-  let shouldSendStatusEmail = false;
+  let autoConfirmed = false;
+  let previousProofStatus = "";
 
   try {
     await session.withTransaction(async () => {
@@ -1160,6 +1169,8 @@ const reviewAdminPaymentProof = async (req, res) => {
         throw new Error("A cancelled order payment proof cannot be reviewed.");
       }
 
+      previousProofStatus = order.paymentProof.status || "";
+
       if (action === "approve") {
         order.paymentProof.status = "approved";
         order.paymentProof.reviewedAt = new Date();
@@ -1175,7 +1186,7 @@ const reviewAdminPaymentProof = async (req, res) => {
             changedBy: req.user?._id || null,
             changedAt: new Date(),
           });
-          shouldSendStatusEmail = true;
+          autoConfirmed = true;
         }
       } else {
         order.paymentProof.status = "rejected";
@@ -1192,15 +1203,13 @@ const reviewAdminPaymentProof = async (req, res) => {
       updatedOrder = order;
     });
 
-    if (shouldSendStatusEmail && updatedOrder) {
-      try {
-        await sendOrderStatusEmail(updatedOrder);
-      } catch (emailError) {
-        console.error(
-          "Payment proof was approved, but status email failed:",
-          emailError.message
-        );
-      }
+    if (updatedOrder) {
+      await sendPaymentProofDecisionEmail(updatedOrder, {
+        action,
+        autoConfirmed,
+        previousProofStatus,
+        reason,
+      });
     }
 
     return res.status(200).json({
