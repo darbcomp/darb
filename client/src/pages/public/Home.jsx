@@ -1267,7 +1267,7 @@ function Home() {
           <div className="mt-10 text-center">
             <Link
               to="/shop"
-              className="inline-flex min-h-[50px] items-center justify-center rounded-full border border-darb-beige/45 px-7 text-sm font-semibold text-darb-beige transition hover:bg-darb-beige hover:text-darb-green"
+              className="inline-flex min-h-[50px] items-center justify-center rounded-full border border-darb-beige/70 bg-darb-cream px-7 text-sm font-semibold text-darb-green transition hover:bg-darb-beige"
             >
               {t("Shop All Fragrances")}
             </Link>
