@@ -49,24 +49,10 @@ export const previewOrder =
 
 export const createOrder =
   async (payload) => {
-    const isFormData =
-      typeof FormData !==
-        "undefined" &&
-      payload instanceof
-        FormData;
-
     const { data } =
       await api.post(
         "/orders",
-        payload,
-        isFormData
-          ? {
-              headers: {
-                "Content-Type":
-                  "multipart/form-data",
-              },
-            }
-          : undefined
+        payload
       );
 
     return data;
@@ -116,13 +102,7 @@ export const resubmitGuestPaymentProof =
     const { data } =
       await api.post(
         "/orders/track/payment-proof",
-        payload,
-        {
-          headers: {
-            "Content-Type":
-              "multipart/form-data",
-          },
-        }
+        payload
       );
 
     return data;
@@ -167,13 +147,7 @@ export const resubmitMyPaymentProof =
     const { data } =
       await api.post(
         `/orders/mine/${orderId}/payment-proof`,
-        payload,
-        {
-          headers: {
-            "Content-Type":
-              "multipart/form-data",
-          },
-        }
+        payload
       );
 
     return data;

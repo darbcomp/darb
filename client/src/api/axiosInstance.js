@@ -43,7 +43,12 @@ api.interceptors.response.use(
       error?.message ||
       "Something went wrong";
 
-    return Promise.reject({ ...error, friendlyMessage: message });
+    return Promise.reject({
+      ...error,
+      response: error?.response,
+      friendlyMessage: message,
+      isNetworkError: !error?.response,
+    });
   }
 );
 

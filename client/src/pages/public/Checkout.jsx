@@ -13,6 +13,12 @@ import { formatCurrency } from "../../utils/formatCurrency";
 import { EGYPT_GOVERNORATES, getGovernorateLabel } from "../../constants/egyptGovernorates";
 import { createOrderRequestId } from "../../utils/orderRequestId";
 import {
+    createObjectUrlManager,
+    getSelectedImageMimeType,
+    snapshotSelectedImageBeforeReset,
+    snapshotSelectedImageFile,
+} from "../../utils/selectedImageFile";
+import {
     createMarketingEventId,
     getMetaBrowserContext,
     normalizeEcommercePayload,
@@ -20,11 +26,6 @@ import {
     trackMarketingEventOnce,
 } from "../../utils/marketingEvents";
 const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024;
-const ALLOWED_PAYMENT_PROOF_TYPES = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-];
 const initialFormData = {
     name: "",
     phone: "",
@@ -120,18 +121,20 @@ function Checkout() {
     const [error, setError] = useState("");
     const [paymentProof, setPaymentProof] = useState(null);
     const [paymentProofError, setPaymentProofError] = useState("");
+    const [paymentProofPreview, setPaymentProofPreview] = useState("");
+    const [paymentProofPreviewFailed, setPaymentProofPreviewFailed] = useState(false);
+    const [isPaymentProofReading, setIsPaymentProofReading] = useState(false);
+    const [paymentProofPreviewManager] = useState(() => createObjectUrlManager());
     const [isProofDragging, setIsProofDragging] = useState(false);
     const [copyStatus, setCopyStatus] = useState("idle");
     const orderRequestIdRef = useRef(createOrderRequestId());
     const copyResetRef = useRef(null);
-    const paymentProofPreview = useMemo(() => (paymentProof ? URL.createObjectURL(paymentProof) : ""), [paymentProof]);
-    useEffect(() => {
-        return () => {
-            if (paymentProofPreview) {
-                URL.revokeObjectURL(paymentProofPreview);
-            }
-        };
-    }, [paymentProofPreview]);
+    const checkoutFormRef = useRef(null);
+    const paymentProofSelectionRef = useRef(0);
+    useEffect(() => () => {
+        paymentProofSelectionRef.current += 1;
+        paymentProofPreviewManager.clear();
+    }, [paymentProofPreviewManager]);
     useEffect(() => () => window.clearTimeout(copyResetRef.current), []);
     useEffect(() => {
         if (!user) return;
@@ -314,9 +317,16 @@ function Checkout() {
             });
         },
         onError: (err) => {
-            setError(err.friendlyMessage ||
-                "Failed to create order.");
-            notify({ type: "error", title: t("Order could not be placed"), message: err.friendlyMessage || t("Please try again.") });
+            const isNetworkFailure = err?.isNetworkError || !err?.response;
+            const message = isNetworkFailure
+                ? "Your cart and checkout details are still here. Check your connection and try again."
+                : err.friendlyMessage || "Failed to create order.";
+            setError(message);
+            notify({
+                type: "error",
+                title: t(isNetworkFailure ? "Couldn’t reach Darb" : "Order could not be placed"),
+                message: t(isNetworkFailure ? message : err.friendlyMessage || "Please try again."),
+            });
         },
     });
     /* =========================
@@ -329,31 +339,79 @@ function Checkout() {
             [name]: type === "checkbox" ? checked : value,
         }));
     };
-    const selectPaymentProof = (file) => {
+    const revokePaymentProofPreview = () => {
+        paymentProofPreviewManager.clear();
+        setPaymentProofPreview("");
+    };
+    const clearPaymentProof = () => {
+        paymentProofSelectionRef.current += 1;
+        revokePaymentProofPreview();
+        setPaymentProof(null);
+        setPaymentProofPreviewFailed(false);
+        setPaymentProofError("");
+        setIsPaymentProofReading(false);
+    };
+    const selectPaymentProof = async (file, input = null) => {
         if (!file) {
             return;
         }
-        if (!ALLOWED_PAYMENT_PROOF_TYPES.includes(file.type)) {
+        const selection = ++paymentProofSelectionRef.current;
+        const selectedType = getSelectedImageMimeType(file);
+        if (!selectedType) {
             setPaymentProofError("Choose a JPG, PNG, or WEBP screenshot.");
             notify({ type: "warning", title: t("Unsupported screenshot"), message: t("Choose a JPG, PNG, or WEBP screenshot.") });
+            if (input) input.value = "";
             return;
         }
         if (file.size > MAX_PAYMENT_PROOF_SIZE) {
             setPaymentProofError("Choose a screenshot that is 10 MB or smaller.");
             notify({ type: "warning", title: t("Screenshot is too large"), message: t("Choose a screenshot that is 10 MB or smaller.") });
+            if (input) input.value = "";
             return;
         }
+        setIsPaymentProofReading(true);
+        let stableProof = null;
+        try {
+            stableProof = input
+                ? await snapshotSelectedImageBeforeReset(file, () => { input.value = ""; })
+                : await snapshotSelectedImageFile(file);
+        }
+        catch {
+            // Customer-facing feedback deliberately hides browser/content-provider internals.
+        }
+        if (selection !== paymentProofSelectionRef.current) return;
+        setIsPaymentProofReading(false);
+        if (!stableProof) {
+            revokePaymentProofPreview();
+            setPaymentProof(null);
+            setPaymentProofPreviewFailed(false);
+            setPaymentProofError("Please choose the image again.");
+            notify({ type: "warning", title: t("Could not read this screenshot"), message: t("Please choose the image again.") });
+            return;
+        }
+
+        revokePaymentProofPreview();
+        let previewUrl = "";
+        try {
+            previewUrl = paymentProofPreviewManager.replace(stableProof.blob);
+        }
+        catch {
+            setPaymentProofPreviewFailed(true);
+        }
+        setPaymentProofPreview(previewUrl);
+        setPaymentProofPreviewFailed(!previewUrl);
         setPaymentProofError("");
-        setPaymentProof(file);
+        setPaymentProof(stableProof);
     };
     const handlePaymentProofChange = (event) => {
-        selectPaymentProof(event.target.files?.[0] || null);
-        event.target.value = "";
+        const input = event.currentTarget;
+        const file = input.files?.[0] || null;
+        void selectPaymentProof(file, input);
     };
     const handlePaymentProofDrop = (event) => {
         event.preventDefault();
         setIsProofDragging(false);
-        selectPaymentProof(event.dataTransfer.files?.[0] || null);
+        void selectPaymentProof(event.dataTransfer.files?.[0] || null);
     };
     const handleCopyRecipient = async () => {
         const recipient = selectedPaymentMethod?.recipient;
@@ -396,38 +454,38 @@ function Checkout() {
     ========================== */
     const validateCheckout = () => {
         if (isEmpty) {
-            return "Your cart is empty.";
+            return { message: "Your cart is empty.", field: "" };
         }
         if (!formData.name.trim()) {
-            return "Full name is required.";
+            return { message: "Full name is required.", field: "name" };
         }
         if (!formData.phone.trim()) {
-            return "Phone number is required.";
+            return { message: "Phone number is required.", field: "phone" };
         }
         if (!formData.governorate.trim()) {
-            return "Governorate is required.";
+            return { message: "Governorate is required.", field: "governorate" };
         }
         if (!formData.city.trim()) {
-            return "City is required.";
+            return { message: "City is required.", field: "city" };
         }
         if (!formData.street.trim()) {
-            return "Street address is required.";
+            return { message: "Street address is required.", field: "street" };
         }
         if (!selectedPaymentMethodKey) {
-            return "Payment method is required.";
+            return { message: "Payment method is required.", field: "paymentMethod" };
         }
         if (selectedPaymentMethod?.requireProof &&
             !pricing) {
-            return "Please wait until Darb confirms the final order total before making the transfer.";
+            return { message: "Please wait until Darb confirms the final order total before making the transfer.", field: "paymentMethod" };
         }
         if (selectedPaymentMethod?.requireProof &&
             !paymentProof) {
-            return "Please upload the payment transaction screenshot.";
+            return { message: "Please upload the payment transaction screenshot.", field: "paymentProof" };
         }
         if (selectedPaymentMethod?.requireProof && !formData.transferSenderName.trim()) {
-            return "Sender name is required for transfer payments.";
+            return { message: "Sender name is required for transfer payments.", field: "transferSenderName" };
         }
-        return "";
+        return null;
     };
     /* =========================
        ORDER PAYLOAD
@@ -464,7 +522,7 @@ function Checkout() {
         if (selectedPaymentMethod?.requireProof) {
             const payload = new FormData();
             payload.append("orderData", JSON.stringify(orderData));
-            payload.append("paymentProof", paymentProof);
+            payload.append("paymentProof", paymentProof.blob, paymentProof.name);
             return payload;
         }
         return orderData;
@@ -476,7 +534,19 @@ function Checkout() {
         event.preventDefault();
         const validationError = validateCheckout();
         if (validationError) {
-            setError(validationError);
+            setError("");
+            notify({ type: "warning", title: t("Complete your checkout"), message: t(validationError.message) });
+            window.requestAnimationFrame(() => {
+                const selector = validationError.field === "paymentProof"
+                    ? "#payment-proof"
+                    : validationError.field ? `[name="${validationError.field}"]` : "";
+                const field = selector ? checkoutFormRef.current?.querySelector(selector) : null;
+                const scrollTarget = validationError.field === "paymentProof"
+                    ? checkoutFormRef.current?.querySelector("#payment-proof-section")
+                    : field;
+                scrollTarget?.scrollIntoView({ behavior: "smooth", block: "center" });
+                field?.focus({ preventScroll: true });
+            });
             return;
         }
         setError("");
@@ -550,12 +620,12 @@ function Checkout() {
             CHECKOUT FORM
         ========================== */}
 
-      <form onSubmit={handleSubmit} className="grid gap-8 lg:grid-cols-[1fr_390px]">
+      <form ref={checkoutFormRef} onSubmit={handleSubmit} className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_390px]">
         {/* =========================
             LEFT SIDE
         ========================== */}
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* =========================
             CUSTOMER DETAILS
         ========================== */}
@@ -763,8 +833,8 @@ function Checkout() {
                   {t("Transfer To")}
                 </p>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-display text-3xl">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  <p className="max-w-full break-all font-display text-2xl sm:text-3xl" dir="ltr">
                     {selectedPaymentMethod.recipient}
                   </p>
 
@@ -775,8 +845,8 @@ function Checkout() {
                   <span className="sr-only" aria-live="polite">{copyStatus === "copied" ? t("Payment number copied") : copyStatus === "failed" ? t("Payment number could not be copied") : ""}</span>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/10 px-4 py-3">
-                  <span className="text-sm text-darb-beige/75">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3">
+                  <span className="min-w-0 text-sm text-darb-beige/75">
                     {t("Exact amount to transfer")}
                   </span>
                   <span className="font-semibold text-darb-gold">
@@ -787,7 +857,7 @@ function Checkout() {
                 </div>
               </div>)}
 
-            {selectedPaymentMethod?.requireProof && (<div className="mt-5 border-t border-darb-gold/25 pt-5">
+            {selectedPaymentMethod?.requireProof && (<div id="payment-proof-section" className="mt-5 min-w-0 border-t border-darb-gold/25 pt-5">
                 <label className="mb-4 block">
                   <span className="mb-2 block text-sm font-semibold text-darb-green">{t("Sender name")} *</span>
                   <input name="transferSenderName" value={formData.transferSenderName} onChange={handleChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none focus:border-darb-green" placeholder={t("Name used for the transfer")} />
@@ -802,8 +872,8 @@ function Checkout() {
                     <span className="mt-2 text-[11px] text-darb-muted">{t("You can also drag and drop the file here.")}</span>
                     <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-requirements payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
                   </label>) : (<div className="mt-3 grid min-h-64 gap-5 rounded-[1.25rem] border border-darb-gold/40 bg-darb-surface/60 p-5 sm:grid-cols-[160px_1fr_auto] sm:items-center">
-                    <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green sm:w-40">
-                      {paymentProofPreview ? (<img src={paymentProofPreview} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : null}
+                    <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green text-center text-sm text-darb-beige sm:w-40">
+                      {paymentProofPreview && !paymentProofPreviewFailed ? (<img src={paymentProofPreview} onError={() => setPaymentProofPreviewFailed(true)} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : <span className="px-4">{t("Preview unavailable")}</span>}
                     </div>
 
                     <div className="min-w-0">
@@ -813,7 +883,7 @@ function Checkout() {
 
                     <div className="flex flex-wrap gap-2 sm:flex-col">
                       <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>{t("Change")}</span><input aria-label={t("Change transaction screenshot")} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/></label>
-                      <button type="button" onClick={() => { setPaymentProof(null); setPaymentProofError(""); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>{t("Remove")}</button>
+                      <button type="button" onClick={clearPaymentProof} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>{t("Remove")}</button>
                     </div>
                   </div>)}
                 {paymentProofError && <p id="payment-proof-error" className="mt-2 text-sm font-semibold text-red-700" role="alert">{t(paymentProofError)}</p>}
@@ -839,7 +909,7 @@ function Checkout() {
             ORDER SUMMARY
         ========================== */}
 
-        <aside className="h-fit rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
+        <aside className="min-w-0 h-fit rounded-[1.5rem] border border-darb-gold/20 bg-white p-6 shadow-soft">
           <h2 className="font-display text-3xl text-darb-green">
             {t("Order Summary")}
           </h2>
@@ -850,16 +920,16 @@ function Checkout() {
             {items.map((item) => {
               const localizedName = language === "ar" && item.arabicName ? item.arabicName : item.name;
               const localizedCategory = language === "ar" && item.arabicCategoryName ? item.arabicCategoryName : item.categoryName;
-              return (<div key={item.cartItemId} className="flex gap-4 border-b border-darb-gold/10 pb-4 last:border-b-0">
+              return (<div key={item.cartItemId} className="flex min-w-0 gap-3 border-b border-darb-gold/10 pb-4 last:border-b-0 sm:gap-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-darb-green">
                     {item.image ? (<img src={item.image} alt={localizedName} className="h-full w-full object-cover"/>) : (<p className="font-display text-sm text-darb-gold">
                         Darb
                       </p>)}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     {localizedCategory && <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-darb-gold">{localizedCategory}</p>}
-                    <p className="font-semibold text-darb-green">
+                    <p className="break-words font-semibold text-darb-green">
                       {localizedName}
                     </p>
 
@@ -873,7 +943,7 @@ function Checkout() {
                     </p>
                   </div>
 
-                  <p className="font-semibold text-darb-black">
+                  <p className="shrink-0 text-end text-sm font-semibold text-darb-black sm:text-base">
                     {formatCurrency(item.price *
                 item.quantity)}
                   </p>
@@ -1070,7 +1140,7 @@ function Checkout() {
             PLACE ORDER
         ========================== */}
 
-          <button type="submit" disabled={orderMutation.isPending ||
+          <button type="submit" disabled={orderMutation.isPending || isPaymentProofReading ||
             settingsQuery.isLoading ||
             previewQuery.isFetching} className="mt-6 flex w-full justify-center rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60">
             {orderMutation.isPending
