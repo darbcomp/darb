@@ -19,6 +19,7 @@ const {
   publicUrlForKey,
 } = require("../services/mediaStorage.service");
 const { buildPaymentProofKey } = require("../services/paymentProof.service");
+const { getR2Config } = require("../config/r2");
 const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse");
 const { sanitizePublicProductMedia, sanitizePublicReviewMedia } = require("../utils/mediaResponse");
 const {
@@ -26,6 +27,7 @@ const {
   shouldDeleteReplacedMedia,
 } = require("../utils/mediaLifecycle");
 const { assertCustomerReviewUpdateAllowed } = require("../services/reviewVerification.service");
+const { serializePublicReview } = require("../controllers/review.controller");
 const { classifyUploadError } = require("../middleware/error.middleware");
 const {
   PAYMENT_PROOF_MAX_BYTES,
@@ -113,6 +115,34 @@ test("public and private namespaces cannot be crossed", () => {
     () => publicUrlForKey("payment-proofs/2026-09-12/proof-id.webp"),
     /Invalid public media key/
   );
+});
+
+test("R2 configuration rejects a shared public/private bucket", () => {
+  const names = [
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_PUBLIC_BUCKET",
+    "R2_PRIVATE_BUCKET",
+    "R2_PUBLIC_BASE_URL",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    R2_ACCOUNT_ID: "test-account",
+    R2_ACCESS_KEY_ID: "test-key",
+    R2_SECRET_ACCESS_KEY: "test-secret",
+    R2_PUBLIC_BUCKET: "shared-bucket",
+    R2_PRIVATE_BUCKET: "shared-bucket",
+    R2_PUBLIC_BASE_URL: "https://media.darbfragrance.com",
+  });
+  try {
+    assert.throws(() => getR2Config(), /must be different/);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
 });
 
 test("storage helpers refuse crossed namespaces before contacting R2", async () => {
@@ -213,6 +243,30 @@ test("public review media omits its managed storage identifier", () => {
       alt: "Review",
     }
   );
+});
+
+test("customer review creation serialization omits managed media and customer/order identifiers", () => {
+  const result = serializePublicReview({
+    _id: "review-1",
+    customer: "customer-1",
+    order: "order-1",
+    product: { _id: "product-1", name: "Darb Musk", slug: "darb-musk" },
+    displayName: "Darb Customer",
+    rating: 5,
+    text: "A lasting scent.",
+    source: "customer",
+    isVerifiedPurchase: true,
+    media: {
+      type: "image",
+      url: "https://media.darbfragrance.com/reviews/item.webp",
+      publicId: "reviews/item.webp",
+    },
+  });
+
+  assert.equal(result.customer, undefined);
+  assert.equal(result.order, undefined);
+  assert.equal(result.media.publicId, undefined);
+  assert.equal(result.fragrance._id, "product-1");
 });
 
 test("safe payment-proof responses never expose the private object reference", () => {

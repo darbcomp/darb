@@ -644,6 +644,7 @@ const ARABIC_TEXT = Object.freeze({
   "Review Received": "تم استلام المراجعة",
   "Reviews unlock after your first Darb order.": "تتاح المراجعات بعد أول طلب لك من درب.",
   "Scent not found.": "لم نعثر على هذا العطر.",
+  "This fragrance is unavailable right now.": "هذا العطر غير متاح حاليًا.",
   "Scent notes": "النوتات العطرية",
   "Search fragrances...": "ابحث عن عطر...",
   "Sign In to Review": "سجّل الدخول لكتابة مراجعة",

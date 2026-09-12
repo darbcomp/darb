@@ -11,14 +11,21 @@ const required = (name) => {
   return value;
 };
 
-const getR2Config = () => ({
-  accountId: required("R2_ACCOUNT_ID"),
-  accessKeyId: required("R2_ACCESS_KEY_ID"),
-  secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
-  publicBucket: required("R2_PUBLIC_BUCKET"),
-  privateBucket: required("R2_PRIVATE_BUCKET"),
-  publicBaseUrl: required("R2_PUBLIC_BASE_URL").replace(/\/+$/, ""),
-});
+const getR2Config = () => {
+  const publicBucket = required("R2_PUBLIC_BUCKET");
+  const privateBucket = required("R2_PRIVATE_BUCKET");
+  if (publicBucket === privateBucket) {
+    throw new Error("R2_PUBLIC_BUCKET and R2_PRIVATE_BUCKET must be different.");
+  }
+  return {
+    accountId: required("R2_ACCOUNT_ID"),
+    accessKeyId: required("R2_ACCESS_KEY_ID"),
+    secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
+    publicBucket,
+    privateBucket,
+    publicBaseUrl: required("R2_PUBLIC_BASE_URL").replace(/\/+$/, ""),
+  };
+};
 
 const getR2Client = () => {
   if (client) return client;

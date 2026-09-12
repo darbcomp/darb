@@ -21,11 +21,13 @@ export const NOINDEX_FIXED_ROUTES = [
   "/register",
   "/account",
   "/account/orders",
+  "/unsubscribe",
   "/admin/login",
   "/admin",
   "/admin/products",
   "/admin/categories",
   "/admin/orders",
+  "/admin/customers",
   "/admin/offers",
   "/admin/bundles",
   "/admin/coupons",
@@ -117,6 +119,7 @@ const utilityTitles = {
   "/register": "Create account",
   "/account": "Account",
   "/account/orders": "My orders",
+  "/unsubscribe": "Email preferences",
 };
 
 export function normalizeSiteUrl(value = "") {

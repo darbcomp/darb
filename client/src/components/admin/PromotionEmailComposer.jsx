@@ -22,13 +22,48 @@ function PromotionEmailComposer({ promotionType, promotionId }) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const sendRequestIdRef = useRef("");
+  const triggerRef = useRef(null);
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const sendingRef = useRef(false);
+
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
 
   useEffect(() => {
     if (!open) return undefined;
-    const onKeyDown = (event) => { if (event.key === "Escape" && !sending) setOpen(false); };
+    const previouslyFocused = document.activeElement;
+    const trigger = triggerRef.current;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && !sendingRef.current) {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = dialogRef.current?.querySelectorAll(
+        "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])"
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, sending]);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", onKeyDown);
+      const focusTarget = previouslyFocused?.isConnected ? previouslyFocused : trigger;
+      window.requestAnimationFrame(() => focusTarget?.focus());
+    };
+  }, [open]);
 
   const openComposer = async () => {
     setOpen(true);
@@ -72,15 +107,15 @@ function PromotionEmailComposer({ promotionType, promotionId }) {
 
   return (
     <>
-      <button type="button" onClick={openComposer} className="inline-flex items-center gap-2 rounded-full border border-darb-green/25 px-5 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green">
+      <button ref={triggerRef} type="button" onClick={openComposer} className="inline-flex items-center gap-2 rounded-full border border-darb-green/25 px-5 py-3 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green">
         <Mail size={16} /> Email Customers
       </button>
       {open && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !sending) setOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby={titleId} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
+          <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-darb-gold">Promotional email</p><h2 id={titleId} className="mt-1 font-display text-2xl text-darb-green">Email opted-in customers</h2></div>
-              <button type="button" aria-label="Close email composer" onClick={() => setOpen(false)} disabled={sending} className="rounded-full p-2 text-darb-muted hover:bg-darb-cream"><X size={20} /></button>
+              <button ref={closeButtonRef} type="button" aria-label="Close email composer" onClick={() => setOpen(false)} disabled={sending} className="rounded-full p-2 text-darb-muted hover:bg-darb-cream"><X size={20} /></button>
             </div>
             {loading && <p className="mt-6 text-sm text-darb-muted" role="status">Checking eligible recipients…</p>}
             {error && <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</p>}

@@ -688,7 +688,7 @@ const createCustomerReview = async (
       message:
         "Thank you. Your review has been submitted and is waiting for approval.",
 
-      data: review,
+      data: serializePublicReview(review.toObject()),
     });
   } catch (error) {
     if (shouldCleanupUploadedMedia({ uploadedKey: uploadedMedia?.publicId, persisted: reviewPersisted })) await deletePublicMedia(uploadedMedia.publicId).catch(() => {});
@@ -1440,6 +1440,7 @@ const deleteAdminReview = async (
 
 module.exports = {
   buildEligibleOrderFilter,
+  serializePublicReview,
   validateCustomerReviewInput,
   getCustomerReviewValidationMessage,
   getPublicReviews,
