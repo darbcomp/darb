@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -209,6 +210,7 @@ function AdminReviews() {
         queryParams
       ),
 
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -1400,7 +1402,7 @@ function AdminReviews() {
             )}
           </div>
         )}
-      <AdminPagination page={pagination?.page || page} pages={pagination?.pages || 1} onPageChange={setPage} />
+      <AdminPagination page={page} pages={pagination?.pages || 1} onPageChange={setPage} />
     </section>
   );
 }

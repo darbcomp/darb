@@ -102,11 +102,11 @@ export default function ReviewCarousel({ reviews, label = "Reviews" }) {
     <div ref={trackRef} dir={isArabic ? "rtl" : "ltr"} className="darb-horizontal-scroll flex max-w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-3" aria-label={t(label)} tabIndex={0}>
       {reviews.map((review, index) => <ReviewCard key={review._id || index} review={review} />)}
     </div>
-    {controls.canScroll && <div className="mt-3 flex items-center justify-end gap-2" dir="ltr">
-      <button type="button" onClick={() => moveLogical(-1)} disabled={controls.atStart} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition hover:border-darb-green hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Previous reviews")}>
+    {controls.canScroll && <div className="mt-3 flex w-full items-center justify-between" dir="ltr">
+      <button type="button" onClick={() => moveLogical(-1)} disabled={controls.atStart} className="review-carousel-arrow inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition active:scale-[0.97] active:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Previous reviews")}>
         {isArabic ? <ArrowRight size={18} aria-hidden="true" /> : <ArrowLeft size={18} aria-hidden="true" />}
       </button>
-      <button type="button" onClick={() => moveLogical(1)} disabled={controls.atEnd} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition hover:border-darb-green hover:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Next reviews")}>
+      <button type="button" onClick={() => moveLogical(1)} disabled={controls.atEnd} className="review-carousel-arrow inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-darb-gold/40 bg-darb-cream text-darb-green transition active:scale-[0.97] active:bg-darb-surface disabled:cursor-not-allowed disabled:opacity-30" aria-label={t("Next reviews")}>
         {isArabic ? <ArrowLeft size={18} aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}
       </button>
     </div>}

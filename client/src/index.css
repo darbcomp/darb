@@ -67,6 +67,11 @@ select {
     color: #0F3D2E;
   }
 
+  .review-carousel-arrow:not(:disabled):hover {
+    border-color: #0F3D2E;
+    background: #EFE6D7;
+  }
+
   .reward-launcher-button {
     width: auto;
     gap: 0.5rem;
