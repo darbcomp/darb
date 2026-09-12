@@ -5,7 +5,7 @@ const spinGrantSchema = new mongoose.Schema({
   ownerUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
   ownerPhone: { type: String, default: "", trim: true, select: false, index: true },
   ownerPhoneLast4: { type: String, default: "", trim: true },
-  sourceOrder: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null, index: true },
+  sourceOrder: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null },
   status: { type: String, enum: ["available", "claimed"], default: "available", index: true },
   claimedAt: { type: Date, default: null },
   claimedByUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

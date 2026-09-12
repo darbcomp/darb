@@ -29,6 +29,7 @@ import {
   getProducts,
 } from "../../api/productApi";
 
+import CatalogPagination from "../../components/common/CatalogPagination";
 import ProductCard from "../../components/product/ProductCard";
 import { useLanguage } from "../../context/LanguageContext";
 import { localizeCategory } from "../../utils/localizedContent";
@@ -39,6 +40,7 @@ import { getRuntimeSiteUrl } from "../../seo/runtimeSeo";
 const PRICE_MIN = 0;
 const PRICE_MAX = 3000;
 const PRICE_GAP = 1;
+const PRODUCTS_PER_PAGE = 12;
 
 const fallbackCategoryNames = {
   men: "Men",
@@ -133,6 +135,11 @@ const readUrlPrice = (
   );
 };
 
+const readUrlPage = (value) => {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 1;
+};
+
 const formatPrice = (
   value
 ) =>
@@ -158,6 +165,12 @@ function CategoryPage() {
 
   const sortRef =
     useRef(null);
+
+  const resultsRef =
+    useRef(null);
+
+  const previousSlugRef =
+    useRef(slug);
 
   const lastPriceEditedRef =
     useRef(null);
@@ -186,6 +199,15 @@ function CategoryPage() {
       "sort"
     ) ||
     "featured";
+
+  const pageParam =
+    searchParams.get(
+      "page"
+    );
+
+  const page = readUrlPage(
+    pageParam
+  );
 
   const activeAvailability =
     useMemo(
@@ -390,7 +412,8 @@ function CategoryPage() {
     useMemo(() => {
       const params = {
         category: slug,
-        limit: 60,
+        page,
+        limit: PRODUCTS_PER_PAGE,
         sort,
       };
 
@@ -423,6 +446,7 @@ function CategoryPage() {
       activeAvailability,
       activeMaxPrice,
       activeMinPrice,
+      page,
       slug,
       sort,
     ]);
@@ -452,6 +476,109 @@ function CategoryPage() {
     productsQuery.data
       ?.pagination?.total ??
     products.length;
+
+  const paginationPage =
+    Number(
+      productsQuery.data
+        ?.pagination?.page
+    ) || page;
+
+  const totalPages = Math.max(
+    Number(
+      productsQuery.data
+        ?.pagination?.pages
+    ) || 0,
+    0
+  );
+
+  const normalizedPage =
+    totalPages > 0
+      ? Math.min(page, totalPages)
+      : 1;
+
+  const isNormalizingPage = Boolean(
+    productsQuery.data &&
+      page !== normalizedPage
+  );
+
+  useEffect(() => {
+    if (
+      previousSlugRef.current ===
+      slug
+    ) {
+      return;
+    }
+
+    previousSlugRef.current = slug;
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+    next.delete("page");
+    setSearchParams(next, {
+      replace: true,
+    });
+  }, [
+    searchParams,
+    setSearchParams,
+    slug,
+  ]);
+
+  useEffect(() => {
+    if (
+      pageParam === null ||
+      page !== 1
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+    next.delete("page");
+    setSearchParams(next, {
+      replace: true,
+    });
+  }, [
+    page,
+    pageParam,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    if (
+      !productsQuery.data ||
+      page === normalizedPage
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    if (normalizedPage <= 1) {
+      next.delete("page");
+    } else {
+      next.set(
+        "page",
+        String(normalizedPage)
+      );
+    }
+
+    setSearchParams(next, {
+      replace: true,
+    });
+  }, [
+    normalizedPage,
+    page,
+    productsQuery.data,
+    searchParams,
+    setSearchParams,
+  ]);
 
   /* =========================
      FILTER COUNT
@@ -883,6 +1010,8 @@ function CategoryPage() {
       );
     }
 
+    next.delete("page");
+
     setSearchParams(
       next,
       {
@@ -950,6 +1079,8 @@ function CategoryPage() {
         "maxPrice"
       );
 
+      next.delete("page");
+
       setSearchParams(
         next,
         {
@@ -968,6 +1099,8 @@ function CategoryPage() {
       next.delete(
         "availability"
       );
+
+      next.delete("page");
 
       setSearchParams(
         next,
@@ -990,6 +1123,8 @@ function CategoryPage() {
     next.delete(
       "maxPrice"
     );
+
+    next.delete("page");
 
     setSearchParams(
       next,
@@ -1025,6 +1160,8 @@ function CategoryPage() {
       );
     }
 
+    next.delete("page");
+
     setSearchParams(
       next,
       {
@@ -1039,6 +1176,43 @@ function CategoryPage() {
     setMobileSortOpen(
       false
     );
+  };
+
+  const handlePageChange = (
+    nextPage
+  ) => {
+    if (
+      productsQuery.isFetching ||
+      nextPage < 1 ||
+      nextPage > totalPages
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    if (nextPage === 1) {
+      next.delete("page");
+    } else {
+      next.set(
+        "page",
+        String(nextPage)
+      );
+    }
+
+    setSearchParams(next);
+
+    resultsRef.current?.scrollIntoView({
+      behavior: window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)"
+      ).matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
   };
 
   const selectedSort =
@@ -1334,7 +1508,7 @@ function CategoryPage() {
             PRODUCTS
         ========================== */}
 
-        <section className="mx-auto max-w-7xl px-5 py-9 sm:px-6 lg:px-8 lg:py-12">
+        <section ref={resultsRef} className="mx-auto max-w-7xl scroll-mt-4 px-5 py-9 sm:px-6 lg:px-8 lg:py-12">
           <p className="text-center text-sm text-darb-black md:hidden">
             {t(String(totalProducts) + ` fragrance${totalProducts === 1 ? "" : "s"}`)}
           </p>
@@ -1406,7 +1580,7 @@ function CategoryPage() {
             </span>
           </div>
 
-          {productsQuery.isLoading && (
+          {(productsQuery.isLoading || isNormalizingPage) && (
             <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
               {Array.from({
                 length: 8,
@@ -1434,6 +1608,7 @@ function CategoryPage() {
           )}
 
           {!productsQuery.isLoading &&
+            !isNormalizingPage &&
             !productsQuery.isError &&
             products.length >
               0 && (
@@ -1457,6 +1632,19 @@ function CategoryPage() {
             )}
 
           {!productsQuery.isLoading &&
+            !isNormalizingPage &&
+            !productsQuery.isError &&
+            products.length > 0 && (
+              <CatalogPagination
+                page={paginationPage}
+                pages={totalPages}
+                isPending={productsQuery.isFetching}
+                onPageChange={handlePageChange}
+              />
+            )}
+
+          {!productsQuery.isLoading &&
+            !isNormalizingPage &&
             !productsQuery.isError &&
             products.length ===
               0 && (

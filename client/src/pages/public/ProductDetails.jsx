@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bell, Minus, Plus, ShoppingBag, Star } from "lucide-react";
+import { ArrowLeft, Bell, Minus, Plus, ShoppingBag } from "lucide-react";
 
 import { getProductBySlug, getProducts } from "../../api/productApi";
-import { getPublicReviews } from "../../api/reviewApi";
 import { createWaitlistRequest } from "../../api/waitlistApi";
-import ReviewCarousel from "../../components/common/ReviewCarousel";
 import ProductCard from "../../components/product/ProductCard";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
@@ -52,16 +50,6 @@ function ProductDetailsView({ slug }) {
   const displayPrice = Number(selectedVariant?.price) || 0;
   const displayCompareAtPrice = Number(selectedVariant?.compareAtPrice) || 0;
   const selectedStock = Number(selectedVariant?.stock) || 0;
-
-
-  const reviewsQuery = useQuery({
-    queryKey: ["public-reviews", "product", product?._id],
-    queryFn: () => getPublicReviews({ product: product._id, limit: 50 }),
-    enabled: Boolean(product?._id), retry: 1, staleTime: 60_000,
-  });
-  const reviews = reviewsQuery.data?.data || [];
-  const reviewCount = Number(reviewsQuery.data?.summary?.count ?? reviews.length);
-  const averageRating = Number(reviewsQuery.data?.summary?.averageRating) || 0;
 
   const categoryName = product?.category?.name || product?.categorySnapshot?.name || "Darb";
   const categorySlug = product?.category?.slug || product?.categorySnapshot?.slug || "";
@@ -121,7 +109,6 @@ function ProductDetailsView({ slug }) {
       image: seoImage,
       price: seoPrice,
       inStock: seoInStock,
-      rating: reviewCount > 0 && averageRating > 0 ? { count: reviewCount, average: averageRating } : null,
     }, siteUrl),
     breadcrumbJsonLd([
       { name: t("Home"), path: "/" },
@@ -209,11 +196,10 @@ function ProductDetailsView({ slug }) {
           <div className="lg:sticky lg:top-[125px] lg:self-start">
             <div className="flex flex-wrap gap-3">{assignedCategories.map((category) => <Link key={category._id || category.slug || category} to={`/category/${category.slug || category}`} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-darb-gold hover:text-darb-green">{category.name || category.slug || category}</Link>)}</div>
             <h1 className="mt-4 font-display text-5xl leading-[1.02] text-darb-green sm:text-6xl">{product.name}</h1>
-            {product.arabicName && <p dir="rtl" className="mt-2 w-fit font-display text-2xl text-darb-green/75">{product.arabicName}</p>}
             {product.inspiredBy && <p className="mt-5 text-sm text-darb-muted"><span className="font-semibold text-darb-green">{t("Inspired by")}</span> {product.inspiredBy}</p>}
             {product.shortDescription && <p className="mt-5 max-w-xl text-sm leading-7 text-darb-muted sm:text-base">{product.shortDescription}</p>}
 
-            <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-darb-gold/20 py-5"><div className="flex items-end gap-3">{displayPrice > 0 && <p className="font-display text-4xl text-darb-green">{formatCurrency(displayPrice)}</p>}{displayCompareAtPrice > displayPrice && displayPrice > 0 && <p className="pb-1 text-sm text-darb-muted line-through">{formatCurrency(displayCompareAtPrice)}</p>}</div>{reviewCount ? <div className="text-end"><div className="flex items-center gap-1 text-darb-gold"><Star size={17} fill="currentColor" aria-hidden="true" /><span className="font-semibold text-darb-green">{averageRating.toFixed(1)}</span></div><p className="mt-1 text-xs text-darb-muted">{t(`${reviewCount} review${reviewCount === 1 ? "" : "s"}`)}</p></div> : !reviewsQuery.isLoading && <p className="text-sm text-darb-muted">{t("No reviews yet")}</p>}</div>
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-darb-gold/20 py-5"><div className="flex items-end gap-3">{displayPrice > 0 && <p className="font-display text-4xl text-darb-green">{formatCurrency(displayPrice)}</p>}{displayCompareAtPrice > displayPrice && displayPrice > 0 && <p className="pb-1 text-sm text-darb-muted line-through">{formatCurrency(displayCompareAtPrice)}</p>}</div></div>
 
             {activeVariants.length > 0 && <fieldset className="mt-6"><legend className="text-xs font-semibold text-darb-green">{t("Size")}</legend><div className="mt-3 flex flex-wrap gap-2">{activeVariants.map((variant) => <button key={variant.variantId} type="button" onClick={() => { setSelectedVariantId(variant.variantId); setQuantity(1); }} aria-pressed={String(selectedVariant?.variantId) === String(variant.variantId)} className={`rounded-full border px-5 py-2.5 text-sm font-semibold transition ${String(selectedVariant?.variantId) === String(variant.variantId) ? "border-darb-green bg-darb-green text-darb-beige" : "border-darb-gold/30 bg-darb-surface text-darb-green hover:border-darb-green"}`}>{variant.label || (variant.sizeMl ? `${variant.sizeMl} ML` : variant.sku)}</button>)}</div></fieldset>}
             <div className="mt-6 flex items-center gap-2 text-sm"><span className={`h-2.5 w-2.5 rounded-full ${canPurchase ? "bg-darb-green" : "bg-darb-muted/50"}`} aria-hidden="true" /><span className={lowStock ? "font-semibold text-darb-gold" : "text-darb-green"}>{canPurchase ? t(lowStock ? `Only ${selectedStock} left` : getStockLabel(selectedStock)) : unavailableReason}</span></div>
@@ -230,7 +216,6 @@ function ProductDetailsView({ slug }) {
         </div>
       </section>
 
-      <section className="border-t border-darb-gold/20 py-12 sm:py-16" aria-labelledby="product-reviews-heading"><div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-darb-gold">{t("Reviews")}</p><h2 id="product-reviews-heading" className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">{t("Along this path.")}</h2>{reviewsQuery.isLoading ? <div className="mt-8 h-56 animate-pulse rounded-[1.5rem] bg-darb-surface" /> : reviews.length ? <div className="mt-8"><ReviewCarousel reviews={reviews} label={t("Reviews for " + product.name)} compact /></div> : <p className="mt-6 text-sm text-darb-muted">{t("No approved reviews yet.")}</p>}</div></section>
       {relatedProducts.length > 0 && <section className="border-t border-darb-gold/20 py-12 sm:py-16"><div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8"><div className="flex items-end justify-between gap-6"><div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-darb-gold">{t("Continue the journey")}</p><h2 className="mt-2 font-display text-4xl text-darb-green sm:text-5xl">{t("You may also like.")}</h2></div>{categorySlug && <Link to={`/category/${categorySlug}`} className="hidden text-sm font-semibold text-darb-green underline decoration-darb-gold underline-offset-4 sm:block">{t("View " + categoryName)}</Link>}</div><div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">{relatedProducts.map((relatedProduct) => <ProductCard key={relatedProduct._id || relatedProduct.slug} product={relatedProduct} />)}</div></div></section>}
     </main>
   );

@@ -24,12 +24,14 @@ import {
   getProducts,
 } from "../../api/productApi";
 
+import CatalogPagination from "../../components/common/CatalogPagination";
 import ProductCard from "../../components/product/ProductCard";
 import { useLanguage } from "../../context/LanguageContext";
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 3000;
 const PRICE_GAP = 1;
+const PRODUCTS_PER_PAGE = 12;
 
 const availabilityOptions = [
   {
@@ -140,6 +142,11 @@ const readUrlPrice = (
   );
 };
 
+const readUrlPage = (value) => {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 1;
+};
+
 function Shop() {
   const { t } = useLanguage();
   const [
@@ -148,6 +155,9 @@ function Shop() {
   ] = useSearchParams();
 
   const sortRef =
+    useRef(null);
+
+  const resultsRef =
     useRef(null);
 
   const lastPriceEditedRef =
@@ -187,6 +197,15 @@ function Shop() {
       "sort"
     ) ||
     "featured";
+
+  const pageParam =
+    searchParams.get(
+      "page"
+    );
+
+  const page = readUrlPage(
+    pageParam
+  );
 
   const activeCategories =
     useMemo(
@@ -377,7 +396,8 @@ function Shop() {
   const productParams =
     useMemo(() => {
       const params = {
-        limit: 60,
+        page,
+        limit: PRODUCTS_PER_PAGE,
         sort,
       };
 
@@ -433,6 +453,7 @@ function Shop() {
       activeCategories,
       activeMaxPrice,
       activeMinPrice,
+      page,
       search,
       sort,
     ]);
@@ -460,6 +481,86 @@ function Shop() {
     productsQuery.data
       ?.pagination?.total ??
     products.length;
+
+  const paginationPage =
+    Number(
+      productsQuery.data
+        ?.pagination?.page
+    ) || page;
+
+  const totalPages = Math.max(
+    Number(
+      productsQuery.data
+        ?.pagination?.pages
+    ) || 0,
+    0
+  );
+
+  const normalizedPage =
+    totalPages > 0
+      ? Math.min(page, totalPages)
+      : 1;
+
+  const isNormalizingPage = Boolean(
+    productsQuery.data &&
+      page !== normalizedPage
+  );
+
+  useEffect(() => {
+    if (
+      pageParam === null ||
+      page !== 1
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+    next.delete("page");
+    setSearchParams(next, {
+      replace: true,
+    });
+  }, [
+    page,
+    pageParam,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    if (
+      !productsQuery.data ||
+      page === normalizedPage
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    if (normalizedPage <= 1) {
+      next.delete("page");
+    } else {
+      next.set(
+        "page",
+        String(normalizedPage)
+      );
+    }
+
+    setSearchParams(next, {
+      replace: true,
+    });
+  }, [
+    normalizedPage,
+    page,
+    productsQuery.data,
+    searchParams,
+    setSearchParams,
+  ]);
 
   /* =========================
      FILTER COUNT
@@ -973,6 +1074,8 @@ function Shop() {
       );
     }
 
+    next.delete("page");
+
     setSearchParams(
       next,
       {
@@ -1048,6 +1151,8 @@ function Shop() {
         "maxPrice"
       );
 
+      next.delete("page");
+
       setSearchParams(
         next,
         {
@@ -1065,6 +1170,8 @@ function Shop() {
     next.delete(
       "search"
     );
+
+    next.delete("page");
 
     setSearchParams(
       next,
@@ -1099,6 +1206,8 @@ function Shop() {
         value
       );
     }
+
+    next.delete("page");
 
     setSearchParams(
       next,
@@ -1156,6 +1265,8 @@ function Shop() {
       );
     }
 
+    next.delete("page");
+
     setSearchParams(
       next,
       {
@@ -1174,6 +1285,8 @@ function Shop() {
       next.delete(
         "availability"
       );
+
+      next.delete("page");
 
       setSearchParams(
         next,
@@ -1197,12 +1310,51 @@ function Shop() {
       "maxPrice"
     );
 
+    next.delete("page");
+
     setSearchParams(
       next,
       {
         replace: true,
       }
     );
+  };
+
+  const handlePageChange = (
+    nextPage
+  ) => {
+    if (
+      productsQuery.isFetching ||
+      nextPage < 1 ||
+      nextPage > totalPages
+    ) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    if (nextPage === 1) {
+      next.delete("page");
+    } else {
+      next.set(
+        "page",
+        String(nextPage)
+      );
+    }
+
+    setSearchParams(next);
+
+    resultsRef.current?.scrollIntoView({
+      behavior: window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)"
+      ).matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
   };
 
   return (
@@ -1467,7 +1619,7 @@ function Shop() {
             PRODUCT AREA
         ========================== */}
 
-        <section className="mx-auto max-w-7xl px-5 py-9 sm:px-6 lg:px-8 lg:py-12">
+        <section ref={resultsRef} className="mx-auto max-w-7xl scroll-mt-4 px-5 py-9 sm:px-6 lg:px-8 lg:py-12">
           {/* Mobile Count */}
 
           <p className="text-center text-sm text-darb-black md:hidden">
@@ -1599,7 +1751,7 @@ function Shop() {
 
           {/* Loading */}
 
-          {productsQuery.isLoading && (
+          {(productsQuery.isLoading || isNormalizingPage) && (
             <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
               {Array.from({
                 length: 8,
@@ -1631,6 +1783,7 @@ function Shop() {
           {/* Products */}
 
           {!productsQuery.isLoading &&
+            !isNormalizingPage &&
             !productsQuery.isError &&
             products.length >
               0 && (
@@ -1653,9 +1806,22 @@ function Shop() {
               </div>
             )}
 
+          {!productsQuery.isLoading &&
+            !isNormalizingPage &&
+            !productsQuery.isError &&
+            products.length > 0 && (
+              <CatalogPagination
+                page={paginationPage}
+                pages={totalPages}
+                isPending={productsQuery.isFetching}
+                onPageChange={handlePageChange}
+              />
+            )}
+
           {/* Empty */}
 
           {!productsQuery.isLoading &&
+            !isNormalizingPage &&
             !productsQuery.isError &&
             products.length ===
               0 && (

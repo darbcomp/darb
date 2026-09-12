@@ -124,6 +124,9 @@ const ARABIC_TEXT = Object.freeze({
   "Clear Filters": "مسح الفلاتر",
   "Reset": "إعادة ضبط",
   "Results": "النتائج",
+  "Previous": "السابق",
+  "Next": "التالي",
+  "Product pages": "صفحات المنتجات",
   "No fragrances found": "لم نعثر على عطور",
   "Explore fragrances created for this Darb path.": "اكتشف العطور المصممة لهذا الدرب.",
   "Distinctive fragrances shaped with depth, presence and character.": "عطور مميزة صيغت بعمق وحضور وشخصية.",
@@ -634,6 +637,7 @@ const ARABIC_TEXT = Object.freeze({
 });
 
 const ARABIC_PATTERNS = [
+  [/^Page\s+(\d+)\s+of\s+(\d+)$/i, (m) => `صفحة ${m[1]} من ${m[2]}`],
   [/^Only\s+(\d+)\s+left$/i, (m) => `متبقي ${m[1]} فقط`],
   [/^(\d+)\s+reviews?$/i, (m) => `${m[1]} مراجعة`],
   [/^(\d+)\s+sizes$/i, (m) => `${m[1]} أحجام`],

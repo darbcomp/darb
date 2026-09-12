@@ -35,12 +35,10 @@ function ProductCard({ product: sourceProduct }) {
     "Darb";
 
   const secondaryLabel =
-    language === "ar"
-      ? sourceProduct?.name || ""
-      : product.arabicName ||
-        (product.inspiredBy
-          ? `Inspired by ${product.inspiredBy}`
-          : "");
+    product.shortDescription ||
+    (product.inspiredBy
+      ? `${t("Inspired by")} ${product.inspiredBy}`
+      : "");
 
   const activeVariants = getActiveProductVariants(product);
   const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
