@@ -52,6 +52,38 @@ select {
   color: #0F3D2E;
 }
 
+.reward-launcher-button {
+  right: max(1.25rem, env(safe-area-inset-right));
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+.reward-launcher-label {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card-add-button:not(:disabled):hover {
+    background: #C8A97E;
+    color: #0F3D2E;
+  }
+
+  .reward-launcher-button {
+    width: auto;
+    gap: 0.5rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .reward-launcher-button:hover {
+    transform: translateY(-0.125rem);
+    background: #1C1C1C;
+  }
+
+  .reward-launcher-label {
+    display: inline;
+  }
+}
+
 /* Admin pages share the same quiet, separator-led language as Operations. */
 .admin-page > :first-child {
   padding-bottom: 2rem;

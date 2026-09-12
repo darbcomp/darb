@@ -9,10 +9,8 @@ const buildPaymentProofFormData = ({
     new FormData();
 
   if (file) {
-    formData.append(
-      "paymentProof",
-      file
-    );
+    const upload = file.blob || file;
+    formData.append("paymentProof", upload, file.name || "payment-proof");
   }
 
   if (orderNumber) {
@@ -48,11 +46,17 @@ export const previewOrder =
   };
 
 export const createOrder =
-  async (payload) => {
+  async (payload, { uploadDiagnosticId = "", requestId = "" } = {}) => {
     const { data } =
       await api.post(
         "/orders",
-        payload
+        payload,
+        uploadDiagnosticId ? {
+          headers: {
+            "X-Darb-Upload-Diagnostic-Id": uploadDiagnosticId,
+            ...(requestId ? { "X-Darb-Order-Request-Id": requestId } : {}),
+          },
+        } : undefined
       );
 
     return data;
@@ -102,7 +106,8 @@ export const resubmitGuestPaymentProof =
     const { data } =
       await api.post(
         "/orders/track/payment-proof",
-        payload
+        payload,
+        file?.diagnosticId ? { headers: { "X-Darb-Upload-Diagnostic-Id": file.diagnosticId } } : undefined
       );
 
     return data;
@@ -147,7 +152,8 @@ export const resubmitMyPaymentProof =
     const { data } =
       await api.post(
         `/orders/mine/${orderId}/payment-proof`,
-        payload
+        payload,
+        file?.diagnosticId ? { headers: { "X-Darb-Upload-Diagnostic-Id": file.diagnosticId } } : undefined
       );
 
     return data;

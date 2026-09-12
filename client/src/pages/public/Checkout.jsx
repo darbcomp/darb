@@ -15,9 +15,11 @@ import { createOrderRequestId } from "../../utils/orderRequestId";
 import {
     createObjectUrlManager,
     getSelectedImageMimeType,
-    snapshotSelectedImageBeforeReset,
+    prepareImagePickerInput,
     snapshotSelectedImageFile,
 } from "../../utils/selectedImageFile";
+import { reportUploadDiagnostic } from "../../api/clientDiagnosticsApi";
+import { createUploadDiagnosticId, getPlatformCategory, getSafeFileExtension } from "../../utils/uploadDiagnosticPayload";
 import {
     createMarketingEventId,
     getMetaBrowserContext,
@@ -131,6 +133,7 @@ function Checkout() {
     const copyResetRef = useRef(null);
     const checkoutFormRef = useRef(null);
     const paymentProofSelectionRef = useRef(0);
+    const pendingPaymentProofDiagnosticRef = useRef(null);
     useEffect(() => () => {
         paymentProofSelectionRef.current += 1;
         paymentProofPreviewManager.clear();
@@ -291,7 +294,7 @@ function Checkout() {
        CREATE ORDER
     ========================== */
     const orderMutation = useMutation({
-        mutationFn: ({ payload }) => createOrder(payload),
+        mutationFn: ({ payload, uploadDiagnosticId, requestId }) => createOrder(payload, { uploadDiagnosticId, requestId }),
         onSuccess: (response, variables) => {
             const order = response?.data;
             const purchasePayload = normalizeEcommercePayload({
@@ -316,8 +319,19 @@ function Checkout() {
                 },
             });
         },
-        onError: (err) => {
+        onError: (err, variables) => {
             const isNetworkFailure = err?.isNetworkError || !err?.response;
+            if (isNetworkFailure && variables?.uploadDiagnosticId) {
+                reportUploadDiagnostic({
+                    diagnosticId: variables.uploadDiagnosticId,
+                    source: variables.uploadSource,
+                    phase: "order_network_error",
+                    platform: getPlatformCategory(),
+                    authenticated: Boolean(user),
+                    requestId: variables.requestId,
+                    httpStatus: 0,
+                });
+            }
             const message = isNetworkFailure
                 ? "Your cart and checkout details are still here. Check your connection and try again."
                 : err.friendlyMessage || "Failed to create order.";
@@ -351,30 +365,57 @@ function Checkout() {
         setPaymentProofError("");
         setIsPaymentProofReading(false);
     };
-    const selectPaymentProof = async (file, input = null) => {
+    const emitPaymentProofDiagnostic = (diagnosticId, source, phase, details = {}) => {
+        reportUploadDiagnostic({
+            diagnosticId,
+            source,
+            phase,
+            platform: getPlatformCategory(),
+            authenticated: Boolean(user),
+            ...details,
+        });
+    };
+    const preparePaymentProofPicker = (input, source) => {
+        const diagnosticId = createUploadDiagnosticId();
+        pendingPaymentProofDiagnosticRef.current = { diagnosticId, source };
+        prepareImagePickerInput(input);
+        emitPaymentProofDiagnostic(diagnosticId, source, "picker_opened");
+    };
+    const selectPaymentProof = async (file, { diagnosticId = createUploadDiagnosticId(), source = "checkout_initial" } = {}) => {
         if (!file) {
             return;
         }
         const selection = ++paymentProofSelectionRef.current;
+        const diagnosticBase = {
+            extension: getSafeFileExtension(file.name),
+            reportedMime: String(file.type || "").trim().toLowerCase() || undefined,
+            size: file.size,
+        };
+        emitPaymentProofDiagnostic(diagnosticId, source, "file_selected", diagnosticBase);
+        emitPaymentProofDiagnostic(diagnosticId, source, "validation_started", diagnosticBase);
         const selectedType = getSelectedImageMimeType(file);
         if (!selectedType) {
+            emitPaymentProofDiagnostic(diagnosticId, source, "validation_failed", diagnosticBase);
             setPaymentProofError("Choose a JPG, PNG, or WEBP screenshot.");
             notify({ type: "warning", title: t("Unsupported screenshot"), message: t("Choose a JPG, PNG, or WEBP screenshot.") });
-            if (input) input.value = "";
             return;
         }
         if (file.size > MAX_PAYMENT_PROOF_SIZE) {
+            emitPaymentProofDiagnostic(diagnosticId, source, "validation_failed", { ...diagnosticBase, normalizedMime: selectedType });
             setPaymentProofError("Choose a screenshot that is 10 MB or smaller.");
             notify({ type: "warning", title: t("Screenshot is too large"), message: t("Choose a screenshot that is 10 MB or smaller.") });
-            if (input) input.value = "";
             return;
         }
         setIsPaymentProofReading(true);
         let stableProof = null;
         try {
-            stableProof = input
-                ? await snapshotSelectedImageBeforeReset(file, () => { input.value = ""; })
-                : await snapshotSelectedImageFile(file);
+            stableProof = await snapshotSelectedImageFile(file, {
+                onPhase: (phase, details) => emitPaymentProofDiagnostic(diagnosticId, source, phase, {
+                    ...diagnosticBase,
+                    normalizedMime: selectedType,
+                    ...details,
+                }),
+            });
         }
         catch {
             // Customer-facing feedback deliberately hides browser/content-provider internals.
@@ -394,24 +435,34 @@ function Checkout() {
         let previewUrl = "";
         try {
             previewUrl = paymentProofPreviewManager.replace(stableProof.blob);
+            emitPaymentProofDiagnostic(diagnosticId, source, "preview_created", { ...diagnosticBase, normalizedMime: selectedType });
         }
         catch {
             setPaymentProofPreviewFailed(true);
+            emitPaymentProofDiagnostic(diagnosticId, source, "preview_failed", { ...diagnosticBase, normalizedMime: selectedType });
         }
         setPaymentProofPreview(previewUrl);
         setPaymentProofPreviewFailed(!previewUrl);
         setPaymentProofError("");
-        setPaymentProof(stableProof);
+        setPaymentProof({ ...stableProof, diagnosticId, diagnosticSource: source });
     };
     const handlePaymentProofChange = (event) => {
         const input = event.currentTarget;
         const file = input.files?.[0] || null;
-        void selectPaymentProof(file, input);
+        const pending = pendingPaymentProofDiagnosticRef.current || {
+            diagnosticId: createUploadDiagnosticId(),
+            source: input.dataset.uploadSource || "checkout_initial",
+        };
+        pendingPaymentProofDiagnosticRef.current = null;
+        void selectPaymentProof(file, pending);
     };
     const handlePaymentProofDrop = (event) => {
         event.preventDefault();
         setIsProofDragging(false);
-        void selectPaymentProof(event.dataTransfer.files?.[0] || null);
+        void selectPaymentProof(event.dataTransfer.files?.[0] || null, {
+            diagnosticId: createUploadDiagnosticId(),
+            source: "checkout_drop",
+        });
     };
     const handleCopyRecipient = async () => {
         const recipient = selectedPaymentMethod?.recipient;
@@ -553,7 +604,20 @@ function Checkout() {
         trackMarketingEvent("AddPaymentInfo", checkoutEventPayload);
         const purchaseEventId = createMarketingEventId();
         const trackingContext = getMetaBrowserContext(purchaseEventId);
-        orderMutation.mutate({ payload: buildPayload(trackingContext), purchaseEventId });
+        const uploadDiagnosticId = paymentProof?.diagnosticId || "";
+        const uploadSource = paymentProof?.diagnosticSource || "checkout_initial";
+        if (uploadDiagnosticId) {
+            emitPaymentProofDiagnostic(uploadDiagnosticId, uploadSource, "order_submit_started", {
+                requestId: orderRequestIdRef.current,
+            });
+        }
+        orderMutation.mutate({
+            payload: buildPayload(trackingContext),
+            purchaseEventId,
+            uploadDiagnosticId,
+            uploadSource,
+            requestId: orderRequestIdRef.current,
+        });
     };
     /* =========================
        EMPTY CART
@@ -870,10 +934,13 @@ function Checkout() {
                     <span id="payment-proof-help" className="mt-2 max-w-md text-xs leading-5 text-darb-muted">{t("Upload a clear screenshot of the successful transfer.")}</span>
                     <span id="payment-proof-requirements" className="mt-1 text-[11px] text-darb-muted">{t("JPG, PNG or WebP, up to 10 MB.")}</span>
                     <span className="mt-2 text-[11px] text-darb-muted">{t("You can also drag and drop the file here.")}</span>
-                    <input id="payment-proof" aria-describedby="payment-proof-help payment-proof-requirements payment-proof-error" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/>
+                    <input id="payment-proof" data-upload-source="checkout_initial" aria-describedby="payment-proof-help payment-proof-requirements payment-proof-error" type="file" onClick={(event) => preparePaymentProofPicker(event.currentTarget, "checkout_initial")} onChange={handlePaymentProofChange} className="sr-only"/>
                   </label>) : (<div className="mt-3 grid min-h-64 gap-5 rounded-[1.25rem] border border-darb-gold/40 bg-darb-surface/60 p-5 sm:grid-cols-[160px_1fr_auto] sm:items-center">
                     <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-darb-green text-center text-sm text-darb-beige sm:w-40">
-                      {paymentProofPreview && !paymentProofPreviewFailed ? (<img src={paymentProofPreview} onError={() => setPaymentProofPreviewFailed(true)} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : <span className="px-4">{t("Preview unavailable")}</span>}
+                      {paymentProofPreview && !paymentProofPreviewFailed ? (<img src={paymentProofPreview} onError={() => {
+                        setPaymentProofPreviewFailed(true);
+                        if (paymentProof?.diagnosticId) emitPaymentProofDiagnostic(paymentProof.diagnosticId, paymentProof.diagnosticSource, "preview_failed", { normalizedMime: paymentProof.type, size: paymentProof.size });
+                      }} alt={t("Payment proof preview")} className="h-full w-full object-contain"/>) : <span className="px-4">{t("Preview unavailable")}</span>}
                     </div>
 
                     <div className="min-w-0">
@@ -882,7 +949,7 @@ function Checkout() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 sm:flex-col">
-                      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>{t("Change")}</span><input aria-label={t("Change transaction screenshot")} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={handlePaymentProofChange} className="sr-only"/></label>
+                      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-darb-gold/40 px-4 py-2 text-sm font-semibold text-darb-green transition hover:bg-darb-cream focus-within:ring-2 focus-within:ring-darb-gold"><span>{t("Change")}</span><input data-upload-source="checkout_change" aria-label={t("Change transaction screenshot")} type="file" onClick={(event) => preparePaymentProofPicker(event.currentTarget, "checkout_change")} onChange={handlePaymentProofChange} className="sr-only"/></label>
                       <button type="button" onClick={clearPaymentProof} className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"><Trash2 size={16}/>{t("Remove")}</button>
                     </div>
                   </div>)}

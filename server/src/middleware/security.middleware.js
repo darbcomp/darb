@@ -118,6 +118,11 @@ const searchSuggestionLimiter = makeLimiter({
   limit: 120,
   message: "Too many searches. Please wait and try again.",
 });
+const clientDiagnosticLimiter = makeLimiter({
+  windowMs: 10 * 60 * 1000,
+  limit: 60,
+  message: "Too many diagnostic events. Please try again later.",
+});
 
 module.exports = {
   cookieSameSite,
@@ -134,4 +139,5 @@ module.exports = {
   couponValidationLimiter,
   orderPreviewLimiter,
   searchSuggestionLimiter,
+  clientDiagnosticLimiter,
 };

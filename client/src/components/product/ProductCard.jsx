@@ -263,7 +263,7 @@ function ProductCard({ product: sourceProduct }) {
             !canPurchase ||
             atCartLimit
           }
-          className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full bg-darb-green px-2 text-[10px] font-semibold text-darb-beige transition hover:bg-darb-gold hover:text-darb-green active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-darb-muted/20 disabled:text-darb-muted disabled:hover:bg-darb-muted/20 sm:min-h-11 sm:gap-2 sm:px-4 sm:text-sm"
+          className="product-card-add-button mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full bg-darb-green px-2 text-[10px] font-semibold text-darb-beige transition active:scale-[0.98] active:bg-darb-black disabled:cursor-not-allowed disabled:bg-darb-muted/20 disabled:text-darb-muted sm:min-h-11 sm:gap-2 sm:px-4 sm:text-sm"
         >
           <ShoppingBag
             size={15}

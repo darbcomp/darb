@@ -25,6 +25,7 @@ const adminRoutes = require("./routes/admin.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const rewardRoutes = require("./routes/reward.routes");
 const marketingRoutes = require("./routes/marketing.routes");
+const clientDiagnosticsRoutes = require("./routes/clientDiagnostics.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,10 +37,11 @@ app.use(cors({
   credentials: true,
   exposedHeaders: ["x-csrf-token"],
 }));
-app.use(express.json({ limit: "256kb" }));
-app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 app.use(cookieParser());
 app.use(ensureCsrfCookie);
+app.use("/api/client-diagnostics", express.json({ limit: "3kb" }), csrfProtection, clientDiagnosticsRoutes);
+app.use(express.json({ limit: "256kb" }));
+app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 app.use(csrfProtection);
 if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
 

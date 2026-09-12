@@ -15,7 +15,7 @@ export default function RewardLauncher() {
   const count = rewardsQuery.data?.data?.spinAvailableCount || 0;
   if (hiddenOnRoute) return null;
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="fixed bottom-5 right-5 z-40 inline-flex min-h-12 items-center gap-2 rounded-full border border-darb-gold/40 bg-darb-green px-4 text-sm font-semibold text-darb-beige shadow-soft transition hover:-translate-y-0.5 hover:bg-darb-black active:translate-y-0" aria-label={count ? `Darb rewards, ${count} spins available` : "Open Darb rewards"}><Gift size={17} /><span>Rewards</span>{count > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-darb-gold px-1 text-[10px] text-darb-green">{count}</span>}</button>
+    <button type="button" onClick={() => setOpen(true)} className="reward-launcher-button fixed z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-darb-gold/40 bg-darb-green text-sm font-semibold text-darb-beige shadow-soft transition active:scale-[0.97]" aria-label={count ? `Darb rewards, ${count} spins available` : "Open Darb rewards"}><Gift size={18} /><span className="reward-launcher-label">Rewards</span>{count > 0 && <span className="absolute -end-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-darb-gold px-1 text-[10px] text-darb-green">{count}</span>}</button>
     {open && <SpinWheel onClose={() => setOpen(false)} />}
   </>;
 }

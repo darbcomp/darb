@@ -28,15 +28,12 @@ import {
 import { buildOrderWhatsAppUrl } from "../../utils/whatsapp";
 import { LocalizedPublicContent } from "../../components/common/InfoPageShell";
 import { useLanguage } from "../../context/LanguageContext";
+import { getSelectedImageMimeType, prepareImagePickerInput, snapshotSelectedImageFile } from "../../utils/selectedImageFile";
+import { reportUploadDiagnostic } from "../../api/clientDiagnosticsApi";
+import { createUploadDiagnosticId, getPlatformCategory, getSafeFileExtension } from "../../utils/uploadDiagnosticPayload";
 
 const MAX_PAYMENT_PROOF_SIZE =
   10 * 1024 * 1024;
-
-const ALLOWED_PAYMENT_PROOF_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
 
 const statusStyles = {
   pending:
@@ -142,6 +139,8 @@ function GuestPaymentProofPanel({
   paymentProofData,
   onProofUpdated,
 }) {
+  const pendingDiagnosticRef = useRef(null);
+  const selectionGenerationRef = useRef(0);
   const [
     file,
     setFile,
@@ -222,7 +221,14 @@ function GuestPaymentProofPanel({
       },
     });
 
-  const handleFileChange = (
+  const preparePicker = (input) => {
+    const diagnosticId = createUploadDiagnosticId();
+    pendingDiagnosticRef.current = diagnosticId;
+    prepareImagePickerInput(input);
+    reportUploadDiagnostic({ diagnosticId, source: "track_order_resubmission", phase: "picker_opened", platform: getPlatformCategory(), authenticated: false });
+  };
+
+  const handleFileChange = async (
     event
   ) => {
     const selected =
@@ -238,19 +244,21 @@ function GuestPaymentProofPanel({
       return;
     }
 
-    if (
-      !ALLOWED_PAYMENT_PROOF_TYPES.includes(
-        selected.type
-      )
-    ) {
+    const diagnosticId = pendingDiagnosticRef.current || createUploadDiagnosticId();
+    pendingDiagnosticRef.current = null;
+    const generation = ++selectionGenerationRef.current;
+    const details = { extension: getSafeFileExtension(selected.name), reportedMime: String(selected.type || "").toLowerCase() || undefined, size: selected.size, platform: getPlatformCategory(), authenticated: false };
+    const emit = (phase, extra = {}) => reportUploadDiagnostic({ diagnosticId, source: "track_order_resubmission", phase, ...details, ...extra });
+    emit("file_selected");
+    emit("validation_started");
+    const normalizedMime = getSelectedImageMimeType(selected);
+    if (!normalizedMime) {
+      emit("validation_failed");
       setFile(null);
 
       setError(
         "Payment proof must be JPG, PNG, or WEBP."
       );
-
-      event.target.value =
-        "";
 
       return;
     }
@@ -259,22 +267,24 @@ function GuestPaymentProofPanel({
       selected.size >
       MAX_PAYMENT_PROOF_SIZE
     ) {
+      emit("validation_failed", { normalizedMime });
       setFile(null);
 
       setError(
         "Payment proof must be 10 MB or smaller."
       );
 
-      event.target.value =
-        "";
-
       return;
     }
-
-    setFile(selected);
-
-    event.target.value =
-      "";
+    try {
+      const stable = await snapshotSelectedImageFile(selected, { onPhase: (phase, extra) => emit(phase, { normalizedMime, ...extra }) });
+      if (generation !== selectionGenerationRef.current) return;
+      setFile({ ...stable, diagnosticId });
+    } catch {
+      if (generation !== selectionGenerationRef.current) return;
+      setFile(null);
+      setError("Please choose the image again.");
+    }
   };
 
   const handleSubmit =
@@ -427,7 +437,7 @@ function GuestPaymentProofPanel({
 
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                onClick={(event) => preparePicker(event.currentTarget)}
                 onChange={
                   handleFileChange
                 }

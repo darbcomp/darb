@@ -5,6 +5,7 @@ const { normalizeEgyptPhone, formatEgyptPhoneForDisplay } = require("../utils/no
 const { sendInternalError } = require("../utils/httpError");
 const { sendPaymentProofSubmittedEmails } = require("../services/transactionalEmail.service");
 const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse");
+const { logUploadPhase } = require("../services/uploadDiagnostics.service");
 
 const {
   uploadPaymentProofToR2,
@@ -95,6 +96,7 @@ const replaceRejectedPaymentProof =
   async ({
     order,
     file,
+    diagnostic,
   }) => {
     if (!file?.buffer) {
       throw new Error(
@@ -119,7 +121,8 @@ const replaceRejectedPaymentProof =
     try {
       newProof =
         await uploadPaymentProofToR2(
-          file
+          file,
+          diagnostic
         );
 
       order.paymentProof =
@@ -129,8 +132,10 @@ const replaceRejectedPaymentProof =
         "pending";
 
       await order.save();
+      if (diagnostic) logUploadPhase({ ...diagnostic, phase: "order_persisted" });
     } catch (error) {
       if (newProof) {
+        if (diagnostic) logUploadPhase({ ...diagnostic, phase: "failed", failureStage: "database", errorCategory: "database" });
         try {
           await deletePaymentProofFromR2(
             newProof
@@ -143,6 +148,9 @@ const replaceRejectedPaymentProof =
             cleanupError.message
           );
         }
+      }
+      if (diagnostic && !newProof && !error.uploadDiagnosticLogged) {
+        logUploadPhase({ ...diagnostic, phase: "failed", failureStage: "processing", errorCategory: "unknown" });
       }
 
       throw error;
@@ -341,6 +349,7 @@ const resubmitGuestPaymentProof =
           {
             order,
             file: req.file,
+            diagnostic: req.uploadDiagnostic,
           }
         );
 
@@ -411,6 +420,7 @@ const resubmitMyPaymentProof =
           {
             order,
             file: req.file,
+            diagnostic: req.uploadDiagnostic,
           }
         );
 

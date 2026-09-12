@@ -37,6 +37,7 @@ const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
 const { normalizeIdempotencyKey, isValidIdempotencyKey, isDuplicateKeyError, isOrderReplayOwner } = require("../utils/idempotency");
+const { logUploadPhase } = require("../services/uploadDiagnostics.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -625,6 +626,7 @@ const createOrder = async (req, res) => {
   let transactionCommitted = false;
   let requestId = "";
   let metaContext = null;
+  let persistenceStarted = false;
 
   try {
     body = parseOrderCreateBody(req);
@@ -637,7 +639,10 @@ const createOrder = async (req, res) => {
     if (!canonicalPhone) throw new Error("Enter a valid Egyptian mobile number.");
     body.customer = { ...body.customer, phone: canonicalPhone };
     const existingOrder = await findOrderByRequestId(requestId);
-    if (existingOrder) return sendOrderReplay(req, res, existingOrder, canonicalPhone);
+    if (existingOrder) {
+      if (req.uploadDiagnostic) logUploadPhase({ ...req.uploadDiagnostic, phase: "order_persisted" });
+      return sendOrderReplay(req, res, existingOrder, canonicalPhone);
+    }
     if (body.customer.email && (String(body.customer.email).trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.customer.email).trim()))) {
       throw new Error("Enter a valid customer email address.");
     }
@@ -677,11 +682,15 @@ const createOrder = async (req, res) => {
     }
 
     if (req.file) {
-      uploadedPaymentProof = await uploadPaymentProofToR2(req.file);
+      uploadedPaymentProof = await uploadPaymentProofToR2(req.file, req.uploadDiagnostic);
     }
   } catch (error) {
     if (uploadedPaymentProof) {
       await cleanupPaymentProof(uploadedPaymentProof);
+    }
+
+    if (req.uploadDiagnostic && !error.uploadDiagnosticLogged) {
+      logUploadPhase({ ...req.uploadDiagnostic, phase: "failed", failureStage: "processing", errorCategory: "unknown" });
     }
 
     return sendOrderRequestError(res, error, "Invalid order request.");
@@ -829,6 +838,7 @@ const createOrder = async (req, res) => {
         order.paymentProof.senderName = String(body.paymentSenderName || "").trim();
       }
 
+      persistenceStarted = true;
       await order.save({ session });
 
       await consumeEntitlement(entitlement?._id, req.user?._id, order._id, session, customer.phone);
@@ -842,6 +852,7 @@ const createOrder = async (req, res) => {
     });
 
     transactionCommitted = true;
+    if (req.uploadDiagnostic) logUploadPhase({ ...req.uploadDiagnostic, phase: "order_persisted" });
 
     try {
       await sendOrderPlacedEmails(createdOrder);
@@ -874,7 +885,19 @@ const createOrder = async (req, res) => {
 
     if (requestId && isDuplicateKeyError(error)) {
       const existingOrder = await findOrderByRequestId(requestId);
-      if (existingOrder) return sendOrderReplay(req, res, existingOrder, body?.customer?.phone || "");
+      if (existingOrder) {
+        if (req.uploadDiagnostic) logUploadPhase({ ...req.uploadDiagnostic, phase: "order_persisted" });
+        return sendOrderReplay(req, res, existingOrder, body?.customer?.phone || "");
+      }
+    }
+
+    if (req.uploadDiagnostic) {
+      logUploadPhase({
+        ...req.uploadDiagnostic,
+        phase: "failed",
+        failureStage: persistenceStarted ? "database" : "processing",
+        errorCategory: persistenceStarted ? "database" : "unknown",
+      });
     }
 
     return sendOrderRequestError(res, error, "Failed to create order.");
