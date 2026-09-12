@@ -369,26 +369,24 @@ function PaymentProofPanel({
               10 MB.
             </p>
 
-            <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-dashed border-darb-gold/40 bg-darb-cream/50 px-4 py-4 transition hover:border-darb-green">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
-                  <ImagePlus
-                    size={18}
-                  />
-                </div>
+            <label className="mt-4 grid w-full min-w-0 max-w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-dashed border-darb-gold/40 bg-darb-cream/50 px-4 py-4 transition hover:border-darb-green">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">
+                <ImagePlus
+                  size={18}
+                />
+              </div>
 
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-darb-green">
-                    Choose
-                    payment
-                    proof
-                  </p>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-darb-green">
+                  Choose
+                  payment
+                  proof
+                </p>
 
-                  <p className="truncate text-xs text-darb-muted">
-                    {file?.name ||
-                      "No file selected"}
-                  </p>
-                </div>
+                <p className="block max-w-full truncate text-xs text-darb-muted">
+                  {file?.name ||
+                    "No file selected"}
+                </p>
               </div>
 
               <span className="shrink-0 rounded-full border border-darb-gold/30 bg-white px-3 py-2 text-xs font-semibold text-darb-green">
