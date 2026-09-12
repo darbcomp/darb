@@ -431,6 +431,25 @@ export const updateAdminSettings = async (payload) => {
 };
 
 /* =========================================================
+   PROMOTIONAL EMAIL
+========================================================= */
+
+export const previewPromotionEmail = async (payload) => {
+  const { data } = await api.post("/marketing/admin/promotions/preview", payload);
+  return data;
+};
+
+export const sendPromotionTestEmail = async (payload) => {
+  const { data } = await api.post("/marketing/admin/promotions/test", payload);
+  return data;
+};
+
+export const sendPromotionEmail = async (payload) => {
+  const { data } = await api.post("/marketing/admin/promotions/send", payload);
+  return data;
+};
+
+/* =========================================================
    CUSTOMERS
 ========================================================= */
 

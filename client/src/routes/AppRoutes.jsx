@@ -24,6 +24,7 @@ const ReturnsExchanges = lazy(() => import("../pages/public/ReturnsExchanges"));
 const PrivacyPolicy = lazy(() => import("../pages/public/PrivacyPolicy"));
 const TermsConditions = lazy(() => import("../pages/public/TermsConditions"));
 const TrackOrder = lazy(() => import("../pages/public/TrackOrder"));
+const Unsubscribe = lazy(() => import("../pages/public/Unsubscribe"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const Account = lazy(() => import("../pages/account/Account"));
@@ -159,6 +160,8 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/unsubscribe" element={<Unsubscribe />} />
 
         <Route
           path="*"

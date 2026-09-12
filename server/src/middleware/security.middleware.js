@@ -43,6 +43,10 @@ const csrfProtection = (req, res, next) => {
   // Login/register create the authenticated session, so no authenticated cookie
   // exists yet. Keeping these explicit also makes the intended boundary clear.
   if (/^\/api\/auth\/(register|login|admin\/login)$/.test(req.path)) return next();
+  // This public action is authorized by a signed, purpose-bound token rather
+  // than ambient login state. It must also work when a signed-in customer
+  // opens the email link without first loading an API CSRF token.
+  if (req.path === "/api/marketing/unsubscribe") return next();
 
   const cookieToken = req.cookies?.darb_csrf;
   const headerToken = req.get("x-csrf-token");

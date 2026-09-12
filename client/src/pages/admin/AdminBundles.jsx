@@ -11,6 +11,7 @@ import { formatCurrency } from "../../utils/formatCurrency";
 import AdminPagination from "../../components/admin/AdminPagination";
 import AdminEntitySelector from "../../components/admin/AdminEntitySelector";
 import useAdminEditorReveal from "../../components/admin/useAdminEditorReveal";
+import PromotionEmailComposer from "../../components/admin/PromotionEmailComposer";
 import { useFeedback } from "../../context/FeedbackContext";
 
 const emptyForm = {
@@ -1122,6 +1123,7 @@ function AdminBundles() {
                     </div>
 
                     <div className="mt-5 flex flex-wrap gap-3">
+                      <PromotionEmailComposer promotionType="bundle" promotionId={bundle._id} />
                       <button
                         type="button"
                         onClick={() => openEditForm(bundle)}
