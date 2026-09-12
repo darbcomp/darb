@@ -376,9 +376,13 @@ export const getAdminReviews = async (params = {}) => {
 };
 
 export const createAdminReview = async (payload) => {
+  const config = payload instanceof FormData
+    ? { headers: { "Content-Type": "multipart/form-data" } }
+    : undefined;
   const { data } = await api.post(
     "/reviews/admin",
-    payload
+    payload,
+    config
   );
 
   return data;
@@ -388,9 +392,13 @@ export const updateAdminReview = async ({
   reviewId,
   payload,
 }) => {
+  const config = payload instanceof FormData
+    ? { headers: { "Content-Type": "multipart/form-data" } }
+    : undefined;
   const { data } = await api.patch(
     `/reviews/admin/${reviewId}`,
-    payload
+    payload,
+    config
   );
 
   return data;
@@ -419,5 +427,19 @@ export const updateAdminSettings = async (payload) => {
     payload
   );
 
+  return data;
+};
+
+/* =========================================================
+   CUSTOMERS
+========================================================= */
+
+export const getAdminCustomers = async (params = {}) => {
+  const { data } = await api.get("/admin/customers", { params });
+  return data;
+};
+
+export const getAdminCustomer = async (customerKey) => {
+  const { data } = await api.get(`/admin/customers/${encodeURIComponent(customerKey)}`);
   return data;
 };

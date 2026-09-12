@@ -73,6 +73,10 @@ const adminSections = [
       label: "Orders",
       path: "/admin/orders",
     },
+    {
+      label: "Customers",
+      path: "/admin/customers",
+    },
   ],
 
   [

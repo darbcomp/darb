@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -8,17 +8,22 @@ import {
 import {
   Check,
   EyeOff,
+  ImagePlus,
+  Link2,
   Pencil,
   Plus,
+  Search,
   ShieldCheck,
   Star,
   Trash2,
+  Unlink,
   X,
 } from "lucide-react";
 
 import {
   createAdminReview,
   deleteAdminReview,
+  getAdminOrders,
   getAdminProducts,
   getAdminReviews,
   updateAdminReview,
@@ -38,11 +43,12 @@ const emptyForm = {
   fragranceName: "",
   reviewDate: todayInputValue(),
   status: "approved",
+  orderId: "",
 };
 
 const statusOptions = [
   {
-    label: "All statuses",
+    label: "All",
     value: "",
   },
   {
@@ -54,7 +60,7 @@ const statusOptions = [
     value: "approved",
   },
   {
-    label: "Hidden",
+    label: "Rejected",
     value: "hidden",
   },
 ];
@@ -138,7 +144,7 @@ function AdminReviews() {
   const [filters, setFilters] =
     useState({
       search: "",
-      status: "",
+      status: "pending",
       source: "",
     });
 
@@ -155,7 +161,25 @@ function AdminReviews() {
 
   const [formError, setFormError] =
     useState("");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [relationshipDirty, setRelationshipDirty] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const imageInputRef = useRef(null);
+  const imagePreviewUrlRef = useRef("");
+  const isCustomerReviewEdit = editingReview?.source === "customer";
   const editorRef = useAdminEditorReveal(formOpen, editingReview?._id || "new");
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrlRef.current) {
+        URL.revokeObjectURL(imagePreviewUrlRef.current);
+        imagePreviewUrlRef.current = "";
+      }
+    };
+  }, []);
 
   const queryParams = useMemo(() => {
     const params = {
@@ -205,6 +229,17 @@ function AdminReviews() {
         limit: 100,
       }),
 
+    retry: 1,
+  });
+
+  const deliveredOrdersQuery = useQuery({
+    queryKey: ["admin-review-delivered-orders", orderSearch.trim()],
+    queryFn: () => getAdminOrders({
+      orderStatus: "delivered",
+      search: orderSearch.trim() || undefined,
+      limit: 20,
+    }),
+    enabled: formOpen && !isCustomerReviewEdit,
     retry: 1,
   });
 
@@ -321,6 +356,23 @@ function AdminReviews() {
   const products =
     productsQuery.data?.data || [];
 
+  const deliveredOrders = deliveredOrdersQuery.data?.data || [];
+
+  const selectedOrderProducts = useMemo(() => {
+    if (!selectedOrder) return [];
+    const seen = new Set();
+    return (selectedOrder.items || []).reduce((options, item) => {
+      const productId = String(item.product?._id || item.product || "");
+      if (!productId || seen.has(productId)) return options;
+      seen.add(productId);
+      options.push({
+        _id: productId,
+        name: item.productSnapshot?.name || "Purchased product",
+      });
+      return options;
+    }, []);
+  }, [selectedOrder]);
+
   const pendingCount =
     reviews.filter(
       (review) =>
@@ -371,18 +423,17 @@ function AdminReviews() {
     });
 
     setFormError("");
+    setOrderSearch("");
+    setSelectedOrder(null);
+    setRelationshipDirty(false);
+    setImageFile(null);
+    setRemoveImage(false);
     setFormOpen(true);
   };
 
   const openEditForm = (
     review
   ) => {
-    if (
-      review.source !== "admin"
-    ) {
-      return;
-    }
-
     setEditingReview(review);
 
     setForm({
@@ -416,17 +467,76 @@ function AdminReviews() {
       status:
         review.status ||
         "approved",
+
+      orderId:
+        review.order?._id || "",
     });
 
     setFormError("");
+    setOrderSearch("");
+    setSelectedOrder(null);
+    setRelationshipDirty(false);
+    setImageFile(null);
+    setRemoveImage(false);
     setFormOpen(true);
   };
 
   const closeForm = () => {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = "";
+    }
     setFormOpen(false);
     setEditingReview(null);
     setForm(emptyForm);
     setFormError("");
+    setOrderSearch("");
+    setSelectedOrder(null);
+    setRelationshipDirty(false);
+    setImageFile(null);
+    setRemoveImage(false);
+    setImagePreviewUrl("");
+  };
+
+  const chooseOrder = (order) => {
+    setSelectedOrder(order);
+    setRelationshipDirty(true);
+    setForm((current) => ({
+      ...current,
+      orderId: order._id,
+      productId: "",
+      fragranceName: "",
+    }));
+  };
+
+  const unlinkOrder = () => {
+    setSelectedOrder(null);
+    setRelationshipDirty(true);
+    setForm((current) => ({ ...current, orderId: "" }));
+  };
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    if (!file) return;
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    imagePreviewUrlRef.current = objectUrl;
+    setImagePreviewUrl(objectUrl);
+    setImageFile(file);
+    setRemoveImage(false);
+    event.target.value = "";
+  };
+
+  const clearImage = () => {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = "";
+    }
+    setImagePreviewUrl("");
+    setImageFile(null);
+    setRemoveImage(Boolean(editingReview?.media?.url));
   };
 
   const handleFormChange = (
@@ -461,6 +571,19 @@ function AdminReviews() {
       return "Review text is too short.";
     }
 
+    if (!isCustomerReviewEdit && form.orderId && !form.productId) {
+      return "Choose a product from the delivered order.";
+    }
+
+    if (!isCustomerReviewEdit && imageFile) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(imageFile.type)) {
+        return "Review image must be JPG, PNG or WebP.";
+      }
+      if (imageFile.size > 5 * 1024 * 1024) {
+        return "Review image must be 5 MB or smaller.";
+      }
+    }
+
     return "";
   };
 
@@ -482,30 +605,24 @@ function AdminReviews() {
 
     setFormError("");
 
-    const values = {
-      displayName:
-        form.displayName.trim(),
-
-      rating:
-        Number(form.rating),
-
-      text:
-        form.text.trim(),
-
-      productId:
-        form.productId || "",
-
-      fragranceName:
-        form.productId
-          ? ""
-          : form.fragranceName.trim(),
-
-      reviewDate:
-        form.reviewDate,
-
-      status: form.status,
-    };
-    const payload = values;
+    const payload = new FormData();
+    payload.append("displayName", form.displayName.trim());
+    payload.append("rating", String(Number(form.rating)));
+    payload.append("text", form.text.trim());
+    payload.append("reviewDate", form.reviewDate);
+    payload.append("status", form.status);
+    if (!isCustomerReviewEdit) {
+      payload.append("productId", form.productId || "");
+      payload.append(
+        "fragranceName",
+        form.productId ? "" : form.fragranceName.trim()
+      );
+      if (!editingReview || relationshipDirty) {
+        payload.append("orderId", form.orderId || "");
+      }
+      if (imageFile) payload.append("image", imageFile);
+      if (removeImage) payload.append("removeImage", "true");
+    }
 
     if (editingReview) {
       editMutation.mutate({
@@ -637,7 +754,26 @@ function AdminReviews() {
 
       {/* Filters */}
       <div className="mb-8 rounded-[1.5rem] border border-darb-gold/20 bg-white p-5 shadow-soft">
-        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr_auto]">
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="Review status filters">
+          {statusOptions.map((option) => (
+            <button
+              key={option.value || "all"}
+              type="button"
+              onClick={() => {
+                setFilters((current) => ({ ...current, status: option.value }));
+                setPage(1);
+              }}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                filters.status === option.value
+                  ? "bg-darb-green text-darb-beige"
+                  : "border border-darb-gold/30 text-darb-green hover:bg-darb-gold/10"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_auto]">
           <input
             name="search"
             value={
@@ -649,32 +785,6 @@ function AdminReviews() {
             placeholder="Search name, review, fragrance..."
             className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
           />
-
-          <select
-            name="status"
-            value={
-              filters.status
-            }
-            onChange={
-              handleFilterChange
-            }
-            className="rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
-          >
-            {statusOptions.map(
-              (option) => (
-                <option
-                  key={
-                    option.label
-                  }
-                  value={
-                    option.value
-                  }
-                >
-                  {option.label}
-                </option>
-              )
-            )}
-          </select>
 
           <select
             name="source"
@@ -752,6 +862,111 @@ function AdminReviews() {
               </div>
             )}
 
+            {isCustomerReviewEdit ? (
+              <section className="mb-6 rounded-3xl border border-darb-gold/20 bg-darb-cream/45 p-5">
+                <div className="flex items-center gap-2 text-darb-green">
+                  <ShieldCheck size={18} />
+                  <h3 className="font-display text-2xl">Purchase relationship</h3>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-darb-muted">
+                  Customer-submitted purchase links are read-only in the admin editor.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-darb-gold/20 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wider text-darb-muted">Order</p>
+                    <p className="mt-1 font-semibold text-darb-green">{editingReview.order?.orderNumber || "Not linked"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-darb-gold/20 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wider text-darb-muted">Product</p>
+                    <p className="mt-1 font-semibold text-darb-green">{editingReview.product?.name || editingReview.fragranceName || "Not linked"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-darb-gold/20 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wider text-darb-muted">Purchase status</p>
+                    <p className="mt-1 inline-flex items-center gap-1.5 font-semibold text-darb-green">
+                      {editingReview.isVerifiedPurchase && <ShieldCheck size={15} />}
+                      {editingReview.isVerifiedPurchase ? "Verified Purchase" : "Not verified"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : (
+            <section className="mb-6 rounded-3xl border border-darb-gold/20 bg-darb-cream/45 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-darb-green">
+                    <Link2 size={18} />
+                    <h3 className="font-display text-2xl">Link to delivered order</h3>
+                  </div>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-darb-muted">
+                    Optional. A Verified Purchase badge is granted only after the server confirms the order was delivered and contains the selected product.
+                  </p>
+                </div>
+                {form.orderId && (
+                  <button
+                    type="button"
+                    onClick={unlinkOrder}
+                    className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                  >
+                    <Unlink size={14} /> Remove link
+                  </button>
+                )}
+              </div>
+
+              {form.orderId && !selectedOrder && editingReview?.order && (
+                <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                  Linked to <strong>{editingReview.order.orderNumber}</strong>. Leave unchanged to preserve this verified relationship, or search below to replace it.
+                </div>
+              )}
+
+              {selectedOrder && (
+                <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                  <strong>{selectedOrder.orderNumber}</strong> · {selectedOrder.customerSnapshot?.name || "Customer"} · {selectedOrder.customerSnapshot?.phone || "No phone"} · {formatDate(selectedOrder.createdAt)}
+                </div>
+              )}
+
+              <label className="mt-4 block text-sm font-semibold text-darb-green" htmlFor="review-order-search">
+                Search delivered orders
+              </label>
+              <div className="relative mt-2">
+                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-darb-muted" size={17} />
+                <input
+                  id="review-order-search"
+                  value={orderSearch}
+                  onChange={(event) => setOrderSearch(event.target.value)}
+                  placeholder="Order number, customer, phone or email"
+                  className="w-full rounded-full border border-darb-gold/30 bg-white py-3 pl-11 pr-5 outline-none transition focus:border-darb-green"
+                  role="combobox"
+                  aria-controls="review-delivered-orders"
+                  aria-expanded={deliveredOrders.length > 0}
+                />
+              </div>
+
+              <div id="review-delivered-orders" role="listbox" aria-label="Delivered orders" className="mt-3 grid max-h-56 gap-2 overflow-y-auto">
+                {deliveredOrdersQuery.isLoading && (
+                  <p className="px-2 py-3 text-sm text-darb-muted">Loading delivered orders...</p>
+                )}
+                {!deliveredOrdersQuery.isLoading && deliveredOrders.map((order) => (
+                  <button
+                    key={order._id}
+                    type="button"
+                    role="option"
+                    aria-selected={form.orderId === order._id}
+                    onClick={() => chooseOrder(order)}
+                    className="rounded-2xl border border-darb-gold/20 bg-white px-4 py-3 text-left transition hover:border-darb-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green"
+                  >
+                    <span className="block font-semibold text-darb-green">{order.orderNumber}</span>
+                    <span className="mt-1 block text-xs text-darb-muted">
+                      {order.customerSnapshot?.name || "Customer"} · {order.customerSnapshot?.phone || "No phone"} · {formatDate(order.createdAt)}
+                    </span>
+                  </button>
+                ))}
+                {!deliveredOrdersQuery.isLoading && deliveredOrders.length === 0 && (
+                  <p className="px-2 py-3 text-sm text-darb-muted">No delivered orders match this search.</p>
+                )}
+              </div>
+            </section>
+            )}
+
             <div className="grid gap-5 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -808,6 +1023,7 @@ function AdminReviews() {
                 </select>
               </div>
 
+              {!isCustomerReviewEdit && <>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
                   Darb Fragrance
@@ -827,7 +1043,13 @@ function AdminReviews() {
                     No linked product
                   </option>
 
-                  {products.map(
+                  {(form.orderId
+                    ? selectedOrderProducts.length > 0
+                      ? selectedOrderProducts
+                      : form.productId && editingReview?.product
+                        ? [editingReview.product]
+                        : []
+                    : products).map(
                     (product) => (
                       <option
                         key={
@@ -872,6 +1094,7 @@ function AdminReviews() {
                   className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
+              </>}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -915,7 +1138,7 @@ function AdminReviews() {
                   </option>
 
                   <option value="hidden">
-                    Hidden
+                    Rejected
                   </option>
                 </select>
               </div>
@@ -941,14 +1164,86 @@ function AdminReviews() {
 
             </div>
 
-            <div className="mt-6 rounded-2xl bg-darb-cream/70 px-5 py-4 text-sm leading-6 text-darb-muted">
-              Manual reviews are
-              intentionally not marked
-              as Verified Purchase.
-              Verification can only come
-              from a real Darb customer
-              order.
-            </div>
+            {isCustomerReviewEdit ? (
+              <section className="mt-6">
+                <p className="mb-2 block text-sm font-semibold text-darb-green">Review image</p>
+                {editingReview.media?.type === "image" && editingReview.media.url ? (
+                  <div className="rounded-3xl border border-darb-gold/25 bg-darb-cream/45 p-4">
+                    <img
+                      src={editingReview.media.url}
+                      alt={editingReview.media.alt || `Review by ${editingReview.displayName}`}
+                      className="h-40 w-full max-w-sm rounded-2xl object-cover"
+                    />
+                    <p className="mt-3 text-xs text-darb-muted">Customer-submitted image · Read only</p>
+                  </div>
+                ) : (
+                  <p className="rounded-2xl bg-darb-cream/70 px-5 py-4 text-sm text-darb-muted">No customer image was submitted.</p>
+                )}
+              </section>
+            ) : (
+            <section className="mt-6">
+              <label className="mb-2 block text-sm font-semibold text-darb-green">
+                Review image
+              </label>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageChange}
+                className="sr-only"
+                aria-label="Choose review image"
+              />
+
+              {(imagePreviewUrl || (!removeImage && editingReview?.media?.url)) ? (
+                <div className="flex flex-col gap-4 rounded-3xl border border-darb-gold/25 bg-darb-cream/45 p-4 sm:flex-row sm:items-center">
+                  <img
+                    src={imagePreviewUrl || editingReview.media.url}
+                    alt="Review upload preview"
+                    className="h-28 w-full rounded-2xl object-cover sm:w-32"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-darb-green">
+                      {imageFile?.name || "Current review image"}
+                    </p>
+                    <p className="mt-1 text-xs text-darb-muted">JPG, PNG or WebP, up to 5 MB.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="rounded-full border border-darb-gold/35 bg-white px-4 py-2 text-xs font-semibold text-darb-green"
+                      >
+                        Replace image
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700"
+                      >
+                        Remove image
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center rounded-3xl border border-dashed border-darb-gold/45 bg-darb-cream/45 px-6 py-8 text-center transition hover:border-darb-gold hover:bg-darb-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green"
+                >
+                  <ImagePlus size={28} className="text-darb-gold" />
+                  <span className="mt-3 font-semibold text-darb-green">Add review image</span>
+                  <span className="mt-1 text-xs text-darb-muted">JPG, PNG or WebP, up to 5 MB</span>
+                  <span className="mt-3 rounded-full bg-darb-green px-4 py-2 text-xs font-semibold text-darb-beige">Browse</span>
+                </button>
+              )}
+            </section>
+            )}
+
+            {!isCustomerReviewEdit && (
+              <div className="mt-6 rounded-2xl bg-darb-cream/70 px-5 py-4 text-sm leading-6 text-darb-muted">
+                Manual reviews are published without a Verified Purchase badge unless they are linked to a real delivered order and a product purchased in that order.
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -1047,9 +1342,7 @@ function AdminReviews() {
                             review.status
                           )}`}
                         >
-                          {
-                            review.status
-                          }
+                          {review.status === "hidden" ? "rejected" : review.status}
                         </span>
 
                         <span className="rounded-full bg-darb-green/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-darb-green">
@@ -1097,6 +1390,14 @@ function AdminReviews() {
                         “{review.text}”
                       </p>
 
+                      {review.media?.type === "image" && review.media.url && (
+                        <img
+                          src={review.media.url}
+                          alt={review.media.alt || `Review by ${review.displayName}`}
+                          className="mt-5 max-h-64 w-full max-w-md rounded-2xl border border-darb-gold/20 object-cover"
+                        />
+                      )}
+
                       {(review.product
                         ?.name ||
                         review.fragranceName) && (
@@ -1107,8 +1408,7 @@ function AdminReviews() {
                         </p>
                       )}
 
-                      {review.source ===
-                        "customer" && (
+                      {(review.order?.orderNumber || review.customer?.email || review.customer?.phone) && (
                         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-darb-gold/15 pt-4 text-xs text-darb-muted">
                           {review.order
                             ?.orderNumber && (
@@ -1197,30 +1497,18 @@ function AdminReviews() {
                             }
                           />
 
-                          Hide
+                          Reject
                         </button>
                       )}
 
-                      {review.source ===
-                        "admin" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openEditForm(
-                              review
-                            )
-                          }
-                          className="inline-flex items-center gap-2 rounded-full border border-darb-gold/35 px-4 py-2 text-xs font-semibold text-darb-green transition hover:bg-darb-gold/10"
-                        >
-                          <Pencil
-                            size={
-                              15
-                            }
-                          />
-
-                          Edit
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(review)}
+                        className="inline-flex items-center gap-2 rounded-full border border-darb-gold/35 px-4 py-2 text-xs font-semibold text-darb-green transition hover:bg-darb-gold/10"
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </button>
 
                       <button
                         type="button"

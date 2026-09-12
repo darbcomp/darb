@@ -6,7 +6,14 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const { getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
-const { shouldCleanupUploadedMedia } = require("../utils/mediaLifecycle");
+const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
+const {
+  assertCustomerReviewUpdateAllowed,
+  assertNoDirectVerificationFlag,
+  clearReviewVerification,
+  getReviewRelationshipIntent,
+  validateReviewVerification,
+} = require("../services/reviewVerification.service");
 
 const isDatabaseConnected = () =>
   mongoose.connection.readyState === 1;
@@ -874,6 +881,8 @@ const createAdminReview = async (
   req,
   res
 ) => {
+  let uploadedMedia = null;
+  let reviewPersisted = false;
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -882,6 +891,8 @@ const createAdminReview = async (
           "Database is unavailable.",
       });
     }
+
+    assertNoDirectVerificationFlag(req.body);
 
     const displayName =
       cleanText(
@@ -951,6 +962,16 @@ const createAdminReview = async (
       }
     }
 
+    let verification = null;
+    const requestedOrderId = cleanText(req.body.orderId || req.body.order);
+    if (requestedOrderId) {
+      if (!mongoose.Types.ObjectId.isValid(requestedOrderId)) {
+        return res.status(400).json({ success: false, message: "Invalid order." });
+      }
+      const order = await Order.findById(requestedOrderId).select("_id customer orderStatus items.product").lean();
+      verification = validateReviewVerification({ order, productId: product?._id || requestedProductId, customerId: cleanText(req.body.customerId) });
+    }
+
     const requestedStatus =
       [
         "pending",
@@ -979,11 +1000,14 @@ const createAdminReview = async (
       });
     }
 
+    const media = await uploadReviewImage(req.file);
+    uploadedMedia = media?.publicId ? media : null;
+
     const review =
       await Review.create({
-        customer: null,
+        customer: verification?.customer || null,
 
-        order: null,
+        order: verification?.order || null,
 
         product:
           product?._id || null,
@@ -1004,12 +1028,8 @@ const createAdminReview = async (
 
         status: requestedStatus,
 
-        /*
-          Manual admin testimonials
-          must never automatically
-          pretend to be verified.
-        */
-        isVerifiedPurchase: false,
+        /* Verified only through the validated delivered-order relationship above. */
+        isVerifiedPurchase: Boolean(verification),
 
         reviewDate,
 
@@ -1024,8 +1044,9 @@ const createAdminReview = async (
           "approved"
             ? req.user._id
             : null,
-        media: { type: "none", url: "", publicId: "", posterUrl: "", alt: "" },
+        media,
       });
+    reviewPersisted = true;
 
     return res.status(201).json({
       success: true,
@@ -1036,6 +1057,7 @@ const createAdminReview = async (
       data: review,
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedMedia?.publicId, persisted: reviewPersisted })) await deletePublicMedia(uploadedMedia.publicId).catch(() => {});
     return res.status(400).json({
       success: false,
 
@@ -1054,6 +1076,9 @@ const updateAdminReview = async (
   req,
   res
 ) => {
+  let uploadedMedia = null;
+  let reviewPersisted = false;
+  let previousMediaKey = "";
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({
@@ -1072,6 +1097,12 @@ const updateAdminReview = async (
           "Review not found.",
       });
     }
+
+    assertNoDirectVerificationFlag(req.body);
+    assertCustomerReviewUpdateAllowed({ review, body: req.body, file: req.file });
+    const relationshipIntent = getReviewRelationshipIntent(req.body);
+
+    previousMediaKey = review.media?.publicId || "";
 
     if (
       req.body.displayName !==
@@ -1195,6 +1226,35 @@ const updateAdminReview = async (
         );
     }
 
+    const relationshipWasRequested = relationshipIntent === "verify" || relationshipIntent === "clear";
+    const productWasChanged = req.body.productId !== undefined || req.body.product !== undefined;
+    if (relationshipWasRequested) {
+      if (review.source !== "admin") {
+        return res.status(400).json({ success: false, message: "Customer review purchase links cannot be changed." });
+      }
+      const orderId = cleanText(req.body.orderId || req.body.order);
+      if (relationshipIntent === "clear") {
+        clearReviewVerification(review);
+      } else {
+        if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order." });
+        const order = await Order.findById(orderId).select("_id customer orderStatus items.product").lean();
+        const verification = validateReviewVerification({ order, productId: review.product, customerId: cleanText(req.body.customerId) });
+        review.order = verification.order;
+        review.customer = verification.customer;
+        review.product = verification.product;
+        review.isVerifiedPurchase = true;
+      }
+    } else if (productWasChanged && review.isVerifiedPurchase) {
+      const linkedOrder = review.order
+        ? await Order.findById(review.order).select("_id customer orderStatus items.product").lean()
+        : null;
+      try {
+        validateReviewVerification({ order: linkedOrder, productId: review.product });
+      } catch {
+        clearReviewVerification(review);
+      }
+    }
+
     if (
       req.body.reviewDate !==
       undefined
@@ -1266,7 +1326,19 @@ const updateAdminReview = async (
       real order verification only.
     */
 
+    if (req.file) {
+      const media = await uploadReviewImage(req.file);
+      uploadedMedia = media?.publicId ? media : null;
+      review.media = media;
+    } else if (String(req.body.removeImage || "").toLowerCase() === "true") {
+      review.media = { type: "none", url: "", publicId: "", posterUrl: "", alt: "" };
+    }
+
     await review.save();
+    reviewPersisted = true;
+    if (shouldDeleteReplacedMedia({ previousKey: previousMediaKey, nextKey: review.media?.publicId || "", persisted: true })) {
+      await deletePublicMedia(previousMediaKey).catch(() => {});
+    }
 
     const populated =
       await Review.findById(
@@ -1295,6 +1367,7 @@ const updateAdminReview = async (
       data: populated,
     });
   } catch (error) {
+    if (shouldCleanupUploadedMedia({ uploadedKey: uploadedMedia?.publicId, persisted: reviewPersisted })) await deletePublicMedia(uploadedMedia.publicId).catch(() => {});
     return res.status(400).json({
       success: false,
 

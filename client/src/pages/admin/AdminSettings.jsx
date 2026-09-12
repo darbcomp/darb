@@ -1035,6 +1035,14 @@ function AdminSettings() {
               </div>
             )}
 
+            <div className="rounded-[1.5rem] border border-darb-gold/20 bg-darb-green px-6 py-5 text-darb-beige">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">Owner settings</p>
+              <h2 className="mt-2 font-display text-3xl">Store operations</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-darb-beige/80">
+                Manage the details customers see and the settings used for everyday orders.
+              </p>
+            </div>
+
             {/* STORE IDENTITY */}
 
             <SectionCard
@@ -1581,6 +1589,19 @@ function AdminSettings() {
               </div>
             </SectionCard>
 
+            <details className="group overflow-hidden rounded-[1.75rem] border border-darb-gold/25 bg-white">
+              <summary className="cursor-pointer list-none px-6 py-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-darb-gold">Advanced / Developer</p>
+                    <h2 className="mt-1 font-display text-3xl text-darb-green">Technical storefront settings</h2>
+                    <p className="mt-2 text-sm text-darb-muted">Brand tokens, analytics integrations, and SEO defaults. Most owners rarely need these controls.</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-darb-gold/30 px-4 py-2 text-xs font-semibold text-darb-green group-open:bg-darb-green group-open:text-darb-beige">Open</span>
+                </div>
+              </summary>
+
+              <div className="space-y-8 border-t border-darb-gold/20 p-5 sm:p-6">
             {/* BRAND */}
 
             <SectionCard
@@ -1734,6 +1755,8 @@ function AdminSettings() {
                 />
               </div>
             </SectionCard>
+              </div>
+            </details>
 
             {/* SAVE */}
 

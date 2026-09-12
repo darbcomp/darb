@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { CheckCircle2, Eye, Filter, Package, Search, X, XCircle, } from "lucide-react";
 import { getAdminOrderPaymentProof, getAdminOrders, reviewAdminOrderPaymentProof, updateAdminOrderStatus, } from "../../api/adminApi";
 import { formatCurrency } from "../../utils/formatCurrency";
@@ -12,6 +13,13 @@ const orderStatuses = [
     "delivered",
     "cancelled",
 ];
+const allowedOrderStatuses = {
+    pending: ["pending", "confirmed", "cancelled"],
+    confirmed: ["confirmed", "shipped", "cancelled"],
+    shipped: ["shipped", "delivered"],
+    delivered: ["delivered"],
+    cancelled: ["cancelled"],
+};
 const paymentStatuses = [
     "pending",
     "paid",
@@ -65,9 +73,10 @@ function StatusBadge({ status }) {
 function AdminOrders() {
     const queryClient = useQueryClient();
     const { confirm, notify } = useFeedback();
+    const [searchParams] = useSearchParams();
     const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({
-        search: "",
+        search: searchParams.get("search") || "",
         orderStatus: "",
         paymentStatus: "",
         paymentMethod: "",
@@ -125,6 +134,7 @@ function AdminOrders() {
             });
             notify({ type: "success", title: "Order updated" });
         },
+        onError: (error) => notify({ type: "error", title: "Order was not updated", message: error.friendlyMessage || "Please try again." }),
     });
     const proofReviewMutation = useMutation({
         mutationFn: reviewAdminOrderPaymentProof,
@@ -183,6 +193,26 @@ function AdminOrders() {
             orderId,
             payload: statusForm,
         });
+    };
+    const moveOrderForward = async (order) => {
+        const nextActions = {
+            pending: { status: "confirmed", label: "Confirm Order" },
+            confirmed: { status: "shipped", label: "Mark as Shipped" },
+            shipped: { status: "delivered", label: "Mark as Delivered" },
+        };
+        const action = nextActions[order.orderStatus];
+        if (!action)
+            return;
+        const accepted = await confirm({ title: `${action.label}?`, body: `${order.orderNumber} will move to ${formatStatus(action.status)}.`, confirmLabel: action.label });
+        if (!accepted)
+            return;
+        updateMutation.mutate({ orderId: order._id, payload: { orderStatus: action.status, note: action.label } });
+    };
+    const cancelOrder = async (order) => {
+        const accepted = await confirm({ title: "Cancel order?", body: `${order.orderNumber} will be cancelled and cannot be reopened.`, confirmLabel: "Cancel Order", variant: "destructive" });
+        if (!accepted)
+            return;
+        updateMutation.mutate({ orderId: order._id, payload: { orderStatus: "cancelled", note: "Order cancelled by admin." } });
     };
     const openPaymentProof = async (order) => {
         setProofError("");
@@ -537,15 +567,17 @@ function AdminOrders() {
                         </span>
                       </div>
 
-                      <button type="button" onClick={() => startEditing(order)} className="mt-5 w-full rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black">
-                        Update Status
-                      </button>
+                      {["pending", "confirmed", "shipped"].includes(order.orderStatus) && <button type="button" onClick={() => moveOrderForward(order)} disabled={updateMutation.isPending} className="mt-5 w-full rounded-full bg-darb-green px-5 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:opacity-60">{{ pending: "Confirm Order", confirmed: "Mark as Shipped", shipped: "Mark as Delivered" }[order.orderStatus]}</button>}
+                      <div className="mt-3 flex gap-2">
+                        <button type="button" onClick={() => startEditing(order)} className="flex-1 rounded-full border border-darb-gold/40 px-4 py-2.5 text-sm font-semibold text-darb-green">More actions</button>
+                        {["pending", "confirmed"].includes(order.orderStatus) && <button type="button" onClick={() => cancelOrder(order)} disabled={updateMutation.isPending} className="rounded-full border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 disabled:opacity-60">Cancel</button>}
+                      </div>
                     </div>
                   </div>
 
                   {isEditing && (<div className="border-t border-darb-gold/10 bg-darb-cream/70 p-6">
                       <h3 className="font-display text-3xl text-darb-green">
-                        Update Order
+                        More actions
                       </h3>
 
                       {updateMutation.isError && (<div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -560,7 +592,7 @@ function AdminOrders() {
                           </label>
 
                           <select name="orderStatus" value={statusForm.orderStatus} onChange={handleStatusFormChange} className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 capitalize outline-none transition focus:border-darb-green">
-                            {orderStatuses.map((status) => (<option key={status} value={status}>
+                            {(allowedOrderStatuses[order.orderStatus] || [order.orderStatus]).map((status) => (<option key={status} value={status}>
                                 {formatStatus(status)}
                               </option>))}
                           </select>
