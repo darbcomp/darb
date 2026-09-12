@@ -9,11 +9,11 @@ const { getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
 const { sanitizePublicReviewMedia } = require("../utils/mediaResponse");
 const {
+  applyManualReviewVerification,
   assertCustomerReviewUpdateAllowed,
+  assertNoCustomerVerificationFlag,
   assertNoDirectVerificationFlag,
-  clearReviewVerification,
-  getReviewRelationshipIntent,
-  validateReviewVerification,
+  getCustomerReviewVerification,
 } = require("../services/reviewVerification.service");
 const {
   sendReviewApprovalEmail,
@@ -555,6 +555,8 @@ const createCustomerReview = async (
       });
     }
 
+    assertNoCustomerVerificationFlag(req.body);
+
     const existingReview =
       await Review.findOne({
         customer: req.user._id,
@@ -646,13 +648,17 @@ const createCustomerReview = async (
 
     const media = await uploadReviewImage(req.file);
     uploadedMedia = media?.publicId ? media : null;
+    const customerVerification = getCustomerReviewVerification({
+      eligibleOrder,
+      customerId: req.user._id,
+    });
 
     const review =
       await Review.create({
-        customer: req.user._id,
+        customer: customerVerification.customer,
 
         order:
-          eligibleOrder._id,
+          customerVerification.order,
 
         product:
           product?._id || null,
@@ -673,7 +679,7 @@ const createCustomerReview = async (
 
         status: "pending",
 
-        isVerifiedPurchase: true,
+        isVerifiedPurchase: customerVerification.isVerifiedPurchase,
 
         reviewDate: new Date(),
         media,
@@ -969,16 +975,6 @@ const createAdminReview = async (
       }
     }
 
-    let verification = null;
-    const requestedOrderId = cleanText(req.body.orderId || req.body.order);
-    if (requestedOrderId) {
-      if (!mongoose.Types.ObjectId.isValid(requestedOrderId)) {
-        return res.status(400).json({ success: false, message: "Invalid order." });
-      }
-      const order = await Order.findById(requestedOrderId).select("_id customer orderStatus items.product").lean();
-      verification = validateReviewVerification({ order, productId: product?._id || requestedProductId, customerId: cleanText(req.body.customerId) });
-    }
-
     const requestedStatus =
       [
         "pending",
@@ -1010,49 +1006,49 @@ const createAdminReview = async (
     const media = await uploadReviewImage(req.file);
     uploadedMedia = media?.publicId ? media : null;
 
-    const review =
-      await Review.create({
-        customer: verification?.customer || null,
+    const reviewData = {
+      customer: null,
 
-        order: verification?.order || null,
+      order: null,
 
-        product:
-          product?._id || null,
+      product:
+        product?._id || null,
 
-        displayName,
+      displayName,
 
-        rating,
+      rating,
 
-        text,
+      text,
 
-        fragranceName:
-          product?.name ||
-          cleanText(
-            req.body.fragranceName
-          ),
+      fragranceName:
+        product?.name ||
+        cleanText(
+          req.body.fragranceName
+        ),
 
-        source: "admin",
+      source: "admin",
 
-        status: requestedStatus,
+      status: requestedStatus,
 
-        /* Verified only through the validated delivered-order relationship above. */
-        isVerifiedPurchase: Boolean(verification),
+      isVerifiedPurchase: false,
 
-        reviewDate,
+      reviewDate,
 
-        approvedAt:
-          requestedStatus ===
-          "approved"
-            ? new Date()
-            : null,
+      approvedAt:
+        requestedStatus ===
+        "approved"
+          ? new Date()
+          : null,
 
-        approvedBy:
-          requestedStatus ===
-          "approved"
-            ? req.user._id
-            : null,
-        media,
-      });
+      approvedBy:
+        requestedStatus ===
+        "approved"
+          ? req.user._id
+          : null,
+      media,
+    };
+    applyManualReviewVerification(reviewData, req.body, { isCreate: true });
+    const review = await Review.create(reviewData);
     reviewPersisted = true;
 
     return res.status(201).json({
@@ -1109,7 +1105,6 @@ const updateAdminReview = async (
 
     assertNoDirectVerificationFlag(req.body);
     assertCustomerReviewUpdateAllowed({ review, body: req.body, file: req.file });
-    const relationshipIntent = getReviewRelationshipIntent(req.body);
 
     previousMediaKey = review.media?.publicId || "";
 
@@ -1235,34 +1230,7 @@ const updateAdminReview = async (
         );
     }
 
-    const relationshipWasRequested = relationshipIntent === "verify" || relationshipIntent === "clear";
-    const productWasChanged = req.body.productId !== undefined || req.body.product !== undefined;
-    if (relationshipWasRequested) {
-      if (review.source !== "admin") {
-        return res.status(400).json({ success: false, message: "Customer review purchase links cannot be changed." });
-      }
-      const orderId = cleanText(req.body.orderId || req.body.order);
-      if (relationshipIntent === "clear") {
-        clearReviewVerification(review);
-      } else {
-        if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order." });
-        const order = await Order.findById(orderId).select("_id customer orderStatus items.product").lean();
-        const verification = validateReviewVerification({ order, productId: review.product, customerId: cleanText(req.body.customerId) });
-        review.order = verification.order;
-        review.customer = verification.customer;
-        review.product = verification.product;
-        review.isVerifiedPurchase = true;
-      }
-    } else if (productWasChanged && review.isVerifiedPurchase) {
-      const linkedOrder = review.order
-        ? await Order.findById(review.order).select("_id customer orderStatus items.product").lean()
-        : null;
-      try {
-        validateReviewVerification({ order: linkedOrder, productId: review.product });
-      } catch {
-        clearReviewVerification(review);
-      }
-    }
+    applyManualReviewVerification(review, req.body);
 
     if (
       req.body.reviewDate !==
@@ -1328,11 +1296,8 @@ const updateAdminReview = async (
 
     /*
       IMPORTANT:
-      isVerifiedPurchase is deliberately
-      not editable here.
-
-      Customer reviews earn it from
-      real order verification only.
+      Manual verification was applied only for admin-source reviews above.
+      Customer review verification remains server-derived and read-only.
     */
 
     if (req.file) {

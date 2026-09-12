@@ -9,21 +9,17 @@ import {
   Check,
   EyeOff,
   ImagePlus,
-  Link2,
   Pencil,
   Plus,
-  Search,
   ShieldCheck,
   Star,
   Trash2,
-  Unlink,
   X,
 } from "lucide-react";
 
 import {
   createAdminReview,
   deleteAdminReview,
-  getAdminOrders,
   getAdminProducts,
   getAdminReviews,
   updateAdminReview,
@@ -43,7 +39,7 @@ const emptyForm = {
   fragranceName: "",
   reviewDate: todayInputValue(),
   status: "approved",
-  orderId: "",
+  manualVerifiedPurchase: false,
 };
 
 const statusOptions = [
@@ -161,9 +157,6 @@ function AdminReviews() {
 
   const [formError, setFormError] =
     useState("");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [relationshipDirty, setRelationshipDirty] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [removeImage, setRemoveImage] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
@@ -229,17 +222,6 @@ function AdminReviews() {
         limit: 100,
       }),
 
-    retry: 1,
-  });
-
-  const deliveredOrdersQuery = useQuery({
-    queryKey: ["admin-review-delivered-orders", orderSearch.trim()],
-    queryFn: () => getAdminOrders({
-      orderStatus: "delivered",
-      search: orderSearch.trim() || undefined,
-      limit: 20,
-    }),
-    enabled: formOpen && !isCustomerReviewEdit,
     retry: 1,
   });
 
@@ -356,23 +338,6 @@ function AdminReviews() {
   const products =
     productsQuery.data?.data || [];
 
-  const deliveredOrders = deliveredOrdersQuery.data?.data || [];
-
-  const selectedOrderProducts = useMemo(() => {
-    if (!selectedOrder) return [];
-    const seen = new Set();
-    return (selectedOrder.items || []).reduce((options, item) => {
-      const productId = String(item.product?._id || item.product || "");
-      if (!productId || seen.has(productId)) return options;
-      seen.add(productId);
-      options.push({
-        _id: productId,
-        name: item.productSnapshot?.name || "Purchased product",
-      });
-      return options;
-    }, []);
-  }, [selectedOrder]);
-
   const pendingCount =
     reviews.filter(
       (review) =>
@@ -423,9 +388,6 @@ function AdminReviews() {
     });
 
     setFormError("");
-    setOrderSearch("");
-    setSelectedOrder(null);
-    setRelationshipDirty(false);
     setImageFile(null);
     setRemoveImage(false);
     setFormOpen(true);
@@ -468,14 +430,11 @@ function AdminReviews() {
         review.status ||
         "approved",
 
-      orderId:
-        review.order?._id || "",
+      manualVerifiedPurchase:
+        Boolean(review.isVerifiedPurchase),
     });
 
     setFormError("");
-    setOrderSearch("");
-    setSelectedOrder(null);
-    setRelationshipDirty(false);
     setImageFile(null);
     setRemoveImage(false);
     setFormOpen(true);
@@ -490,29 +449,9 @@ function AdminReviews() {
     setEditingReview(null);
     setForm(emptyForm);
     setFormError("");
-    setOrderSearch("");
-    setSelectedOrder(null);
-    setRelationshipDirty(false);
     setImageFile(null);
     setRemoveImage(false);
     setImagePreviewUrl("");
-  };
-
-  const chooseOrder = (order) => {
-    setSelectedOrder(order);
-    setRelationshipDirty(true);
-    setForm((current) => ({
-      ...current,
-      orderId: order._id,
-      productId: "",
-      fragranceName: "",
-    }));
-  };
-
-  const unlinkOrder = () => {
-    setSelectedOrder(null);
-    setRelationshipDirty(true);
-    setForm((current) => ({ ...current, orderId: "" }));
   };
 
   const handleImageChange = (event) => {
@@ -571,10 +510,6 @@ function AdminReviews() {
       return "Review text is too short.";
     }
 
-    if (!isCustomerReviewEdit && form.orderId && !form.productId) {
-      return "Choose a product from the delivered order.";
-    }
-
     if (!isCustomerReviewEdit && imageFile) {
       if (!["image/jpeg", "image/png", "image/webp"].includes(imageFile.type)) {
         return "Review image must be JPG, PNG or WebP.";
@@ -617,9 +552,7 @@ function AdminReviews() {
         "fragranceName",
         form.productId ? "" : form.fragranceName.trim()
       );
-      if (!editingReview || relationshipDirty) {
-        payload.append("orderId", form.orderId || "");
-      }
+      payload.append("manualVerifiedPurchase", String(form.manualVerifiedPurchase));
       if (imageFile) payload.append("image", imageFile);
       if (removeImage) payload.append("removeImage", "true");
     }
@@ -889,83 +822,7 @@ function AdminReviews() {
                   </div>
                 </div>
               </section>
-            ) : (
-            <section className="mb-6 rounded-3xl border border-darb-gold/20 bg-darb-cream/45 p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-darb-green">
-                    <Link2 size={18} />
-                    <h3 className="font-display text-2xl">Link to delivered order</h3>
-                  </div>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-darb-muted">
-                    Optional. A Verified Purchase badge is granted only after the server confirms the order was delivered and contains the selected product.
-                  </p>
-                </div>
-                {form.orderId && (
-                  <button
-                    type="button"
-                    onClick={unlinkOrder}
-                    className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-                  >
-                    <Unlink size={14} /> Remove link
-                  </button>
-                )}
-              </div>
-
-              {form.orderId && !selectedOrder && editingReview?.order && (
-                <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                  Linked to <strong>{editingReview.order.orderNumber}</strong>. Leave unchanged to preserve this verified relationship, or search below to replace it.
-                </div>
-              )}
-
-              {selectedOrder && (
-                <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                  <strong>{selectedOrder.orderNumber}</strong> · {selectedOrder.customerSnapshot?.name || "Customer"} · {selectedOrder.customerSnapshot?.phone || "No phone"} · {formatDate(selectedOrder.createdAt)}
-                </div>
-              )}
-
-              <label className="mt-4 block text-sm font-semibold text-darb-green" htmlFor="review-order-search">
-                Search delivered orders
-              </label>
-              <div className="relative mt-2">
-                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-darb-muted" size={17} />
-                <input
-                  id="review-order-search"
-                  value={orderSearch}
-                  onChange={(event) => setOrderSearch(event.target.value)}
-                  placeholder="Order number, customer, phone or email"
-                  className="w-full rounded-full border border-darb-gold/30 bg-white py-3 pl-11 pr-5 outline-none transition focus:border-darb-green"
-                  role="combobox"
-                  aria-controls="review-delivered-orders"
-                  aria-expanded={deliveredOrders.length > 0}
-                />
-              </div>
-
-              <div id="review-delivered-orders" role="listbox" aria-label="Delivered orders" className="mt-3 grid max-h-56 gap-2 overflow-y-auto">
-                {deliveredOrdersQuery.isLoading && (
-                  <p className="px-2 py-3 text-sm text-darb-muted">Loading delivered orders...</p>
-                )}
-                {!deliveredOrdersQuery.isLoading && deliveredOrders.map((order) => (
-                  <button
-                    key={order._id}
-                    type="button"
-                    role="option"
-                    aria-selected={form.orderId === order._id}
-                    onClick={() => chooseOrder(order)}
-                    className="rounded-2xl border border-darb-gold/20 bg-white px-4 py-3 text-left transition hover:border-darb-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darb-green"
-                  >
-                    <span className="block font-semibold text-darb-green">{order.orderNumber}</span>
-                    <span className="mt-1 block text-xs text-darb-muted">
-                      {order.customerSnapshot?.name || "Customer"} · {order.customerSnapshot?.phone || "No phone"} · {formatDate(order.createdAt)}
-                    </span>
-                  </button>
-                ))}
-                {!deliveredOrdersQuery.isLoading && deliveredOrders.length === 0 && (
-                  <p className="px-2 py-3 text-sm text-darb-muted">No delivered orders match this search.</p>
-                )}
-              </div>
-            </section>
-            )}
+            ) : null}
 
             <div className="grid gap-5 md:grid-cols-2">
               <div>
@@ -1043,13 +900,7 @@ function AdminReviews() {
                     No linked product
                   </option>
 
-                  {(form.orderId
-                    ? selectedOrderProducts.length > 0
-                      ? selectedOrderProducts
-                      : form.productId && editingReview?.product
-                        ? [editingReview.product]
-                        : []
-                    : products).map(
+                  {products.map(
                     (product) => (
                       <option
                         key={
@@ -1142,6 +993,24 @@ function AdminReviews() {
                   </option>
                 </select>
               </div>
+
+              {!isCustomerReviewEdit && (
+                <label className="flex items-start gap-3 rounded-2xl border border-darb-gold/25 bg-darb-cream/45 px-5 py-4 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    name="manualVerifiedPurchase"
+                    checked={form.manualVerifiedPurchase}
+                    onChange={handleFormChange}
+                    className="mt-1 h-4 w-4 rounded border-darb-gold text-darb-green focus:ring-darb-green"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-darb-green">Verified Purchase</span>
+                    <span className="mt-1 block text-sm leading-6 text-darb-muted">
+                      Mark this when Darb has confirmed this customer purchased before the website.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-semibold text-darb-green">
@@ -1237,12 +1106,6 @@ function AdminReviews() {
                 </button>
               )}
             </section>
-            )}
-
-            {!isCustomerReviewEdit && (
-              <div className="mt-6 rounded-2xl bg-darb-cream/70 px-5 py-4 text-sm leading-6 text-darb-muted">
-                Manual reviews are published without a Verified Purchase badge unless they are linked to a real delivered order and a product purchased in that order.
-              </div>
             )}
 
             <div className="mt-6 flex flex-wrap gap-3">

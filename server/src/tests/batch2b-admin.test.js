@@ -6,11 +6,12 @@ const {
   getCustomerIdentityKey,
 } = require("../services/customerAggregation.service");
 const {
+  applyManualReviewVerification,
   assertCustomerReviewUpdateAllowed,
+  assertNoCustomerVerificationFlag,
   assertNoDirectVerificationFlag,
-  clearReviewVerification,
-  getReviewRelationshipIntent,
-  validateReviewVerification,
+  getCustomerReviewVerification,
+  parseManualVerifiedPurchase,
 } = require("../services/reviewVerification.service");
 
 test("customer aggregation treats local and +20 Egyptian phone forms as one identity", () => {
@@ -40,46 +41,77 @@ test("different normalized phones remain different customers", () => {
   assert.equal(customers.length, 2);
 });
 
-const deliveredOrder = {
-  _id: "order-1",
-  customer: "customer-1",
-  orderStatus: "delivered",
-  items: [{ product: "product-1" }],
-};
-
-test("delivered order and purchased product create a verified relationship", () => {
-  assert.deepEqual(
-    validateReviewVerification({ order: deliveredOrder, productId: "product-1" }),
-    {
-      order: "order-1",
-      customer: "customer-1",
-      product: "product-1",
-      isVerifiedPurchase: true,
-    }
-  );
-});
-
-test("non-delivered orders cannot verify a review", () => {
-  assert.throws(
-    () => validateReviewVerification({
-      order: { ...deliveredOrder, orderStatus: "shipped" },
-      productId: "product-1",
-    }),
-    /Only delivered orders/
-  );
-});
-
-test("a product outside the selected order cannot verify a review", () => {
-  assert.throws(
-    () => validateReviewVerification({ order: deliveredOrder, productId: "product-2" }),
-    /product that was purchased/
-  );
-});
-
 test("request bodies cannot directly force Verified Purchase", () => {
   assert.throws(
     () => assertNoDirectVerificationFlag({ isVerifiedPurchase: true }),
-    /linking a delivered order/
+    /cannot be set directly/
+  );
+});
+
+test("manual admin review defaults unverified", () => {
+  const review = { source: "admin", order: null, customer: null };
+  applyManualReviewVerification(review, {}, { isCreate: true });
+  assert.equal(review.isVerifiedPurchase, false);
+});
+
+test("admin create accepts manualVerifiedPurchase true", () => {
+  const review = { source: "admin", order: null, customer: null };
+  applyManualReviewVerification(review, { manualVerifiedPurchase: true }, { isCreate: true });
+  assert.equal(review.isVerifiedPurchase, true);
+});
+
+test("admin create treats false or missing manual verification as unverified", () => {
+  for (const value of [false, "false", 1, "1", null, undefined]) {
+    assert.equal(parseManualVerifiedPurchase(value), false);
+  }
+  const review = { source: "admin" };
+  applyManualReviewVerification(review, { manualVerifiedPurchase: false }, { isCreate: true });
+  assert.equal(review.isVerifiedPurchase, false);
+});
+
+test("admin can check manual verification later", () => {
+  const review = { source: "admin", isVerifiedPurchase: false };
+  applyManualReviewVerification(review, { manualVerifiedPurchase: "true" });
+  assert.equal(review.isVerifiedPurchase, true);
+});
+
+test("admin can uncheck manual verification later", () => {
+  const review = { source: "admin", isVerifiedPurchase: true };
+  applyManualReviewVerification(review, { manualVerifiedPurchase: "false" });
+  assert.equal(review.isVerifiedPurchase, false);
+});
+
+test("admin edit without manual verification preserves its current value", () => {
+  const review = { source: "admin", isVerifiedPurchase: true };
+  applyManualReviewVerification(review, { text: "Updated review text" });
+  assert.equal(review.isVerifiedPurchase, true);
+});
+
+test("customer requests cannot set isVerifiedPurchase", () => {
+  assert.throws(
+    () => assertNoCustomerVerificationFlag({ isVerifiedPurchase: true }),
+    /cannot be set directly/
+  );
+});
+
+test("customer requests cannot set manualVerifiedPurchase", () => {
+  assert.throws(
+    () => assertNoCustomerVerificationFlag({ manualVerifiedPurchase: true }),
+    /only available for admin reviews/
+  );
+});
+
+test("validated customer order verification remains automatic", () => {
+  assert.deepEqual(
+    getCustomerReviewVerification({
+      eligibleOrder: { _id: "order-1" },
+      customerId: "customer-1",
+    }),
+    {
+      customer: "customer-1",
+      order: "order-1",
+      isVerifiedPurchase: true,
+    }
   );
 });
 
@@ -137,54 +169,47 @@ test("unrelated customer review moderation and content edits preserve immutable 
   assert.deepEqual(review, before);
 });
 
-test("manual reviews still allow secure order, product, and media editing inputs", () => {
+test("manual reviews allow product and media editing independently", () => {
   const review = { source: "admin" };
   assert.doesNotThrow(() => assertCustomerReviewUpdateAllowed({
     review,
-    body: { orderId: "order-1", productId: "product-1", removeImage: "true" },
+    body: { productId: "product-1", removeImage: "true" },
     file: { mimetype: "image/webp" },
   }));
-  assert.equal(
-    validateReviewVerification({ order: deliveredOrder, productId: "product-1" }).isVerifiedPurchase,
-    true
-  );
 });
 
-test("an unrelated admin review edit preserves media and purchase relationship fields", () => {
+test("editing a customer review cannot manually alter verification", () => {
   const review = {
-    media: { type: "image", url: "https://cdn.example/review.webp" },
-    order: "order-1",
-    product: "product-1",
-    customer: "customer-1",
+    source: "customer",
     isVerifiedPurchase: true,
   };
-
-  assert.equal(getReviewRelationshipIntent({ text: "Updated review text" }), "preserve");
-  assert.equal(review.media.url, "https://cdn.example/review.webp");
-  assert.equal(review.order, "order-1");
+  assert.throws(
+    () => assertCustomerReviewUpdateAllowed({ review, body: { manualVerifiedPurchase: false } }),
+    /purchase links and media cannot be changed/
+  );
+  applyManualReviewVerification(review, { manualVerifiedPurchase: false });
   assert.equal(review.isVerifiedPurchase, true);
 });
 
-test("explicitly removing a purchase relationship clears verification", () => {
+test("manual admin review does not require an order or customer relationship", () => {
   const review = {
-    order: "order-1",
-    product: "product-1",
-    customer: "customer-1",
-    isVerifiedPurchase: true,
+    source: "admin",
+    order: null,
+    customer: null,
   };
-
-  assert.equal(getReviewRelationshipIntent({ orderId: "" }), "clear");
-  clearReviewVerification(review);
+  applyManualReviewVerification(review, { manualVerifiedPurchase: true }, { isCreate: true });
   assert.equal(review.order, null);
   assert.equal(review.customer, null);
-  assert.equal(review.isVerifiedPurchase, false);
-  assert.equal(review.product, "product-1");
+  assert.equal(review.isVerifiedPurchase, true);
 });
 
-test("changing a verified review to an unpurchased product fails revalidation", () => {
-  assert.equal(getReviewRelationshipIntent({ productId: "product-2" }), "revalidate");
-  assert.throws(
-    () => validateReviewVerification({ order: deliveredOrder, productId: "product-2" }),
-    /product that was purchased/
-  );
+test("manual product selection is independent from verification", () => {
+  const review = {
+    source: "admin",
+    product: "product-1",
+    isVerifiedPurchase: false,
+  };
+  applyManualReviewVerification(review, { manualVerifiedPurchase: true });
+  assert.equal(review.product, "product-1");
+  assert.equal(review.isVerifiedPurchase, true);
 });

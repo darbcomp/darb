@@ -1,11 +1,48 @@
-const getPurchasedProductIds = (order = {}) => new Set(
-  (order.items || []).map((item) => String(item?.product?._id || item?.product || "")).filter(Boolean)
-);
-
 const assertNoDirectVerificationFlag = (body = {}) => {
   if (Object.prototype.hasOwnProperty.call(body, "isVerifiedPurchase")) {
-    throw new Error("Verified Purchase can only be set by linking a delivered order.");
+    throw new Error("Verified Purchase cannot be set directly.");
   }
+};
+
+const assertNoCustomerVerificationFlag = (body = {}) => {
+  let message = "";
+  if (Object.prototype.hasOwnProperty.call(body, "isVerifiedPurchase")) {
+    message = "Verified Purchase cannot be set directly.";
+  } else if (Object.prototype.hasOwnProperty.call(body, "manualVerifiedPurchase")) {
+    message = "Manual Verified Purchase is only available for admin reviews.";
+  }
+  if (!message) return;
+
+  const error = new Error(message);
+  error.code = "CUSTOMER_REVIEW_VALIDATION";
+  throw error;
+};
+
+const parseManualVerifiedPurchase = (value) => value === true || value === "true";
+
+const applyManualReviewVerification = (review, body = {}, { isCreate = false } = {}) => {
+  if (review?.source !== "admin") return review;
+
+  const provided = Object.prototype.hasOwnProperty.call(body, "manualVerifiedPurchase");
+  if (isCreate || provided) {
+    review.isVerifiedPurchase = provided
+      ? parseManualVerifiedPurchase(body.manualVerifiedPurchase)
+      : false;
+  }
+
+  return review;
+};
+
+const getCustomerReviewVerification = ({ eligibleOrder, customerId } = {}) => {
+  if (!eligibleOrder?._id || !customerId) {
+    throw new Error("A validated customer order is required to verify a purchase.");
+  }
+
+  return {
+    customer: customerId,
+    order: eligibleOrder._id,
+    isVerifiedPurchase: true,
+  };
 };
 
 const customerReviewImmutableFields = [
@@ -19,6 +56,7 @@ const customerReviewImmutableFields = [
   "media",
   "image",
   "removeImage",
+  "manualVerifiedPurchase",
 ];
 
 const assertCustomerReviewUpdateAllowed = ({ review, body = {}, file = null } = {}) => {
@@ -31,46 +69,12 @@ const assertCustomerReviewUpdateAllowed = ({ review, body = {}, file = null } = 
   }
 };
 
-const getReviewRelationshipIntent = (body = {}) => {
-  assertNoDirectVerificationFlag(body);
-  const orderProvided = body.orderId !== undefined || body.order !== undefined;
-  const productProvided = body.productId !== undefined || body.product !== undefined;
-  if (!orderProvided && !productProvided) return "preserve";
-  if (orderProvided && !String(body.orderId || body.order || "").trim()) return "clear";
-  if (orderProvided) return "verify";
-  return "revalidate";
-};
-
-const clearReviewVerification = (review) => {
-  review.order = null;
-  review.customer = null;
-  review.isVerifiedPurchase = false;
-  return review;
-};
-
-const validateReviewVerification = ({ order, productId, customerId = "" } = {}) => {
-  if (!order) throw new Error("Delivered order not found.");
-  if (order.orderStatus !== "delivered") throw new Error("Only delivered orders can verify a purchase.");
-  if (!productId || !getPurchasedProductIds(order).has(String(productId))) {
-    throw new Error("Choose a product that was purchased in this order.");
-  }
-  if (customerId && String(order.customer || "") !== String(customerId)) {
-    throw new Error("The selected customer does not match this order.");
-  }
-  return {
-    order: order._id,
-    customer: order.customer || null,
-    product: productId,
-    isVerifiedPurchase: true,
-  };
-};
-
 module.exports = {
+  applyManualReviewVerification,
   assertCustomerReviewUpdateAllowed,
+  assertNoCustomerVerificationFlag,
   assertNoDirectVerificationFlag,
-  clearReviewVerification,
   customerReviewImmutableFields,
-  getPurchasedProductIds,
-  getReviewRelationshipIntent,
-  validateReviewVerification,
+  getCustomerReviewVerification,
+  parseManualVerifiedPurchase,
 };
