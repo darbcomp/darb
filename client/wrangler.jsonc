@@ -3,6 +3,12 @@
   "compatibility_date": "2026-09-13",
   "workers_dev": true,
   "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "darbfragrance.com",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "html_handling": "drop-trailing-slash",
