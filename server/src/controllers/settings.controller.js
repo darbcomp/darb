@@ -1,6 +1,7 @@
 const { getSafeInternalMessage } = require("../utils/httpError");
 const mongoose = require("mongoose");
 const StoreSettings = require("../models/StoreSettings");
+const { scheduleFrontendRebuild } = require("../services/frontendRebuild.service");
 
 /* =========================
    DATABASE
@@ -934,6 +935,11 @@ const updateAdminSettings =
       const settings =
         await getOrCreateSettings();
 
+      const previousSeo = {
+        metaTitle: String(settings.seo?.metaTitle || ""),
+        metaDescription: String(settings.seo?.metaDescription || ""),
+      };
+
       const payload =
         buildSettingsPayload(
           req.body,
@@ -946,6 +952,14 @@ const updateAdminSettings =
       );
 
       await settings.save();
+
+      const seoChanged =
+        previousSeo.metaTitle !== String(settings.seo?.metaTitle || "") ||
+        previousSeo.metaDescription !== String(settings.seo?.metaDescription || "");
+
+      if (seoChanged) {
+        scheduleFrontendRebuild("seo-settings-updated");
+      }
 
       return res
         .status(200)

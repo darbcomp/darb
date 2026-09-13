@@ -7,6 +7,7 @@ const slugify = require("../utils/slugify");
 const { uploadOptimizedPublicImage, deletePublicMedia } = require("../services/mediaStorage.service");
 const { preserveOptionalBoolean, preserveOptionalString } = require("../utils/preserveOptionalField");
 const { sanitizePublicProductMedia, sanitizePublicCategoryMedia } = require("../utils/mediaResponse");
+const { scheduleFrontendRebuild } = require("../services/frontendRebuild.service");
 
 const MAX_PRODUCT_IMAGES = 10;
 
@@ -922,6 +923,8 @@ const createProduct = async (req, res) => {
       .populate("category", "name arabicName slug")
       .populate("categories", "name arabicName slug");
 
+    scheduleFrontendRebuild("product-created");
+
     return res.status(201).json({
       success: true,
       message: "Product created successfully.",
@@ -994,6 +997,8 @@ const updateProduct = async (req, res) => {
       .populate("category", "name arabicName slug")
       .populate("categories", "name arabicName slug");
 
+    scheduleFrontendRebuild("product-updated");
+
     return res.status(200).json({
       success: true,
       message: "Product updated successfully.",
@@ -1033,6 +1038,8 @@ const deleteProduct = async (req, res) => {
       await product.deleteOne();
       await destroyStoredImages(images);
 
+      scheduleFrontendRebuild("product-deleted");
+
       return res.status(200).json({
         success: true,
         message: "Product permanently deleted successfully.",
@@ -1041,6 +1048,8 @@ const deleteProduct = async (req, res) => {
 
     product.isActive = false;
     await product.save();
+
+    scheduleFrontendRebuild("product-deactivated");
 
     return res.status(200).json({
       success: true,
@@ -1109,6 +1118,8 @@ const deleteProductImage = async (req, res) => {
 
     await product.save();
     await destroyStoredImage(imageToRemove.publicId);
+
+    scheduleFrontendRebuild("product-image-deleted");
 
     return res.status(200).json({
       success: true,

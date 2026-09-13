@@ -7,6 +7,7 @@ const slugify = require("../utils/slugify");
 const { shouldCleanupUploadedMedia, shouldDeleteReplacedMedia } = require("../utils/mediaLifecycle");
 const { preserveOptionalString } = require("../utils/preserveOptionalField");
 const { sanitizePublicCategoryMedia } = require("../utils/mediaResponse");
+const { scheduleFrontendRebuild } = require("../services/frontendRebuild.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
@@ -331,6 +332,8 @@ const createCategory = async (req, res) => {
     const category = await Category.create(payload);
     categoryPersisted = true;
 
+    scheduleFrontendRebuild("category-created");
+
     return res.status(201).json({
       success: true,
       message: "Category created successfully.",
@@ -413,6 +416,8 @@ const updateCategory = async (req, res) => {
       );
     }
 
+    scheduleFrontendRebuild("category-updated");
+
     return res.status(200).json({
       success: true,
       message: "Category updated successfully.",
@@ -463,6 +468,8 @@ const deleteCategory = async (req, res) => {
       await category.deleteOne();
       if (imagePublicId) await deletePublicMedia(imagePublicId).catch(() => {});
 
+      scheduleFrontendRebuild("category-deleted");
+
       return res.status(200).json({
         success: true,
         message: "Category permanently deleted successfully.",
@@ -471,6 +478,8 @@ const deleteCategory = async (req, res) => {
 
     category.isActive = false;
     await category.save();
+
+    scheduleFrontendRebuild("category-deactivated");
 
     return res.status(200).json({
       success: true,
