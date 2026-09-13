@@ -9,9 +9,15 @@ Custom MERN e-commerce website for Darb Perfumes.
 - Tailwind CSS
 - Node.js + Express
 - MongoDB + Mongoose
-- Cloudinary
-- Vercel
-- Render
+
+## Infrastructure
+
+- Frontend: Cloudflare Workers Static Assets
+- Backend: Render
+- Database: MongoDB Atlas
+- Media: Cloudflare R2
+- DNS / SSL / CDN: Cloudflare
+- Domain registration: Vercel
 
 ## Brand Direction
 
