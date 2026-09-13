@@ -9,7 +9,7 @@ const { products } = require("./catalog.data");
 const { processProductImage } = require("../utils/imageProcessor");
 const { putPublicObject } = require("../services/mediaStorage.service");
 
-const productRoot = path.resolve(__dirname, "../../../client/public/images/products");
+const productRoot = path.resolve(__dirname, "../../../seed-assets/products");
 const groupFor = (product) => product.productType === "musk" ? "musk" : product.primaryCategory === "women" ? "female" : "male";
 const compareProductImageNames = (slug, a, b) => {
   const base = String(slug).toLowerCase();
