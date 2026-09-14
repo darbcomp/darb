@@ -4,6 +4,7 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import MarketingPixels from "../marketing/MarketingPixels";
 import RewardLauncher from "../rewards/RewardLauncher";
+import AddedToCartPopup from "../cart/AddedToCartPopup";
 
 function PublicLayout() {
   return (
@@ -17,6 +18,7 @@ function PublicLayout() {
 
       <Footer />
       <RewardLauncher />
+      <AddedToCartPopup />
     </div>
   );
 }

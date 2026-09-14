@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useReducer,
@@ -11,6 +12,7 @@ const CART_STORAGE_KEY = "darb_cart_v1";
 
 const initialState = {
   items: [],
+  addedEvent: null,
 };
 
 /* =========================
@@ -45,6 +47,7 @@ const getInitialCartState = () => {
         cartItemId: item.cartItemId || `${item.productId || item.slug}_${item.variant?.variantId || "default"}`,
         variant: item.variant || null,
       })),
+      addedEvent: null,
     };
   } catch {
     window.localStorage.removeItem(
@@ -255,6 +258,10 @@ const cartReducer = (
         return {
           ...state,
 
+          addedEvent: action.showPopup
+            ? { id: action.eventId }
+            : state.addedEvent,
+
           items: state.items.map(
             (item) =>
               item.cartItemId ===
@@ -276,6 +283,10 @@ const cartReducer = (
 
       return {
         ...state,
+
+        addedEvent: action.showPopup
+          ? { id: action.eventId }
+          : state.addedEvent,
 
         items: [
           ...state.items,
@@ -328,6 +339,13 @@ const cartReducer = (
       return {
         ...state,
         items: [],
+      };
+    }
+
+    case "DISMISS_ADDED_POPUP": {
+      return {
+        ...state,
+        addedEvent: null,
       };
     }
 
@@ -395,6 +413,8 @@ export function CartProvider({
     dispatch({
       type: "ADD_ITEM",
       payload: cartItem,
+      showPopup: addedQuantity > 0,
+      eventId: Date.now(),
     });
 
     if (addedQuantity > 0) {
@@ -502,6 +522,12 @@ export function CartProvider({
     });
   };
 
+  const dismissAddedPopup = useCallback(() => {
+    dispatch({
+      type: "DISMISS_ADDED_POPUP",
+    });
+  }, []);
+
   /* =========================
      SUMMARY
   ========================== */
@@ -562,6 +588,8 @@ export function CartProvider({
     decrementItem,
     removeItem,
     clearCart,
+    addedEvent: state.addedEvent,
+    dismissAddedPopup,
     ...cartSummary,
   };
 

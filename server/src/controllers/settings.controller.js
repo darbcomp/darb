@@ -39,12 +39,12 @@ const defaultSettings = {
   },
 
   delivery: {
-    defaultFee: 135,
+    defaultFee: 100,
 
     freeDeliveryThreshold: 0,
 
     estimatedDeliveryText: "3–5 business days",
-    governorateFees: { cairo: 80, giza: 80, alexandria: 125, other: 135 },
+    governorateFees: { cairo: 100, giza: 100, alexandria: 100, other: 100 },
     shipsToCountry: "Egypt",
   },
 
@@ -396,12 +396,24 @@ const migratePaymentSettingsIfNeeded =
         vodafone.enabled = true;
       }
       if (instaPay) instaPay.enabled = true;
-      settings.delivery.defaultFee = 135;
+      settings.delivery.defaultFee = defaultSettings.delivery.defaultFee;
       settings.delivery.freeDeliveryThreshold = 0;
       settings.delivery.estimatedDeliveryText = "3–5 business days";
       settings.delivery.governorateFees = defaultSettings.delivery.governorateFees;
       if (!settings.contact.whatsapp) settings.contact.whatsapp = INSTAPAY_RECIPIENT;
       settings.launchConfigVersion = 1;
+      changed = true;
+    }
+
+    if (Number(rawSettings.launchConfigVersion || 0) < 2) {
+      settings.delivery.defaultFee = 100;
+      settings.delivery.governorateFees = {
+        cairo: 100,
+        giza: 100,
+        alexandria: 100,
+        other: 100,
+      };
+      settings.launchConfigVersion = 2;
       changed = true;
     }
 
@@ -433,7 +445,7 @@ const getOrCreateSettings =
           singletonKey:
             "main",
 
-          launchConfigVersion: 1,
+          launchConfigVersion: 2,
 
           ...defaultSettings,
         });
@@ -564,7 +576,7 @@ const buildSettingsPayload = (
         body.delivery?.defaultFee,
         Number(
           currentDelivery.defaultFee
-        ) || 0
+        ) || 100
       ),
 
       freeDeliveryThreshold:
@@ -590,10 +602,10 @@ const buildSettingsPayload = (
               .estimatedDeliveryText
         ),
       governorateFees: {
-        cairo: parseNumber(body.delivery?.governorateFees?.cairo, Number(currentDelivery.governorateFees?.cairo) || 80),
-        giza: parseNumber(body.delivery?.governorateFees?.giza, Number(currentDelivery.governorateFees?.giza) || 80),
-        alexandria: parseNumber(body.delivery?.governorateFees?.alexandria, Number(currentDelivery.governorateFees?.alexandria) || 125),
-        other: parseNumber(body.delivery?.governorateFees?.other, Number(currentDelivery.governorateFees?.other) || 135),
+        cairo: parseNumber(body.delivery?.governorateFees?.cairo, Number(currentDelivery.governorateFees?.cairo) || 100),
+        giza: parseNumber(body.delivery?.governorateFees?.giza, Number(currentDelivery.governorateFees?.giza) || 100),
+        alexandria: parseNumber(body.delivery?.governorateFees?.alexandria, Number(currentDelivery.governorateFees?.alexandria) || 100),
+        other: parseNumber(body.delivery?.governorateFees?.other, Number(currentDelivery.governorateFees?.other) || 100),
       },
       shipsToCountry: "Egypt",
     },

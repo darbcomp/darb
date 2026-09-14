@@ -45,14 +45,14 @@ const defaultForm = {
   },
 
   delivery: {
-    defaultFee: "135",
+    defaultFee: "100",
 
     freeDeliveryThreshold:
       "0",
 
     estimatedDeliveryText:
       "3–5 business days",
-    governorateFees: { cairo: "80", giza: "80", alexandria: "125", other: "135" },
+    governorateFees: { cairo: "100", giza: "100", alexandria: "100", other: "100" },
   },
 
   paymentMethods: {
@@ -223,7 +223,7 @@ const normalizeSettings = (
     defaultFee: String(
       settings.delivery
         ?.defaultFee ??
-        "0"
+        "100"
     ),
 
     freeDeliveryThreshold:
@@ -239,10 +239,10 @@ const normalizeSettings = (
       defaultForm.delivery
         .estimatedDeliveryText,
     governorateFees: {
-      cairo: String(settings.delivery?.governorateFees?.cairo ?? "80"),
-      giza: String(settings.delivery?.governorateFees?.giza ?? "80"),
-      alexandria: String(settings.delivery?.governorateFees?.alexandria ?? "125"),
-      other: String(settings.delivery?.governorateFees?.other ?? "135"),
+      cairo: String(settings.delivery?.governorateFees?.cairo ?? "100"),
+      giza: String(settings.delivery?.governorateFees?.giza ?? "100"),
+      alexandria: String(settings.delivery?.governorateFees?.alexandria ?? "100"),
+      other: String(settings.delivery?.governorateFees?.other ?? "100"),
     },
   },
 
@@ -382,10 +382,10 @@ const buildPayload = (
       form.delivery
         .estimatedDeliveryText,
     governorateFees: {
-      cairo: Number(form.delivery.governorateFees.cairo) || 80,
-      giza: Number(form.delivery.governorateFees.giza) || 80,
-      alexandria: Number(form.delivery.governorateFees.alexandria) || 125,
-      other: Number(form.delivery.governorateFees.other) || 135,
+      cairo: Number(form.delivery.governorateFees.cairo) || 100,
+      giza: Number(form.delivery.governorateFees.giza) || 100,
+      alexandria: Number(form.delivery.governorateFees.alexandria) || 100,
+      other: Number(form.delivery.governorateFees.other) || 100,
     },
   },
 

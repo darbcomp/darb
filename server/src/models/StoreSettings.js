@@ -63,7 +63,7 @@ const storeSettingsSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
-    launchConfigVersion: { type: Number, default: 0, select: false },
+    launchConfigVersion: { type: Number, default: 2, select: false },
 
     storeName: {
       type: String,
@@ -140,7 +140,7 @@ const storeSettingsSchema = new mongoose.Schema(
     delivery: {
       defaultFee: {
         type: Number,
-        default: 0,
+        default: 100,
       },
 
       freeDeliveryThreshold: {
@@ -155,10 +155,10 @@ const storeSettingsSchema = new mongoose.Schema(
           "Delivery timing will be confirmed after placing the order.",
       },
       governorateFees: {
-        cairo: { type: Number, default: 80 },
-        giza: { type: Number, default: 80 },
-        alexandria: { type: Number, default: 125 },
-        other: { type: Number, default: 135 },
+        cairo: { type: Number, default: 100 },
+        giza: { type: Number, default: 100 },
+        alexandria: { type: Number, default: 100 },
+        other: { type: Number, default: 100 },
       },
       shipsToCountry: { type: String, trim: true, default: "Egypt" },
     },

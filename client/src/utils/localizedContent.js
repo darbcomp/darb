@@ -9,6 +9,11 @@ const chooseText = (arabicValue, englishValue, language) =>
 const chooseItems = (arabicValue, englishValue, language) =>
   language === "ar" && hasItems(arabicValue) ? arabicValue : englishValue;
 
+const localizeSizeLabel = (value, language) =>
+  language === "ar" && typeof value === "string"
+    ? value.replace(/(\d+(?:\.\d+)?)\s*ML\b/gi, "$1 مل")
+    : value;
+
 export function localizeCategory(category, language) {
   if (!category || language !== "ar") return category;
 
@@ -66,7 +71,15 @@ export function localizeProduct(product, language) {
         chooseItems(arabicNotes.middle, englishNotes.middle, language) || [],
       base: chooseItems(arabicNotes.base, englishNotes.base, language) || [],
     },
+    sizeLabel: localizeSizeLabel(product.sizeLabel, language),
+    variants: Array.isArray(product.variants)
+      ? product.variants.map((variant) => ({
+          ...variant,
+          label: localizeSizeLabel(variant.label, language),
+        }))
+      : product.variants,
     category: localizeCategory(product.category, language),
+    categorySnapshot: localizeCategory(product.categorySnapshot, language),
     categories: Array.isArray(product.categories)
       ? product.categories.map((category) => localizeCategory(category, language))
       : product.categories,

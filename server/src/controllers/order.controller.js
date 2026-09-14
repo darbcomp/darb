@@ -120,7 +120,7 @@ const getMainImage = (product) =>
   product.images?.find((image) => image.isMain) || product.images?.[0];
 
 const getSettings = async (session = null) => {
-  const query = StoreSettings.findOne({ singletonKey: "main" });
+  const query = StoreSettings.findOne({ singletonKey: "main" }).select("+launchConfigVersion");
 
   if (session) {
     query.session(session);
@@ -128,15 +128,17 @@ const getSettings = async (session = null) => {
 
   const settings = await query;
 
+  const needsDeliveryMigration = Number(settings?.launchConfigVersion || 0) < 2;
+
   return {
     delivery: {
-      defaultFee: Number(settings?.delivery?.defaultFee) || 0,
+      defaultFee: needsDeliveryMigration ? 100 : Number(settings?.delivery?.defaultFee) || 100,
       freeDeliveryThreshold: 0,
       governorateFees: {
-        cairo: Number(settings?.delivery?.governorateFees?.cairo) || 80,
-        giza: Number(settings?.delivery?.governorateFees?.giza) || 80,
-        alexandria: Number(settings?.delivery?.governorateFees?.alexandria) || 125,
-        other: Number(settings?.delivery?.governorateFees?.other) || 135,
+        cairo: needsDeliveryMigration ? 100 : Number(settings?.delivery?.governorateFees?.cairo) || 100,
+        giza: needsDeliveryMigration ? 100 : Number(settings?.delivery?.governorateFees?.giza) || 100,
+        alexandria: needsDeliveryMigration ? 100 : Number(settings?.delivery?.governorateFees?.alexandria) || 100,
+        other: needsDeliveryMigration ? 100 : Number(settings?.delivery?.governorateFees?.other) || 100,
       },
     },
     paymentMethods: settings?.paymentMethods || fallbackPaymentMethods,

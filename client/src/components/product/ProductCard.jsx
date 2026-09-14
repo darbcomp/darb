@@ -42,7 +42,7 @@ function ProductCard({ product: sourceProduct }) {
 
   const activeVariants = getActiveProductVariants(product);
   const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
-  const size = quickVariant?.label || `${activeVariants.length} sizes`;
+  const size = quickVariant?.label || `${activeVariants.length} ${t("sizes")}`;
   const displayVariant = quickVariant || activeVariants.find((variant) => Number(variant.price) > 0) || activeVariants[0];
   const price = Number(displayVariant?.price || product.price);
   const stock = quickVariant ? Number(quickVariant.stock) : Math.max(...activeVariants.map((variant) => Number(variant.stock) || 0), 0);
@@ -233,7 +233,7 @@ function ProductCard({ product: sourceProduct }) {
         )}
 
         <div className="mt-auto pt-4 sm:pt-5">
-          <p className="truncate text-sm font-semibold text-darb-black sm:text-base">
+          <p className="inline-flex max-w-full rounded-lg bg-darb-green px-2.5 py-1.5 text-sm font-semibold leading-none text-darb-beige sm:px-3 sm:py-2 sm:text-base">
             {price > 0
               ? formatCurrency(price)
               : t("Unavailable")}

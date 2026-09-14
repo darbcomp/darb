@@ -12,6 +12,7 @@
     "start": "node src/server.js",
     "seed": "node src/seed/seedProducts.js",
     "seed:categories": "node src/seed/seedCategories.js",
+    "backfill:arabic": "node src/scripts/backfillArabicCatalog.js",
     "create-admin": "node src/scripts/createAdmin.js",
     "phase1:migrate": "node src/scripts/migratePhase1.js",
     "test-connections": "node src/scripts/testConnections.js"
