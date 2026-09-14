@@ -331,7 +331,8 @@ const renderDiscounts = (
             "
           >
             ${escapeHtml(
-              discount.name ||
+              discount.title ||
+                discount.name ||
                 discount.code ||
                 "Discount"
             )}

@@ -93,6 +93,14 @@ const discountSnapshotSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    title: {
+      type: String,
+      default: "",
+    },
+    arabicTitle: {
+      type: String,
+      default: "",
+    },
     code: {
       type: String,
       default: "",

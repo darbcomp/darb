@@ -370,6 +370,8 @@ const buildStoredDiscounts = (discounts = []) =>
     sourceId: discount.sourceId || null,
     name:
       discount.name || discount.title || discount.code || "Discount",
+    title: discount.title || discount.name || discount.code || "Discount",
+    arabicTitle: discount.arabicTitle || "",
     code: discount.code || "",
     amount: Number(discount.amount) || 0,
   }));
@@ -815,7 +817,7 @@ const createOrder = async (req, res) => {
           origin: entitlement.origin,
           freeTester,
         } : {
-          label: pricing.discounts[0]?.name || "",
+          label: pricing.discounts[0]?.title || pricing.discounts[0]?.name || "",
           origin: pricing.discounts[0]?.sourceType || "",
           freeTester: false,
         },

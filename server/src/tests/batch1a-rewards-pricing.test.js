@@ -10,7 +10,25 @@ const {
 const {
   calculateBundleDiscount,
   calculateOrderTotals,
+  serializeAppliedDiscount,
 } = require("../utils/calculateCart");
+
+test("applied offer serialization preserves internal and customer titles", () => {
+  const discount = serializeAppliedDiscount({
+    sourceType: "offer",
+    sourceId: "offer-1",
+    name: "Internal September offer",
+    title: "A September path",
+    arabicTitle: "درب سبتمبر",
+    discountType: "percentage",
+    amount: 100,
+  });
+
+  assert.equal(discount.name, "Internal September offer");
+  assert.equal(discount.title, "A September path");
+  assert.equal(discount.arabicTitle, "درب سبتمبر");
+  assert.equal(discount.amount, 100);
+});
 
 const basePricing = {
   subtotal: 1450,

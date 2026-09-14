@@ -7,6 +7,7 @@ import { flyProductImageToCart } from "../../utils/flyToCart";
 import { formatCurrency } from "../../utils/formatCurrency";
 import { getActiveProductVariants } from "../../utils/productVariants";
 import { localizeProduct } from "../../utils/localizedContent";
+import ProductOfferNote from "./ProductOfferNote";
 
 function ProductCard({ product: sourceProduct }) {
   const navigate = useNavigate();
@@ -245,6 +246,10 @@ function ProductCard({ product: sourceProduct }) {
                 product.compareAtPrice
               )}
             </p>
+          )}
+
+          {price > 0 && (
+            <ProductOfferNote product={sourceProduct} price={price} hasCompareAt={hasDiscount} />
           )}
 
           {stock <= 0 && (

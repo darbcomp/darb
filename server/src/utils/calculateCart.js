@@ -461,7 +461,12 @@ const calculateOfferDiscounts =
           offer.name,
 
         title:
+          offer.title ||
           offer.name,
+
+        arabicTitle:
+          offer.arabicTitle ||
+          "",
 
         code: "",
 
@@ -1437,6 +1442,19 @@ const calculateCouponDiscount =
     };
   };
 
+const serializeAppliedDiscount = (discount) => ({
+  sourceType: discount.sourceType,
+  sourceId: discount.sourceId,
+  name: discount.name || discount.title || "",
+  title: discount.title || discount.name || "",
+  arabicTitle: discount.arabicTitle || "",
+  code: discount.code || "",
+  discountType: discount.discountType,
+  amount: Number(discount.amount) || 0,
+  freeShipping: Boolean(discount.freeShipping),
+  applications: Number(discount.applications) || 0,
+});
+
 const calculateCartPricing =
   async ({
     items = [],
@@ -1614,49 +1632,7 @@ const calculateCartPricing =
 
       freeShipping,
 
-      discounts:
-        selectedDiscounts.map(
-          (discount) => ({
-            sourceType:
-              discount.sourceType,
-
-            sourceId:
-              discount.sourceId,
-
-            name:
-              discount.name ||
-              discount.title ||
-              "",
-
-            // Keep title because the current
-            // Checkout UI already reads it.
-            title:
-              discount.title ||
-              discount.name ||
-              "",
-
-            code:
-              discount.code || "",
-
-            discountType:
-              discount.discountType,
-
-            amount:
-              Number(
-                discount.amount
-              ) || 0,
-
-            freeShipping:
-              Boolean(
-                discount.freeShipping
-              ),
-
-            applications:
-              Number(
-                discount.applications
-              ) || 0,
-          })
-        ),
+      discounts: selectedDiscounts.map(serializeAppliedDiscount),
 
       coupon: {
         code:
@@ -1899,6 +1875,7 @@ const decrementDiscountUsage =
 module.exports = {
   calculateOrderTotals,
   calculateBundleDiscount,
+  serializeAppliedDiscount,
   calculateCartPricing,
   incrementDiscountUsage,
   decrementDiscountUsage,

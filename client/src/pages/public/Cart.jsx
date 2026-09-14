@@ -15,6 +15,7 @@ import { useCart } from "../../context/useCart";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { previewOrder } from "../../api/orderApi";
+import { getOfferCustomerTitle } from "../../utils/productOffers";
 
 import {
   formatCurrency,
@@ -464,7 +465,7 @@ function Cart() {
                     {automaticDiscounts.map((discount, index) => (
                       <SummaryRow
                         key={`${discount.sourceType}-${discount.sourceId || index}`}
-                        label={discount.name || discount.title || t("Automatic promotion")}
+                        label={getOfferCustomerTitle(discount, language) || t("Automatic promotion")}
                         value={discount.amount > 0 ? `-${formatCurrency(discount.amount)}` : t("Applied")}
                         saving
                       />

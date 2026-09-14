@@ -10,6 +10,7 @@ import { useCart } from "../../context/useCart";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { formatCurrency } from "../../utils/formatCurrency";
+import { getOfferCustomerTitle } from "../../utils/productOffers";
 import { EGYPT_GOVERNORATES, getGovernorateLabel } from "../../constants/egyptGovernorates";
 import { createOrderRequestId } from "../../utils/orderRequestId";
 import {
@@ -1070,7 +1071,7 @@ function Checkout() {
               <div className="mt-3 space-y-2">
                 {pricing.discounts.map((discount, index) => (<div key={`${discount.sourceType}-${discount.sourceId || index}`} className="flex justify-between gap-4 text-xs text-darb-muted">
                       <span>
-                        {discount.title}
+                        {getOfferCustomerTitle(discount, language)}
 
                         {discount.freeShipping
                     ? " • " + t("Free delivery")

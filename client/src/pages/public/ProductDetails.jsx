@@ -6,6 +6,7 @@ import { ArrowLeft, Bell, Minus, Plus, ShoppingBag } from "lucide-react";
 import { getProductBySlug, getProducts } from "../../api/productApi";
 import { createWaitlistRequest } from "../../api/waitlistApi";
 import ProductCard from "../../components/product/ProductCard";
+import ProductOfferNote from "../../components/product/ProductOfferNote";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import { useLanguage } from "../../context/LanguageContext";
@@ -199,6 +200,8 @@ function ProductDetailsView({ slug }) {
             {product.shortDescription && <p className="mt-5 max-w-xl text-sm leading-7 text-darb-muted sm:text-base">{product.shortDescription}</p>}
 
             <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-darb-gold/20 py-5"><div className="flex items-end gap-3">{displayPrice > 0 && <p className="inline-flex rounded-xl bg-darb-green px-4 py-2 font-display text-3xl leading-none text-darb-beige sm:text-4xl">{formatCurrency(displayPrice)}</p>}{displayCompareAtPrice > displayPrice && displayPrice > 0 && <p className="pb-1 text-sm text-darb-muted line-through">{formatCurrency(displayCompareAtPrice)}</p>}</div></div>
+
+            {displayPrice > 0 && <ProductOfferNote product={sourceProduct} price={displayPrice} hasCompareAt={displayCompareAtPrice > displayPrice} />}
 
             {activeVariants.length > 0 && <fieldset className="mt-6"><legend className="text-xs font-semibold text-darb-green">{t("Size")}</legend><div className="mt-3 flex flex-wrap gap-2">{activeVariants.map((variant) => <button key={variant.variantId} type="button" onClick={() => { setSelectedVariantId(variant.variantId); setQuantity(1); }} aria-pressed={String(selectedVariant?.variantId) === String(variant.variantId)} className={`rounded-full border px-5 py-2.5 text-sm font-semibold transition ${String(selectedVariant?.variantId) === String(variant.variantId) ? "border-darb-green bg-darb-green text-darb-beige" : "border-darb-gold/30 bg-darb-surface text-darb-green hover:border-darb-green"}`}>{variant.label || (variant.sizeMl ? `${variant.sizeMl} ${language === "ar" ? "مل" : "ML"}` : variant.sku)}</button>)}</div></fieldset>}
             <div className="mt-6 flex items-center gap-2 text-sm"><span className={`h-2.5 w-2.5 rounded-full ${canPurchase ? "bg-darb-green" : "bg-darb-muted/50"}`} aria-hidden="true" /><span className={lowStock ? "font-semibold text-darb-gold" : "text-darb-green"}>{canPurchase ? t(lowStock ? `Only ${selectedStock} left` : getStockLabel(selectedStock)) : unavailableReason}</span></div>
