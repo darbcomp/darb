@@ -38,6 +38,14 @@ function Register() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+
+    if (!formData.email.trim() && !formData.phone.trim()) {
+      const message = t("Enter an email address or phone number.");
+      setError(message);
+      notify({ type: "error", title: t("Account was not created"), message });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -86,6 +94,8 @@ function Register() {
               name="name"
               value={formData.name}
               onChange={handleChange}
+              autoComplete="name"
+              maxLength={120}
               className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
               placeholder="Your name"
               required
@@ -106,6 +116,8 @@ function Register() {
               value={formData.email}
               onChange={handleChange}
               type="email"
+              autoComplete="email"
+              maxLength={254}
               className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
               placeholder="example@email.com"
             />
@@ -119,6 +131,10 @@ function Register() {
               name="phone"
               value={formData.phone}
               onChange={handleChange}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={40}
               className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
               placeholder="01xxxxxxxxx"
             />
@@ -133,8 +149,10 @@ function Register() {
               value={formData.password}
               onChange={handleChange}
               autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
               className="w-full rounded-full border border-darb-gold/30 py-3 ps-5 pe-14 outline-none transition focus:border-darb-green"
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
               required
             />
           </div>

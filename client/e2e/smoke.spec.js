@@ -41,8 +41,10 @@ test("customer and admin auth pages render with password visibility controls", a
 
   await page.goto("/register");
   await expect(page.getByRole("heading", { name: "Create Account" })).toBeVisible();
-  const registerPassword = page.getByPlaceholder("At least 6 characters");
+  const registerPassword = page.getByPlaceholder("At least 8 characters");
   await expect(registerPassword).toHaveAttribute("type", "password");
+  await expect(registerPassword).toHaveAttribute("minlength", "8");
+  await expect(registerPassword).toHaveAttribute("maxlength", "128");
   await expect(page.getByRole("button", { name: "Show password" })).toHaveCount(1);
   await page.getByRole("button", { name: "Show password" }).click();
   await expect(registerPassword).toHaveAttribute("type", "text");
@@ -54,6 +56,86 @@ test("customer and admin auth pages render with password visibility controls", a
   await expect(page.getByRole("button", { name: "Show password" })).toHaveCount(1);
   await page.getByRole("button", { name: "Show password" }).click();
   await expect(adminPassword).toHaveAttribute("type", "text");
+});
+
+test("registration requires email or phone before contacting the API", async ({ page }) => {
+  await mockBaseApi(page);
+  let registrationRequests = 0;
+  await page.route(`${API_BASE}/auth/register`, async (route) => {
+    registrationRequests += 1;
+    return json(route, { success: true, data: { user: {} } });
+  });
+
+  await page.goto("/register");
+  await page.locator('input[name="name"]').fill("Darb Customer");
+  await page.getByPlaceholder("At least 8 characters").fill("strongpass");
+  await page.getByRole("button", { name: "Create Account" }).click();
+
+  await expect(page.getByText("Enter an email address or phone number.", { exact: true }).first()).toBeVisible();
+  expect(registrationRequests).toBe(0);
+});
+
+test("failed logout keeps the authenticated session visible", async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem("darb_rewards_auto_opened_v1", "true");
+  });
+
+  await page.route(API_GLOB, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+
+    if (pathname === "/api/auth/me") {
+      return json(route, {
+        success: true,
+        data: {
+          user: {
+            _id: "customer-1",
+            name: "Darb Customer",
+            email: "customer@example.com",
+            phone: "01000000000",
+            role: "customer",
+            addresses: [],
+          },
+        },
+      });
+    }
+
+    if (pathname === "/api/auth/logout") {
+      return json(route, { success: false, message: "Logout is temporarily unavailable." }, 503);
+    }
+
+    if (pathname === "/api/rewards/mine") {
+      return json(route, {
+        success: true,
+        data: {
+          spinAvailable: false,
+          spinAvailableCount: 0,
+          spins: [],
+          available: [],
+          history: [],
+        },
+      });
+    }
+
+    if (pathname === "/api/settings") {
+      return json(route, { success: true, data: { currency: "EGP" } });
+    }
+
+    if (pathname === "/api/categories") return json(route, { success: true, data: [] });
+    if (pathname === "/api/products" || pathname.includes("/featured") || pathname.includes("/search/suggestions")) {
+      return json(route, { success: true, data: [] });
+    }
+
+    return json(route, { success: true, data: [] });
+  });
+
+  await page.goto("/account");
+  await expect(page.getByRole("heading", { name: "My Account" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign Out" }).click();
+  await page.getByRole("button", { name: "Log out" }).click();
+
+  await expect(page.getByRole("heading", { name: "My Account" })).toBeVisible();
+  await expect(page.getByText("Could not log out", { exact: true })).toBeVisible();
 });
 
 test("track order requires order number and checkout phone", async ({ page }) => {

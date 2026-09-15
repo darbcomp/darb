@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
     set: (value) => value ? normalizeEgyptPhone(value) || String(value).trim() : undefined,
     validate: { validator: (value) => !value || Boolean(normalizeEgyptPhone(value)), message: "Enter a valid Egyptian mobile number." },
   },
-  password: { type: String, required: true, minlength: 6, select: false },
+  password: { type: String, required: true, minlength: 8, maxlength: 128, select: false },
   role: { type: String, enum: ["customer", "admin"], default: "customer", index: true },
   addresses: { type: [addressSchema], default: [] },
   birthday: { type: Date, default: null, select: false },

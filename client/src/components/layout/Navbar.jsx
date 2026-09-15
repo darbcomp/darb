@@ -137,7 +137,7 @@ function Navbar() {
     setLanguage,
     t,
   } = useLanguage();
-  const { confirm } = useFeedback();
+  const { confirm, notify } = useFeedback();
 
   const location =
     useLocation();
@@ -375,11 +375,19 @@ function Navbar() {
       closeDesktopMenus();
       closeMobileMenu();
 
-      await logout();
+      try {
+        await logout();
 
-      navigate("/", {
-        replace: true,
-      });
+        navigate("/", {
+          replace: true,
+        });
+      } catch (err) {
+        notify({
+          type: "error",
+          title: t("Could not log out"),
+          message: err.friendlyMessage || t("Please try again."),
+        });
+      }
     };
 
   const desktopNavClass = ({

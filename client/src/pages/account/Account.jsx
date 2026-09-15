@@ -130,6 +130,12 @@ function Account() {
         navigate("/", {
           replace: true,
         });
+      } catch (err) {
+        notify({
+          type: "error",
+          title: t("Could not log out"),
+          message: err.friendlyMessage || t("Please try again."),
+        });
       } finally {
         setIsLoggingOut(
           false

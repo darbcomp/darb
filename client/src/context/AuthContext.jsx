@@ -50,13 +50,8 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try {
-      await logoutCustomer();
-    } catch {
-      // Even if backend logout fails, clear frontend auth state.
-    } finally {
-      setUser(null);
-    }
+    await logoutCustomer();
+    setUser(null);
   };
 
   const value = useMemo(

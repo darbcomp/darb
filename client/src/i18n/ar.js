@@ -100,6 +100,8 @@ const ARABIC_TEXT = Object.freeze({
   "You are on the waitlist": "تم انضمامك لقائمة الانتظار",
   "Could not join the waitlist": "تعذر الانضمام لقائمة الانتظار",
   "Please try again.": "يرجى المحاولة مرة أخرى.",
+  "Enter an email address or phone number.": "أدخل بريدًا إلكترونيًا أو رقم هاتف.",
+  "Could not log out": "تعذر تسجيل الخروج",
   "In stock": "متوفر",
   "Out of stock": "غير متوفر",
   "In Stock": "متوفر",

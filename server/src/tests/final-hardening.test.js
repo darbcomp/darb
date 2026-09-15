@@ -67,3 +67,9 @@ test("production cookie SameSite fallback is lax while explicit none remains sup
     if (oldSameSite === undefined) delete process.env.COOKIE_SAME_SITE; else process.env.COOKIE_SAME_SITE = oldSameSite;
   }
 });
+
+test("logout remains idempotent when the session is already unavailable", () => {
+  const code = source("routes/auth.routes.js");
+  assert.ok(code.includes('router.post("/logout", logout);'));
+  assert.ok(!code.includes('router.post("/logout", protect, logout);'));
+});

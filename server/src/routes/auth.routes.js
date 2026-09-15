@@ -8,7 +8,7 @@ const router = express.Router();
 router.post("/register", authLimiter, registerCustomer);
 router.post("/login", authLimiter, loginCustomer);
 router.post("/admin/login", adminAuthLimiter, loginAdmin);
-router.post("/logout", protect, logout);
+router.post("/logout", logout);
 router.get("/me", protect, getMe);
 router.get("/admin/me", protect, requireAdmin, getMe);
 module.exports = router;
