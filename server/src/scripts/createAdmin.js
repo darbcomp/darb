@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
 const normalizeEmail = (email = "") => {
@@ -40,6 +41,12 @@ const createAdmin = async () => {
     if (ADMIN_PASSWORD.length < 8) {
       throw new Error(
         "ADMIN_PASSWORD should be at least 8 characters long."
+      );
+    }
+
+    if (bcrypt.truncates(String(ADMIN_PASSWORD))) {
+      throw new Error(
+        "ADMIN_PASSWORD is too long. Use 72 UTF-8 bytes or fewer."
       );
     }
 

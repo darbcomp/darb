@@ -4,6 +4,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const SpinGrant = require("../models/SpinGrant");
+const User = require("../models/User");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildCustomerPipeline } = require("../controllers/customer.controller");
 const { cookieSameSite } = require("../middleware/security.middleware");
@@ -72,4 +73,36 @@ test("logout remains idempotent when the session is already unavailable", () => 
   const code = source("routes/auth.routes.js");
   assert.ok(code.includes('router.post("/logout", logout);'));
   assert.ok(!code.includes('router.post("/logout", protect, logout);'));
+});
+
+test("new password writes enforce bcrypt's 72-byte UTF-8 limit", async () => {
+  const passwordError = async (password) => {
+    const candidate = new User({
+      name: "Password Test",
+      email: "password-test@example.com",
+      password,
+    });
+
+    try {
+      await candidate.validate();
+      return null;
+    } catch (error) {
+      return error?.errors?.password || null;
+    }
+  };
+
+  assert.equal(await passwordError("a".repeat(72)), null);
+  assert.match((await passwordError("a".repeat(73)))?.message || "", /72 UTF-8 bytes/);
+  assert.match((await passwordError("🙂".repeat(19)))?.message || "", /72 UTF-8 bytes/);
+
+  const authCode = source("controllers/auth.controller.js");
+  assert.ok(authCode.includes("bcrypt.truncates(String(password))"));
+
+  const adminCode = source("scripts/createAdmin.js");
+  assert.ok(adminCode.includes("bcrypt.truncates(String(ADMIN_PASSWORD))"));
+});
+
+test("public auth user includes the account creation date", () => {
+  const code = source("controllers/auth.controller.js");
+  assert.ok(code.includes("createdAt: user.createdAt"));
 });

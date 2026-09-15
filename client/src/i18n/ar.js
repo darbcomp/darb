@@ -102,6 +102,7 @@ const ARABIC_TEXT = Object.freeze({
   "Please try again.": "يرجى المحاولة مرة أخرى.",
   "Enter an email address or phone number.": "أدخل بريدًا إلكترونيًا أو رقم هاتف.",
   "Could not log out": "تعذر تسجيل الخروج",
+  "Password is too long. Use 72 UTF-8 bytes or fewer.": "كلمة المرور طويلة جدًا. استخدم 72 بايت UTF-8 أو أقل.",
   "In stock": "متوفر",
   "Out of stock": "غير متوفر",
   "In Stock": "متوفر",
