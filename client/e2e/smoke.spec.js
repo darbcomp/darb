@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+const API_BASE = "http://127.0.0.1:4173/api";
+const API_GLOB = `${API_BASE}/**`;
 
 const json = (route, body, status = 200) => route.fulfill({
   status,
@@ -10,7 +12,7 @@ async function mockBaseApi(page) {
   await page.addInitScript(() => {
     sessionStorage.setItem("darb_rewards_auto_opened_v1", "true");
   });
-  await page.route("**/api/**", async (route) => {
+  await page.route(API_GLOB, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -43,7 +45,7 @@ test("track order requires order number and checkout phone", async ({ page }) =>
 test("guest reward claim sends order number and phone together", async ({ page }) => {
   await mockBaseApi(page);
   let captured = null;
-  await page.route("**/api/rewards/guest/order-spin", async (route) => {
+  await page.route(`${API_BASE}/rewards/guest/order-spin`, async (route) => {
     captured = route.request().postDataJSON();
     return json(route, { success: false, message: "No unclaimed delivered-order spin is available for those details." }, 409);
   });
@@ -77,7 +79,7 @@ test("cart blocks checkout when current availability cannot be verified", async 
       quantity: 1,
     }]));
   });
-  await page.route("**/api/**", async (route) => {
+  await page.route(API_GLOB, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
     if (pathname === "/api/orders/preview") return json(route, { success: false, message: "Test Fragrance does not have enough stock." }, 400);

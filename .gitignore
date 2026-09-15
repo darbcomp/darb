@@ -44,3 +44,7 @@ server/uploads/
 
 .darb-localization-backup/
 .darb-phase1-backup/
+
+# Playwright outputs
+client/test-results/
+client/playwright-report/
