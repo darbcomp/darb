@@ -20,4 +20,38 @@ const buildRestoreStockOperation = (item) => {
     : { filter: { _id: item.product }, update: { $inc: { stock: quantity } } };
 };
 
-module.exports = { buildReserveStockOperation, buildRestoreStockOperation };
+const buildSyncVariantStockOperation = (item) => {
+  const variantId = item.variant?.variantId || "";
+  if (!variantId) return null;
+
+  return {
+    filter: { _id: item.product },
+    update: [
+      {
+        $set: {
+          stock: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $ifNull: ["$variants", []] },
+                    as: "variant",
+                    cond: { $eq: ["$$variant.isActive", true] },
+                  },
+                },
+                as: "variant",
+                in: { $ifNull: ["$$variant.stock", 0] },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+};
+
+module.exports = {
+  buildReserveStockOperation,
+  buildRestoreStockOperation,
+  buildSyncVariantStockOperation,
+};

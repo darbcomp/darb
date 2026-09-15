@@ -51,7 +51,7 @@ const initialFormData = {
 };
 const defaultSettings = {
     delivery: {
-        defaultFee: 135,
+        defaultFee: 100,
         freeDeliveryThreshold: 0,
         estimatedDeliveryText: "3–5 business days",
     },

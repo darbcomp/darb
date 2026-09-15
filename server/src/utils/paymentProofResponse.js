@@ -1,5 +1,17 @@
-const sanitizePaymentProofForClient = (paymentProof, { includeSenderName = false } = {}) => {
-  if (!paymentProof) return { status: "not_required" };
+const sanitizePaymentProofForClient = (
+  paymentProof,
+  { includeSenderName = false, fallbackSenderName = "" } = {}
+) => {
+  const senderName = String(
+    paymentProof?.senderName || fallbackSenderName || ""
+  ).trim();
+
+  if (!paymentProof) {
+    return {
+      status: "not_required",
+      ...(includeSenderName ? { senderName } : {}),
+    };
+  }
 
   return {
     status: paymentProof.status || "not_required",
@@ -10,7 +22,7 @@ const sanitizePaymentProofForClient = (paymentProof, { includeSenderName = false
     uploadedAt: paymentProof.uploadedAt || null,
     reviewedAt: paymentProof.reviewedAt || null,
     rejectionReason: paymentProof.rejectionReason || "",
-    ...(includeSenderName ? { senderName: paymentProof.senderName || "" } : {}),
+    ...(includeSenderName ? { senderName } : {}),
   };
 };
 

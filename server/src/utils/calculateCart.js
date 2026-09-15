@@ -658,34 +658,59 @@ const getBundleEligibleItems = (
   return [];
 };
 
+const getSpecificBundleRequirements = (bundle) => {
+  const requirements = new Map();
+
+  for (
+    const specificItem of
+    bundle.specificItems || []
+  ) {
+    const productId =
+      toId(
+        specificItem.product
+      );
+
+    if (!productId) {
+      continue;
+    }
+
+    const quantity =
+      Math.max(
+        Number(
+          specificItem.quantity
+        ) || 1,
+        1
+      );
+
+    requirements.set(
+      productId,
+      (requirements.get(productId) || 0) + quantity
+    );
+  }
+
+  return requirements;
+};
+
 const getSpecificBundleApplications =
   (
     bundle,
     items
   ) => {
-    if (
-      !bundle.specificItems
-        ?.length
-    ) {
+    const requirements =
+      getSpecificBundleRequirements(
+        bundle
+      );
+
+    if (!requirements.size) {
       return 0;
     }
 
     const applications =
-      bundle.specificItems.map(
-        (specificItem) => {
-          const productId =
-            toId(
-              specificItem.product
-            );
-
-          const requiredQuantity =
-            Math.max(
-              Number(
-                specificItem.quantity
-              ) || 1,
-              1
-            );
-
+      [...requirements.entries()].map(
+        ([
+          productId,
+          requiredQuantity,
+        ]) => {
           const cartQuantity =
             items
               .filter(
@@ -733,43 +758,72 @@ const getBundleBaseSubtotal = ({
     "specific_products"
   ) {
     let subtotal = 0;
+    const requirements =
+      getSpecificBundleRequirements(
+        bundle
+      );
 
     for (
-      const specificItem of
-      bundle.specificItems ||
-      []
+      const [
+        productId,
+        quantityPerApplication,
+      ] of requirements.entries()
     ) {
-      const productId =
-        toId(
-          specificItem.product
-        );
-
       const requiredQuantity =
-        Math.max(
-          Number(
-            specificItem.quantity
-          ) || 1,
-          1
-        ) * applications;
+        quantityPerApplication *
+        applications;
+      const unitPrices = [];
 
-      const item =
-        eligibleItems.find(
-          (cartItem) =>
-            isSameId(
-              getItemProductId(
-                cartItem
-              ),
-              productId
-            )
-        );
+      for (
+        const item of
+        eligibleItems
+      ) {
+        if (
+          !isSameId(
+            getItemProductId(
+              item
+            ),
+            productId
+          )
+        ) {
+          continue;
+        }
 
-      if (item) {
-        subtotal +=
-          (Number(
-            item.unitPrice
-          ) || 0) *
-          requiredQuantity;
+        const quantity =
+          Math.max(
+            Number(
+              item.quantity
+            ) || 0,
+            0
+          );
+
+        for (
+          let index = 0;
+          index < quantity;
+          index += 1
+        ) {
+          unitPrices.push(
+            Number(
+              item.unitPrice
+            ) || 0
+          );
+        }
       }
+
+      unitPrices.sort(
+        (a, b) => a - b
+      );
+
+      subtotal += unitPrices
+        .slice(
+          0,
+          requiredQuantity
+        )
+        .reduce(
+          (sum, price) =>
+            sum + price,
+          0
+        );
     }
 
     return subtotal;

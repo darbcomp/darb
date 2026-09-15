@@ -499,7 +499,7 @@ function AdminOrders() {
                                 {order.paymentProof?.uploadedAt && (<span className="text-xs text-darb-muted">
                                     Uploaded {formatDateTime(order.paymentProof.uploadedAt)}
                                   </span>)}
-                                {order.paymentProof?.senderName && (<span className="text-xs font-semibold text-darb-green">Sender: {order.paymentProof.senderName}</span>)}
+                                {(order.paymentProof?.senderName || order.senderName) && (<span className="text-xs font-semibold text-darb-green">Sender: {order.paymentProof?.senderName || order.senderName}</span>)}
                               </div>
 
                               {proofIsRejected &&

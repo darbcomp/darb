@@ -64,7 +64,27 @@ const buildReward = () => {
   return { ...reward };
 };
 
-const makeRewardCode = () => `DARB-${randomBytes(4).toString("hex").toUpperCase()}`;
+const makeRewardCode = () =>
+  `DARB-${randomBytes(12).toString("hex").toUpperCase()}`;
+
+const makeUniqueRewardCode = async (session = null) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = makeRewardCode();
+    const query = Entitlement.exists({ code });
+
+    if (session && typeof query?.session === "function") {
+      query.session(session);
+    }
+
+    if (!(await query)) {
+      return code;
+    }
+  }
+
+  throw new Error(
+    "Could not generate a unique Darb reward code. Please try again."
+  );
+};
 
 const claimGrant = async ({ grantId = null, userId = null, phone = "" } = {}) => {
   const normalizedPhone = normalizeEgyptPhone(phone);
@@ -90,7 +110,9 @@ const claimGrant = async ({ grantId = null, userId = null, phone = "" } = {}) =>
       const reward = buildReward();
       // Guest rewards always receive a code so the reward remains portable into
       // the later checkout UX without exposing the guest's order.
-      const code = !userId || reward.key === "spin-next-10" ? makeRewardCode() : "";
+      const code = !userId || reward.key === "spin-next-10"
+        ? await makeUniqueRewardCode(session)
+        : "";
       [entitlement] = await Entitlement.create([{
         user: userId || null,
         ownerPhone: userId ? "" : normalizedPhone,
@@ -119,5 +141,7 @@ module.exports = {
   ensureOrderSpinGrant,
   getUserAvailableSpinCount,
   serializeGrant,
+  makeRewardCode,
+  makeUniqueRewardCode,
   claimGrant,
 };

@@ -59,6 +59,12 @@ const parseNumber = (value, defaultValue = 0) => {
 const escapeRegex = (value = "") =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const hasOwn = (object, key) =>
+  Object.prototype.hasOwnProperty.call(object || {}, key);
+
+const hasAnyOwn = (object, keys) =>
+  keys.some((key) => hasOwn(object, key));
+
 const getPagination = (query = {}) => {
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(query.limit) || 12, 1), 60);
@@ -339,11 +345,23 @@ const buildProductPayload = async (
     selectedExistingImages
   );
 
-  const scentNotes = parseMaybeJSON(body.scentNotes, {
-    top: parseStringArray(body.topNotes),
-    middle: parseStringArray(body.middleNotes),
-    base: parseStringArray(body.baseNotes),
-  });
+  const hasScentNotesInput = hasAnyOwn(body, [
+    "scentNotes",
+    "topNotes",
+    "middleNotes",
+    "baseNotes",
+  ]);
+  const scentNotes = hasScentNotesInput
+    ? parseMaybeJSON(body.scentNotes, {
+        top: parseStringArray(body.topNotes),
+        middle: parseStringArray(body.middleNotes),
+        base: parseStringArray(body.baseNotes),
+      })
+    : {
+        top: [...(existingProduct?.scentNotes?.top || [])],
+        middle: [...(existingProduct?.scentNotes?.middle || [])],
+        base: [...(existingProduct?.scentNotes?.base || [])],
+      };
 
   const variants = parseMaybeJSON(body.variants, existingProduct?.variants || []);
   const scentFamilies = parseStringArray(body.scentFamilies ?? body.scentFamily ?? existingProduct?.scentFamilies ?? existingProduct?.scentFamily);
@@ -352,11 +370,23 @@ const buildProductPayload = async (
   const arabicScentFamilies = parseStringArray(body.arabicScentFamilies ?? existingProduct?.arabicScentFamilies);
   const arabicBestFor = parseStringArray(body.arabicBestFor ?? existingProduct?.arabicBestFor);
   const arabicKeyNotes = parseStringArray(body.arabicKeyNotes ?? existingProduct?.arabicKeyNotes);
-  const arabicScentNotes = parseMaybeJSON(body.arabicScentNotes, {
-    top: parseStringArray(body.arabicTopNotes),
-    middle: parseStringArray(body.arabicMiddleNotes),
-    base: parseStringArray(body.arabicBaseNotes),
-  });
+  const hasArabicScentNotesInput = hasAnyOwn(body, [
+    "arabicScentNotes",
+    "arabicTopNotes",
+    "arabicMiddleNotes",
+    "arabicBaseNotes",
+  ]);
+  const arabicScentNotes = hasArabicScentNotesInput
+    ? parseMaybeJSON(body.arabicScentNotes, {
+        top: parseStringArray(body.arabicTopNotes),
+        middle: parseStringArray(body.arabicMiddleNotes),
+        base: parseStringArray(body.arabicBaseNotes),
+      })
+    : {
+        top: [...(existingProduct?.arabicScentNotes?.top || [])],
+        middle: [...(existingProduct?.arabicScentNotes?.middle || [])],
+        base: [...(existingProduct?.arabicScentNotes?.base || [])],
+      };
   const tags = parseStringArray(body.tags);
 
   const isPlaceholder = preserveOptionalBoolean(
@@ -410,20 +440,34 @@ const buildProductPayload = async (
     inspiredBy: body.inspiredBy !== undefined ? body.inspiredBy?.trim() || "" : existingProduct?.inspiredBy || "",
     arabicInspiredBy: body.arabicInspiredBy !== undefined ? body.arabicInspiredBy?.trim() || "" : existingProduct?.arabicInspiredBy || "",
     shortDescription: preserveOptionalString(body, "shortDescription", existingProduct?.shortDescription),
-    arabicShortDescription: body.arabicShortDescription?.trim() || existingProduct?.arabicShortDescription || "",
+    arabicShortDescription: preserveOptionalString(
+      body,
+      "arabicShortDescription",
+      existingProduct?.arabicShortDescription
+    ),
     description: preserveOptionalString(body, "description", existingProduct?.description),
-    arabicDescription: body.arabicDescription?.trim() || existingProduct?.arabicDescription || "",
+    arabicDescription: preserveOptionalString(
+      body,
+      "arabicDescription",
+      existingProduct?.arabicDescription
+    ),
     price: primaryVariant?.price || price,
-    compareAtPrice: primaryVariant?.compareAtPrice || parseNumber(body.compareAtPrice, 0),
+    compareAtPrice: primaryVariant
+      ? primaryVariant.compareAtPrice
+      : parseNumber(
+          body.compareAtPrice,
+          existingProduct?.compareAtPrice || 0
+        ),
     costPrice: parseNumber(body.costPrice, existingProduct?.costPrice || 0),
     sizeLabel: body.sizeLabel !== undefined
       ? body.sizeLabel?.trim() || ""
       : existingProduct?.sizeLabel || "",
     sizeMl: parseNumber(body.sizeMl, existingProduct?.sizeMl || 0),
-    concentration:
-      body.concentration?.trim() ||
-      existingProduct?.concentration ||
-      "",
+    concentration: preserveOptionalString(
+      body,
+      "concentration",
+      existingProduct?.concentration
+    ),
     scentFamily: scentFamilies.join(" • ") || body.scentFamily?.trim() || "",
     scentFamilies,
     arabicScentFamilies,

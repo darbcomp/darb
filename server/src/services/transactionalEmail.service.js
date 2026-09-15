@@ -172,6 +172,7 @@ const sendPaymentProofSubmittedEmails = (order, { isResubmission = false } = {})
             { label: "Phone", value: order.customerSnapshot?.phone || "" },
             { label: "Email", value: order.customerSnapshot?.email || "" },
             { label: "Payment method", value: String(order.paymentMethod || "").replaceAll("_", " ") },
+            { label: "Sender", value: order.paymentProof?.senderName || order.senderName || "" },
             { label: "Submission", value: isResubmission ? "Resubmission" : "New submission" },
           ],
           cta: { label: "Review in Orders", url: getSiteUrl(`/admin/orders?search=${encodeURIComponent(order.orderNumber)}`) },

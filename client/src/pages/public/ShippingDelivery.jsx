@@ -66,7 +66,7 @@ function ShippingDelivery() {
   const currency =
     settings.currency || "EGP";
 
-  const fees = delivery.governorateFees || { cairo: 80, giza: 80, alexandria: 125, other: 135 };
+  const fees = delivery.governorateFees || { cairo: 100, giza: 100, alexandria: 100, other: 100 };
 
   return (
     <InfoPageShell

@@ -4,6 +4,7 @@ const buildPaymentProofFormData = ({
   file,
   orderNumber,
   phone,
+  senderName,
 } = {}) => {
   const formData =
     new FormData();
@@ -24,6 +25,13 @@ const buildPaymentProofFormData = ({
     formData.append(
       "phone",
       phone
+    );
+  }
+
+  if (senderName) {
+    formData.append(
+      "senderName",
+      senderName
     );
   }
 
@@ -93,6 +101,7 @@ export const resubmitGuestPaymentProof =
     orderNumber,
     phone,
     file,
+    senderName,
   }) => {
     const payload =
       buildPaymentProofFormData(
@@ -100,6 +109,7 @@ export const resubmitGuestPaymentProof =
           file,
           orderNumber,
           phone,
+          senderName,
         }
       );
 
@@ -141,11 +151,13 @@ export const resubmitMyPaymentProof =
   async ({
     orderId,
     file,
+    senderName,
   }) => {
     const payload =
       buildPaymentProofFormData(
         {
           file,
+          senderName,
         }
       );
 

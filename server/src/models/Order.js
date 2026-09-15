@@ -174,6 +174,12 @@ const paymentProofSchema = new mongoose.Schema(
       select: false,
     },
 
+    senderName: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: "",
+    },
     originalName: {
       type: String,
       trim: true,

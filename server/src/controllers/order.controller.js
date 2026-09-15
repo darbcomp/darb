@@ -31,7 +31,11 @@ const {
 const { findProductVariant } = require("../utils/productVariants");
 const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse");
 const { getGovernorateDeliveryFee } = require("../utils/shipping");
-const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
+const {
+  buildReserveStockOperation,
+  buildRestoreStockOperation,
+  buildSyncVariantStockOperation,
+} = require("../utils/inventory");
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, resolveEntitlementCodeForCheckout } = require("../services/entitlement.service");
 const { getRewardDisplayLabel } = require("../services/rewardPresentation.service");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
@@ -446,7 +450,11 @@ const sanitizeOrderForClient = (order) => {
   }
 
   const plain = typeof order.toObject === "function" ? order.toObject() : { ...order };
-  plain.paymentProof = sanitizePaymentProofForClient(plain.paymentProof, { includeSenderName: true });
+  plain.paymentProof = sanitizePaymentProofForClient(plain.paymentProof, {
+    includeSenderName: true,
+    fallbackSenderName: plain.senderName || "",
+  });
+  delete plain.senderName;
   if (plain.customerSnapshot?.phone) {
     plain.customerSnapshot = {
       ...plain.customerSnapshot,
@@ -555,6 +563,17 @@ const enforceCouponPerCustomerLimit = async ({
   }
 };
 
+const syncVariantAggregateStock = async (item, session) => {
+  const operation = buildSyncVariantStockOperation(item);
+  if (!operation) return;
+
+  await Product.updateOne(
+    operation.filter,
+    operation.update,
+    { session }
+  );
+};
+
 const reserveStock = async (items, session) => {
   for (const item of items) {
     const operation = buildReserveStockOperation(item);
@@ -569,6 +588,8 @@ const reserveStock = async (items, session) => {
         `${item.productSnapshot.name} no longer has enough stock.`
       );
     }
+
+    await syncVariantAggregateStock(item, session);
   }
 };
 
@@ -580,6 +601,8 @@ const restoreStock = async (items, session) => {
       operation.update,
       { session }
     );
+
+    await syncVariantAggregateStock(item, session);
   }
 };
 

@@ -156,6 +156,11 @@ function GuestPaymentProofPanel({
     setMessage,
   ] = useState("");
 
+  const [
+    senderName,
+    setSenderName,
+  ] = useState("");
+
   const proof =
     paymentProofData
       ?.paymentProof || {
@@ -173,6 +178,7 @@ function GuestPaymentProofPanel({
           response
         ) => {
           setFile(null);
+          setSenderName("");
 
           setError("");
 
@@ -292,6 +298,17 @@ function GuestPaymentProofPanel({
       setError("");
       setMessage("");
 
+      const cleanSenderName =
+        senderName.trim();
+
+      if (!cleanSenderName) {
+        setError(
+          "Enter the sender name used for the transfer."
+        );
+
+        return;
+      }
+
       if (!file) {
         setError(
           "Choose the new transaction screenshot first."
@@ -304,6 +321,8 @@ function GuestPaymentProofPanel({
         orderNumber,
         phone,
         file,
+        senderName:
+          cleanSenderName,
       });
     };
 
@@ -408,6 +427,19 @@ function GuestPaymentProofPanel({
               WEBP. Maximum
               10 MB.
             </p>
+
+            <label className="mt-4 block text-sm font-semibold text-darb-green">
+              Sender name used for the transfer
+              <input
+                type="text"
+                value={senderName}
+                onChange={(event) => setSenderName(event.target.value)}
+                maxLength={120}
+                autoComplete="name"
+                placeholder="Name shown on the transfer"
+                className="mt-2 w-full rounded-full border border-darb-gold/30 bg-white px-4 py-3 text-sm font-normal text-darb-black outline-none transition focus:border-darb-green"
+              />
+            </label>
 
             <label className="mt-4 grid w-full min-w-0 max-w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-dashed border-darb-gold/40 bg-darb-cream/50 px-4 py-4 transition hover:border-darb-green">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-darb-green text-darb-beige">

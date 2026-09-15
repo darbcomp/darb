@@ -19,7 +19,7 @@ const PAYMENT_PROOF_PRIVATE_SELECT =
   "+paymentProof.publicId +paymentProof.assetId +paymentProof.resourceType +paymentProof.deliveryType +paymentProof.format";
 
 const isSafeProofError = (error) =>
-  !error?.code && /order not found|cancelled order|already marked as paid|only be uploaded after|choose a payment screenshot/i.test(error?.message || "");
+  !error?.code && /order not found|cancelled order|already marked as paid|only be uploaded after|choose a payment screenshot|sender name/i.test(error?.message || "");
 
 const sendProofError = (res, error) => {
   if (isSafeProofError(error)) {
@@ -41,8 +41,14 @@ const sanitizeOrderForClient = (order) => {
 
   plain.paymentProof =
     sanitizePaymentProofForClient(
-      plain.paymentProof
+      plain.paymentProof,
+      {
+        includeSenderName: true,
+        fallbackSenderName: plain.senderName || "",
+      }
     );
+
+  delete plain.senderName;
 
   if (plain.customerSnapshot?.phone) {
     plain.customerSnapshot = {
@@ -52,6 +58,22 @@ const sanitizeOrderForClient = (order) => {
   }
 
   return plain;
+};
+
+const cleanPaymentSenderName = (value, order) => {
+  const senderName = String(
+    value || order?.paymentProof?.senderName || order?.senderName || ""
+  ).trim();
+
+  if (!senderName) {
+    throw new Error("Sender name is required for transfer payments.");
+  }
+
+  if (senderName.length > 120) {
+    throw new Error("Sender name is too long.");
+  }
+
+  return senderName;
 };
 
 const validatePaymentProofResubmission = (
@@ -97,6 +119,7 @@ const replaceRejectedPaymentProof =
     order,
     file,
     diagnostic,
+    senderName,
   }) => {
     if (!file?.buffer) {
       throw new Error(
@@ -105,6 +128,11 @@ const replaceRejectedPaymentProof =
     }
 
     validatePaymentProofResubmission(
+      order
+    );
+
+    const cleanSenderName = cleanPaymentSenderName(
+      senderName,
       order
     );
 
@@ -124,6 +152,9 @@ const replaceRejectedPaymentProof =
           file,
           diagnostic
         );
+
+      newProof.senderName =
+        cleanSenderName;
 
       order.paymentProof =
         newProof;
@@ -268,7 +299,11 @@ const getGuestPaymentProofStatus =
 
             paymentProof:
               sanitizePaymentProofForClient(
-                order.paymentProof
+                order.paymentProof,
+                {
+                  includeSenderName: true,
+                  fallbackSenderName: order.senderName || "",
+                }
               ),
           },
         });
@@ -350,6 +385,7 @@ const resubmitGuestPaymentProof =
             order,
             file: req.file,
             diagnostic: req.uploadDiagnostic,
+            senderName: req.body.senderName,
           }
         );
 
@@ -421,6 +457,7 @@ const resubmitMyPaymentProof =
             order,
             file: req.file,
             diagnostic: req.uploadDiagnostic,
+            senderName: req.body.senderName,
           }
         );
 

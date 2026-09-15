@@ -44,22 +44,38 @@ function ProductCard({ product: sourceProduct }) {
   const activeVariants = getActiveProductVariants(product);
   const quickVariant = activeVariants.length === 1 ? activeVariants[0] : null;
   const size = quickVariant?.label || `${activeVariants.length} ${t("sizes")}`;
-  const displayVariant = quickVariant || activeVariants.find((variant) => Number(variant.price) > 0) || activeVariants[0];
-  const price = Number(displayVariant?.price || product.price);
-  const stock = quickVariant ? Number(quickVariant.stock) : Math.max(...activeVariants.map((variant) => Number(variant.stock) || 0), 0);
+  const pricedVariants = activeVariants
+    .filter((variant) => Number(variant.price) > 0)
+    .slice()
+    .sort((a, b) => Number(a.price) - Number(b.price));
+  const purchasableVariants = pricedVariants.filter(
+    (variant) => Number(variant.stock) > 0
+  );
+  const displayVariant =
+    quickVariant ||
+    purchasableVariants[0] ||
+    pricedVariants[0] ||
+    activeVariants[0];
+  const price = Number(displayVariant?.price ?? product.price) || 0;
+  const compareAtPrice = Number(
+    displayVariant?.compareAtPrice ??
+      (displayVariant?.isLegacy ? product.compareAtPrice : 0)
+  ) || 0;
+  const stock = quickVariant
+    ? Number(quickVariant.stock) || 0
+    : Math.max(...activeVariants.map((variant) => Number(variant.stock) || 0), 0);
+  const hasPurchasableVariant = quickVariant
+    ? Number(quickVariant.price) > 0 && Number(quickVariant.stock) > 0
+    : purchasableVariants.length > 0;
 
   const hasDiscount =
-    Number(product.compareAtPrice) >
-      price &&
+    compareAtPrice > price &&
     price > 0;
 
   const canPurchase =
     product.isActive &&
     !product.isPlaceholder &&
-    Number.isFinite(price) &&
-    price > 0 &&
-    Number.isFinite(stock) &&
-    stock > 0;
+    hasPurchasableVariant;
 
   const cartItemId = `${
     product._id || product.slug
@@ -243,7 +259,7 @@ function ProductCard({ product: sourceProduct }) {
           {hasDiscount && (
             <p className="mt-0.5 text-[10px] text-darb-muted line-through sm:text-sm">
               {formatCurrency(
-                product.compareAtPrice
+                compareAtPrice
               )}
             </p>
           )}

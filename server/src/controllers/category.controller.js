@@ -28,6 +28,9 @@ const parseNumber = (value, defaultValue = 0) => {
   return Number.isFinite(number) ? number : defaultValue;
 };
 
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 
 const uploadCategoryImage = async (file, name) => {
   if (!file) return null;
@@ -49,10 +52,17 @@ const buildCategoryPayload = async (body, file = null, existingCategory = null) 
 
   const payload = {
     name,
-    arabicName: body.arabicName?.trim() || existingCategory?.arabicName || "",
+    arabicName: preserveOptionalString(body, "arabicName", existingCategory?.arabicName),
     description: preserveOptionalString(body, "description", existingCategory?.description),
-    arabicDescription: body.arabicDescription?.trim() || existingCategory?.arabicDescription || "",
-    isActive: parseBoolean(body.isActive, true),
+    arabicDescription: preserveOptionalString(
+      body,
+      "arabicDescription",
+      existingCategory?.arabicDescription
+    ),
+    isActive: parseBoolean(
+      body.isActive,
+      existingCategory?.isActive ?? true
+    ),
     sortOrder: parseNumber(body.sortOrder, existingCategory?.sortOrder || 0),
     seoTitle: preserveOptionalString(body, "seoTitle", existingCategory?.seoTitle),
     seoDescription: preserveOptionalString(body, "seoDescription", existingCategory?.seoDescription),
@@ -318,7 +328,10 @@ const createCategory = async (req, res) => {
     if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
 
     const existingCategory = await Category.findOne({
-      $or: [{ slug: payload.slug }, { name: new RegExp(`^${payload.name}$`, "i") }],
+      $or: [
+        { slug: payload.slug },
+        { name: new RegExp(`^${escapeRegex(payload.name)}$`, "i") },
+      ],
     });
 
     if (existingCategory) {
@@ -372,19 +385,20 @@ const updateCategory = async (req, res) => {
     const payload = await buildCategoryPayload(req.body, req.file || null, category);
     if (req.file) uploadedImagePublicId = payload.image?.publicId || "";
 
-    if (payload.slug) {
-      const duplicateCategory = await Category.findOne({
-        slug: payload.slug,
-        _id: { $ne: category._id },
-      });
+    const duplicateCategory = await Category.findOne({
+      _id: { $ne: category._id },
+      $or: [
+        { slug: payload.slug || category.slug },
+        { name: new RegExp(`^${escapeRegex(payload.name)}$`, "i") },
+      ],
+    });
 
-      if (duplicateCategory) {
-        if (uploadedImagePublicId) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
-        return res.status(409).json({
-          success: false,
-          message: "A category with this slug already exists.",
-        });
-      }
+    if (duplicateCategory) {
+      if (uploadedImagePublicId) await deletePublicMedia(uploadedImagePublicId).catch(() => {});
+      return res.status(409).json({
+        success: false,
+        message: "A category with this name or slug already exists.",
+      });
     }
 
     const previousImagePublicId = category.image?.publicId || "";
