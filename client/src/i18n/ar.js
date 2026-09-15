@@ -50,6 +50,8 @@ const ARABIC_TEXT = Object.freeze({
   "My Orders": "طلباتي",
   "No orders yet": "لا توجد طلبات بعد",
   "Sign In": "تسجيل الدخول",
+  "Show password": "إظهار كلمة المرور",
+  "Hide password": "إخفاء كلمة المرور",
   "Log Out": "تسجيل الخروج",
   "Logout": "تسجيل الخروج",
   "Account": "الحساب",

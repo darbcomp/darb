@@ -201,3 +201,9 @@ html[dir="rtl"] [data-darb-ltr="true"] {
   text-align: left;
 }
 
+
+/* Darb owns the password reveal control so supported browsers do not render a second reveal eye. */
+.darb-password-input::-ms-reveal,
+.darb-password-input::-ms-clear {
+  display: none;
+}

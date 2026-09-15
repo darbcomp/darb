@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
+import PasswordInput from "../../components/common/PasswordInput";
 
 function Login() {
   const { customerLogin } = useAuth();
@@ -83,12 +84,12 @@ function Login() {
             <label className="mb-2 block text-sm font-semibold text-darb-green">
               {t("Password")}
             </label>
-            <input
+            <PasswordInput
               name="password"
               value={formData.password}
               onChange={handleChange}
-              type="password"
-              className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+              autoComplete="current-password"
+              className="w-full rounded-full border border-darb-gold/30 py-3 ps-5 pe-14 outline-none transition focus:border-darb-green"
               placeholder="Your password"
               required
             />

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import SpinWheel from "../../components/rewards/SpinWheel";
 import { useFeedback } from "../../context/FeedbackContext";
 import { useLanguage } from "../../context/LanguageContext";
+import PasswordInput from "../../components/common/PasswordInput";
 import { createMarketingEventId, getMetaBrowserContext, trackMarketingEvent } from "../../utils/marketingEvents";
 
 function Register() {
@@ -127,12 +128,12 @@ function Register() {
             <label className="mb-2 block text-sm font-semibold text-darb-green">
               {t("Password")}
             </label>
-            <input
+            <PasswordInput
               name="password"
               value={formData.password}
               onChange={handleChange}
-              type="password"
-              className="w-full rounded-full border border-darb-gold/30 px-5 py-3 outline-none transition focus:border-darb-green"
+              autoComplete="new-password"
+              className="w-full rounded-full border border-darb-gold/30 py-3 ps-5 pe-14 outline-none transition focus:border-darb-green"
               placeholder="At least 6 characters"
               required
             />

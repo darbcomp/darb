@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import PasswordInput from "../../components/common/PasswordInput";
 
 function AdminLogin() {
   const { adminLogin } = useAuth();
@@ -76,12 +77,12 @@ function AdminLogin() {
             <label className="mb-2 block text-sm font-semibold text-darb-green">
               Password
             </label>
-            <input
+            <PasswordInput
               name="password"
               value={formData.password}
               onChange={handleChange}
-              type="password"
-              className="w-full rounded-full border border-darb-gold/30 bg-white px-5 py-3 outline-none transition focus:border-darb-green"
+              autoComplete="current-password"
+              className="w-full rounded-full border border-darb-gold/30 bg-white py-3 ps-5 pe-14 outline-none transition focus:border-darb-green"
               placeholder="Admin password"
               required
             />

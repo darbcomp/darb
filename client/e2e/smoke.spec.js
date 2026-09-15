@@ -27,12 +27,33 @@ async function mockBaseApi(page) {
   });
 }
 
-test("customer and admin login pages render", async ({ page }) => {
+test("customer and admin auth pages render with password visibility controls", async ({ page }) => {
   await mockBaseApi(page);
+
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Login" })).toBeVisible();
+  const loginPassword = page.getByPlaceholder("Your password");
+  await expect(loginPassword).toHaveAttribute("type", "password");
+  await expect(page.getByRole("button", { name: "Show password" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(loginPassword).toHaveAttribute("type", "text");
+  await expect(page.getByRole("button", { name: "Hide password" })).toHaveCount(1);
+
+  await page.goto("/register");
+  await expect(page.getByRole("heading", { name: "Create Account" })).toBeVisible();
+  const registerPassword = page.getByPlaceholder("At least 6 characters");
+  await expect(registerPassword).toHaveAttribute("type", "password");
+  await expect(page.getByRole("button", { name: "Show password" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(registerPassword).toHaveAttribute("type", "text");
+
   await page.goto("/admin/login");
   await expect(page.getByRole("heading", { name: "Admin Login" })).toBeVisible();
+  const adminPassword = page.getByPlaceholder("Admin password");
+  await expect(adminPassword).toHaveAttribute("type", "password");
+  await expect(page.getByRole("button", { name: "Show password" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(adminPassword).toHaveAttribute("type", "text");
 });
 
 test("track order requires order number and checkout phone", async ({ page }) => {
@@ -51,7 +72,7 @@ test("guest reward claim sends order number and phone together", async ({ page }
   });
   await page.goto("/shop");
   await page.getByRole("button", { name: /Open Darb rewards/i }).click();
-  await page.getByLabel("Order number").fill("DARB-1002");
+  await page.getByLabel("Order number digits").fill("1002");
   await page.getByLabel("Phone used for your order").fill("01130696935");
   await page.getByRole("button", { name: "Claim order spin" }).click();
   await expect.poll(() => captured).toEqual({ orderNumber: "DARB-1002", phone: "01130696935" });
