@@ -168,10 +168,9 @@ const getCategoryBySlug = async (req, res) => {
 const getAdminCategories = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        message: "Database not connected. Returning empty admin categories.",
-        data: [],
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -254,9 +253,9 @@ const getAdminCategories = async (req, res) => {
 const getAdminCategoryById = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Category not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 

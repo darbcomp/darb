@@ -352,7 +352,7 @@ function OrderSuccess() {
           </div>
 
           <p className="mt-7 text-[10px] font-bold uppercase tracking-[0.32em] text-darb-gold">
-            Order Confirmed
+            Order Placed
           </p>
 
           <h1 className="mx-auto mt-3 max-w-3xl font-display text-4xl leading-tight text-darb-green sm:text-6xl">

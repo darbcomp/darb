@@ -42,6 +42,7 @@ const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
 const { normalizeIdempotencyKey, isValidIdempotencyKey, isDuplicateKeyError, isOrderReplayOwner } = require("../utils/idempotency");
+const { parseOrderBirthday } = require("../utils/orderBirthday");
 const { logUploadPhase } = require("../services/uploadDiagnostics.service");
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
@@ -674,6 +675,7 @@ const createOrder = async (req, res) => {
     if (body.customer.email && (String(body.customer.email).trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.customer.email).trim()))) {
       throw new Error("Enter a valid customer email address.");
     }
+    body.birthday = parseOrderBirthday(body.birthday);
     if (String(body.customerNotes || "").length > 1000) throw new Error("Customer notes are too long.");
     if (String(body.paymentSenderName || "").length > 120) throw new Error("Sender name is too long.");
     metaContext = extractMetaContext(body.trackingContext, req);
@@ -850,7 +852,7 @@ const createOrder = async (req, res) => {
           grantedAt: body.marketingConsent ? new Date() : null,
           source: "checkout",
         },
-        birthday: body.birthday ? new Date(body.birthday) : null,
+        birthday: body.birthday || null,
         statusHistory: [
           {
             status: "pending",
@@ -1035,15 +1037,9 @@ const buildAdminOrderFilter = (query = {}) => {
 const getAdminOrders = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -1083,9 +1079,9 @@ const getAdminOrders = async (req, res) => {
 const getAdminOrderById = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Order not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 

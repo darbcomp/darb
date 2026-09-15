@@ -484,15 +484,9 @@ const getPublicBundles = async (req, res) => {
 const getAdminBundles = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -553,6 +547,13 @@ const getAdminBundleById = async (
   res
 ) => {
   try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
+      });
+    }
+
     const bundle =
       await populateBundle(
         Bundle.findById(req.params.id)

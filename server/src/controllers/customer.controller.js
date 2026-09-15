@@ -101,9 +101,10 @@ const buildCustomerPipeline = ({ query = {}, customerKey = "", includeOrders = f
         email: { $ifNull: ["$registeredUser.email", "$latestOrder.email"] },
         isActive: { $ifNull: ["$registeredUser.isActive", true] },
         marketingConsent: {
-          $or: [
+          $cond: [
+            { $ne: ["$registeredUser", null] },
             { $eq: ["$registeredUser.marketingConsent.granted", true] },
-            { $anyElementTrue: { $map: { input: "$orders", as: "order", in: { $eq: ["$$order.marketingConsent.granted", true] } } } },
+            { $eq: ["$latestOrder.marketingConsent.granted", true] },
           ],
         },
         orderCount: { $size: "$orders" },
@@ -159,7 +160,7 @@ const serializeCustomer = (customer) => ({
 
 const getAdminCustomers = async (req, res) => {
   try {
-    if (!isDatabaseConnected()) return res.status(200).json({ success: true, data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+    if (!isDatabaseConnected()) return res.status(503).json({ success: false, message: "Database is unavailable." });
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
     const pipeline = buildCustomerPipeline({ query: req.query });
@@ -174,7 +175,7 @@ const getAdminCustomers = async (req, res) => {
 
 const getAdminCustomer = async (req, res) => {
   try {
-    if (!isDatabaseConnected()) return res.status(404).json({ success: false, message: "Customer not found." });
+    if (!isDatabaseConnected()) return res.status(503).json({ success: false, message: "Database is unavailable." });
     const [customer] = await User.aggregate(buildCustomerPipeline({ customerKey: decodeURIComponent(req.params.key), includeOrders: true }));
     if (!customer) return res.status(404).json({ success: false, message: "Customer not found." });
     return res.status(200).json({ success: true, data: serializeCustomer(customer) });

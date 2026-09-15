@@ -243,24 +243,9 @@ const createWaitlistRequest = async (req, res) => {
 const getAdminWaitlist = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        message: "Database not connected. Returning empty waitlist.",
-        data: [],
-        pagination: {
-          page: 1,
-          limit: Number(req.query.limit) || 20,
-          total: 0,
-          pages: 0,
-        },
-        summary: {
-          waiting: 0,
-          notified: 0,
-          contacted: 0,
-          converted: 0,
-          cancelled: 0,
-          total: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -324,9 +309,9 @@ const getAdminWaitlist = async (req, res) => {
 const getAdminWaitlistRequestById = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Waitlist request not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 

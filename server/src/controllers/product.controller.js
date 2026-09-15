@@ -837,15 +837,9 @@ const getProductBySlug = async (req, res) => {
 const getAdminProducts = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit: Number(req.query.limit) || 20,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -890,9 +884,9 @@ const getAdminProducts = async (req, res) => {
 const getAdminProductById = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(404).json({
+      return res.status(503).json({
         success: false,
-        message: "Product not found because database is not connected.",
+        message: "Database is unavailable.",
       });
     }
 

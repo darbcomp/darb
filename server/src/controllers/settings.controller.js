@@ -846,6 +846,11 @@ const getPublicSettings =
             delivery:
               settings.delivery,
 
+            orderSettings: {
+              allowGuestCheckout:
+                settings.orderSettings?.allowGuestCheckout !== false,
+            },
+
             /*
               Public checkout needs:
               - enabled
@@ -890,15 +895,11 @@ const getAdminSettings =
         !isDatabaseConnected()
       ) {
         return res
-          .status(200)
+          .status(503)
           .json({
-            success: true,
-
+            success: false,
             message:
-              "Database not connected. Returning default admin settings.",
-
-            data:
-              defaultSettings,
+              "Database is unavailable.",
           });
       }
 
