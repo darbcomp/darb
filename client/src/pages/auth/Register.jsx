@@ -7,6 +7,10 @@ import { useLanguage } from "../../context/LanguageContext";
 import PasswordInput from "../../components/common/PasswordInput";
 import { createMarketingEventId, getMetaBrowserContext, trackMarketingEvent } from "../../utils/marketingEvents";
 
+const MAX_BCRYPT_PASSWORD_BYTES = 72;
+const getUtf8ByteLength = (value) =>
+  new TextEncoder().encode(String(value || "")).length;
+
 function Register() {
   const { customerRegister } = useAuth();
   const { notify } = useFeedback();
@@ -41,6 +45,13 @@ function Register() {
 
     if (!formData.email.trim() && !formData.phone.trim()) {
       const message = t("Enter an email address or phone number.");
+      setError(message);
+      notify({ type: "error", title: t("Account was not created"), message });
+      return;
+    }
+
+    if (getUtf8ByteLength(formData.password) > MAX_BCRYPT_PASSWORD_BYTES) {
+      const message = t("Password is too long. Use 72 UTF-8 bytes or fewer.");
       setError(message);
       notify({ type: "error", title: t("Account was not created"), message });
       return;
@@ -150,7 +161,7 @@ function Register() {
               onChange={handleChange}
               autoComplete="new-password"
               minLength={8}
-              maxLength={128}
+              maxLength={72}
               className="w-full rounded-full border border-darb-gold/30 py-3 ps-5 pe-14 outline-none transition focus:border-darb-green"
               placeholder="At least 8 characters"
               required

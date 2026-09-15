@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 const { createFirstOrderEntitlement } = require("../services/entitlement.service");
@@ -35,6 +36,7 @@ const publicUser = async (user) => {
     addresses: user.addresses || [],
     spinAvailable,
     marketingConsent: user.marketingConsent || { granted: false },
+    createdAt: user.createdAt,
   };
 };
 
@@ -57,7 +59,7 @@ const registerCustomer = async (req, res) => {
     if (String(name).trim().length > 120) return res.status(400).json({ success: false, message: "Name is too long." });
     if (phone && String(phone).length > 40) return res.status(400).json({ success: false, message: "Phone number is too long." });
     if (String(password).length < 8) return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
-    if (String(password).length > 128) return res.status(400).json({ success: false, message: "Password must be 128 characters or fewer." });
+    if (bcrypt.truncates(String(password))) return res.status(400).json({ success: false, message: "Password is too long. Use 72 UTF-8 bytes or fewer." });
     const cleanEmail = email ? String(email).toLowerCase().trim() : undefined;
     if (cleanEmail && (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))) return res.status(400).json({ success: false, message: "Enter a valid email address." });
     const cleanPhone = phone ? normalizeEgyptPhone(phone) : undefined;
