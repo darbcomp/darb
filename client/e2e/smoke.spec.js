@@ -17,7 +17,7 @@ async function mockBaseApi(page) {
     const url = new URL(request.url());
     const pathname = url.pathname;
     if (pathname === "/api/auth/me") return json(route, { success: false, message: "Not authenticated" }, 401);
-    if (pathname === "/api/settings") return json(route, { success: true, data: { currency: "EGP", delivery: { defaultFee: 100, governorateFees: { cairo: 100, giza: 100, alexandria: 100, other: 100 } } } });
+    if (pathname === "/api/settings/public") return json(route, { success: true, data: { currency: "EGP", delivery: { defaultFee: 100, governorateFees: { cairo: 100, giza: 100, alexandria: 100, other: 100 } } } });
     if (pathname === "/api/categories") return json(route, { success: true, data: [] });
     if (pathname === "/api/products" || pathname.includes("/featured") || pathname.includes("/search/suggestions")) return json(route, { success: true, data: [] });
     if (pathname === "/api/bundles") return json(route, { success: true, data: [] });
@@ -137,7 +137,7 @@ test("failed logout keeps the authenticated session visible", async ({ page }) =
       });
     }
 
-    if (pathname === "/api/settings") {
+    if (pathname === "/api/settings/public") {
       return json(route, { success: true, data: { currency: "EGP" } });
     }
 
@@ -243,7 +243,7 @@ test("account-scoped query data is cleared when the authenticated identity chang
       });
     }
 
-    if (pathname === "/api/settings") {
+    if (pathname === "/api/settings/public") {
       return json(route, { success: true, data: { currency: "EGP" } });
     }
 
@@ -335,10 +335,160 @@ test("cart blocks checkout when current availability cannot be verified", async 
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
     if (pathname === "/api/orders/preview") return json(route, { success: false, message: "Test Fragrance does not have enough stock." }, 400);
-    if (pathname === "/api/settings") return json(route, { success: true, data: { currency: "EGP" } });
+    if (pathname === "/api/settings/public") return json(route, { success: true, data: { currency: "EGP" } });
     return json(route, { success: true, data: [] });
   });
   await page.goto("/cart");
   await expect(page.getByText(/couldn’t verify current availability/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Checkout" })).toBeDisabled();
+});
+
+async function seedCheckoutCart(page) {
+  await page.addInitScript((cart) => {
+    sessionStorage.setItem("darb_rewards_auto_opened_v1", "true");
+    localStorage.setItem("darb_cart_v1", JSON.stringify(cart));
+  }, [{
+    cartItemId: "checkout_p1_v1",
+    productId: "checkout-p1",
+    slug: "checkout-test-fragrance",
+    name: "Checkout Test Fragrance",
+    arabicName: "",
+    image: "",
+    categoryName: "Darb",
+    arabicCategoryName: "",
+    categorySlug: "",
+    price: 750,
+    compareAtPrice: 0,
+    stock: 5,
+    sizeLabel: "50 ML",
+    sizeMl: 50,
+    variant: { variantId: "checkout-v1", label: "50 ML", sizeMl: 50, sku: "" },
+    quantity: 1,
+  }]);
+}
+
+const checkoutSettingsPayload = (allowGuestCheckout = true) => ({
+  success: true,
+  data: {
+    currency: "EGP",
+    delivery: {
+      defaultFee: 100,
+      freeDeliveryThreshold: 0,
+      governorateFees: { cairo: 100, giza: 100, alexandria: 100, other: 100 },
+    },
+    orderSettings: { allowGuestCheckout },
+    paymentMethods: {
+      cashOnDelivery: {
+        enabled: true,
+        label: "Cash on Delivery",
+        instructions: "Pay when your Darb order arrives.",
+        recipient: "",
+        requireProof: false,
+      },
+      instapay: { enabled: false, label: "InstaPay", instructions: "", recipient: "", requireProof: true },
+      vodafoneCash: { enabled: false, label: "Vodafone Cash", instructions: "", recipient: "", requireProof: true },
+      paymobCard: { enabled: false, label: "Card Payment", instructions: "", recipient: "", requireProof: false },
+    },
+  },
+});
+
+const checkoutPreviewPayload = {
+  success: true,
+  data: {
+    items: [],
+    pricing: {
+      subtotal: 750,
+      discountTotal: 0,
+      deliveryFee: 100,
+      total: 850,
+      discounts: [],
+      coupon: null,
+      freeShipping: false,
+    },
+  },
+};
+
+test("checkout fails closed when public store settings are unavailable", async ({ page }) => {
+  await seedCheckoutCart(page);
+
+  await page.route(API_GLOB, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
+    if (pathname === "/api/settings/public") return json(route, { success: false, message: "Database is unavailable." }, 503);
+    if (pathname === "/api/orders/preview") return json(route, checkoutPreviewPayload);
+    return json(route, { success: true, data: [] });
+  });
+
+  await page.goto("/checkout");
+
+  await expect(
+    page.getByText("Store settings could not be loaded. Checkout is temporarily unavailable.", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Place Order" })).toBeDisabled();
+  await expect(page.getByText("+20 10 99589674", { exact: true })).toHaveCount(0);
+});
+
+test("checkout fails closed when server pricing preview is unavailable", async ({ page }) => {
+  await seedCheckoutCart(page);
+
+  await page.route(API_GLOB, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
+    if (pathname === "/api/settings/public") return json(route, checkoutSettingsPayload(true));
+    if (pathname === "/api/orders/preview") return json(route, { success: false, message: "Preview unavailable." }, 503);
+    return json(route, { success: true, data: [] });
+  });
+
+  await page.goto("/checkout");
+
+  await expect(
+    page.getByText("Checkout preview could not be calculated. Retry before placing your order.", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Place Order" })).toBeDisabled();
+});
+
+test("checkout rejects incomplete pricing payloads instead of treating them as confirmed", async ({ page }) => {
+  await seedCheckoutCart(page);
+
+  await page.route(API_GLOB, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
+    if (pathname === "/api/settings/public") return json(route, checkoutSettingsPayload(true));
+    if (pathname === "/api/orders/preview") {
+      return json(route, {
+        success: true,
+        data: {
+          pricing: {
+            subtotal: 750,
+            discountTotal: 0,
+          },
+        },
+      });
+    }
+    return json(route, { success: true, data: [] });
+  });
+
+  await page.goto("/checkout");
+
+  await expect(page.getByRole("button", { name: "Place Order" })).toBeDisabled();
+});
+
+test("guest checkout setting is surfaced before a guest can submit", async ({ page }) => {
+  await seedCheckoutCart(page);
+
+  await page.route(API_GLOB, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/auth/me") return json(route, { success: false }, 401);
+    if (pathname === "/api/settings/public") return json(route, checkoutSettingsPayload(false));
+    if (pathname === "/api/orders/preview") return json(route, checkoutPreviewPayload);
+    return json(route, { success: true, data: [] });
+  });
+
+  await page.goto("/checkout");
+
+  await expect(
+    page.getByText("Guest checkout is currently disabled. Sign in to continue.", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("button", { name: "Place Order" })).toBeDisabled();
 });

@@ -55,35 +55,9 @@ const defaultSettings = {
         freeDeliveryThreshold: 0,
         estimatedDeliveryText: "3–5 business days",
     },
-    paymentMethods: {
-        cashOnDelivery: {
-            enabled: true,
-            label: "Cash on Delivery",
-            instructions: "Pay when your Darb order arrives.",
-            recipient: "",
-            requireProof: false,
-        },
-        instapay: {
-            enabled: true,
-            label: "InstaPay",
-            instructions: "Transfer the exact order total, then upload a screenshot of the successful transaction.",
-            recipient: "+20 10 99589674",
-            requireProof: true,
-        },
-        vodafoneCash: {
-            enabled: true,
-            label: "Vodafone Cash",
-            instructions: "Transfer the full order total, then upload a screenshot of the successful transaction.",
-            recipient: "+20 10 99589674",
-            requireProof: true,
-        },
-        paymobCard: {
-            enabled: false,
-            label: "Card Payment",
-            instructions: "Card payment will be available soon.",
-            recipient: "",
-            requireProof: false,
-        },
+    paymentMethods: {},
+    orderSettings: {
+        allowGuestCheckout: true,
     },
 };
 const paymentMethodMap = [
@@ -212,18 +186,6 @@ function Checkout() {
             };
         })
             .filter((method) => method.enabled && method.key !== "paymob_card");
-        if (methods.length === 0) {
-            return [
-                {
-                    key: "cash_on_delivery",
-                    label: "Cash on Delivery",
-                    description: "Pay when your Darb order arrives.",
-                    enabled: true,
-                    recipient: "",
-                    requireProof: false,
-                },
-            ];
-        }
         return methods;
     }, [
         settings.paymentMethods,
@@ -248,44 +210,47 @@ function Checkout() {
     ]);
     const selectedPaymentMethod = availablePaymentMethods.find((method) => method.key ===
         selectedPaymentMethodKey);
+    const guestCheckoutDisabled = !user &&
+        settingsQuery.isSuccess &&
+        settings.orderSettings?.allowGuestCheckout === false;
     /* =========================
-       FALLBACK DELIVERY
-    ========================== */
-    const fallbackDeliveryFee = useMemo(() => {
-        const defaultFee = Number(settings.delivery
-            ?.defaultFee) || 0;
-        const freeDeliveryThreshold = Number(settings.delivery
-            ?.freeDeliveryThreshold) || 0;
-        if (freeDeliveryThreshold >
-            0 &&
-            subtotal >=
-                freeDeliveryThreshold) {
-            return 0;
-        }
-        return defaultFee;
-    }, [
-        settings.delivery,
-        subtotal,
-    ]);
-    /* =========================
-       CALCULATED PRICING
+       SERVER-CONFIRMED PRICING
     ========================== */
     const pricing = previewQuery.data?.data
         ?.pricing;
+    const hasConfirmedPricing = [
+        pricing?.subtotal,
+        pricing?.discountTotal,
+        pricing?.deliveryFee,
+        pricing?.total,
+    ].every((value) => typeof value === "number" && Number.isFinite(value));
     const calculatedSubtotal = pricing?.subtotal ??
         subtotal;
     const calculatedDiscountTotal = pricing?.discountTotal ??
         0;
-    const calculatedDeliveryFee = pricing?.deliveryFee ??
-        fallbackDeliveryFee;
-    const calculatedTotal = pricing?.total ??
-        Math.max(calculatedSubtotal +
-            calculatedDeliveryFee -
-            calculatedDiscountTotal, 0);
+    const calculatedDeliveryFee = hasConfirmedPricing
+        ? pricing.deliveryFee
+        : null;
+    const calculatedTotal = hasConfirmedPricing
+        ? pricing.total
+        : null;
+    const checkoutConfigurationUnavailable =
+        Boolean(settingsQuery.error) ||
+        !settingsQuery.data?.data ||
+        availablePaymentMethods.length === 0;
+    const checkoutPricingUnavailable =
+        Boolean(previewQuery.error) ||
+        !hasConfirmedPricing;
+    const checkoutBlocked =
+        settingsQuery.isLoading ||
+        checkoutConfigurationUnavailable ||
+        guestCheckoutDisabled ||
+        previewQuery.isFetching ||
+        checkoutPricingUnavailable;
     const checkoutEventPayload = useMemo(() => normalizeEcommercePayload({
         items,
-        value: calculatedTotal,
-    }), [calculatedTotal, items]);
+        value: calculatedTotal ?? subtotal,
+    }), [calculatedTotal, items, subtotal]);
 
     useEffect(() => {
         if (isEmpty) return;
@@ -508,6 +473,18 @@ function Checkout() {
         if (isEmpty) {
             return { message: "Your cart is empty.", field: "" };
         }
+        if (settingsQuery.isLoading) {
+            return { message: "Store settings are still loading.", field: "" };
+        }
+        if (checkoutConfigurationUnavailable) {
+            return { message: "Store settings could not be loaded. Checkout is temporarily unavailable.", field: "" };
+        }
+        if (guestCheckoutDisabled) {
+            return { message: "Guest checkout is currently disabled. Sign in to continue.", field: "" };
+        }
+        if (previewQuery.isFetching || checkoutPricingUnavailable) {
+            return { message: "Checkout totals are unavailable. Retry the preview before placing your order.", field: "" };
+        }
         if (!formData.name.trim()) {
             return { message: "Full name is required.", field: "name" };
         }
@@ -667,16 +644,33 @@ function Checkout() {
             SETTINGS ERROR
         ========================== */}
 
-      {settingsQuery.isError && (<div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          {t("Store settings could not be loaded, so checkout is using default values for now.")}
+      {settingsQuery.error && (<div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          <span>{t("Store settings could not be loaded. Checkout is temporarily unavailable.")}</span>
+          <button type="button" onClick={() => settingsQuery.refetch()} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold transition hover:bg-red-100">
+            {t("Retry")}
+          </button>
+        </div>)}
+
+      {settingsQuery.isSuccess && !settingsQuery.error && availablePaymentMethods.length === 0 && (<div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {t("No payment methods are currently available. Checkout is temporarily unavailable.")}
+        </div>)}
+
+      {guestCheckoutDisabled && (<div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-darb-gold/35 bg-darb-cream px-4 py-3 text-sm text-darb-green" role="alert">
+          <span>{t("Guest checkout is currently disabled. Sign in to continue.")}</span>
+          <Link to="/login" state={{ from: { pathname: "/checkout" } }} className="rounded-full bg-darb-green px-4 py-2 text-xs font-semibold text-darb-beige">
+            {t("Sign in to continue")}
+          </Link>
         </div>)}
 
       {/* =========================
             PREVIEW ERROR
         ========================== */}
 
-      {previewQuery.isError && (<div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          {t(previewQuery.error?.friendlyMessage || "Checkout preview could not be calculated. The final order will still be checked before creation.")}
+      {previewQuery.isError && (<div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800" role="alert">
+          <span>{t("Checkout preview could not be calculated. Retry before placing your order.")}</span>
+          <button type="button" onClick={() => previewQuery.refetch()} className="rounded-full border border-yellow-300 px-4 py-2 text-xs font-semibold transition hover:bg-yellow-100">
+            {t("Retry preview")}
+          </button>
         </div>)}
 
       {/* =========================
@@ -862,6 +856,10 @@ function Checkout() {
 
             {settingsQuery.isLoading ? (<p className="mt-4 text-darb-muted">
                 {t("Loading payment methods...")}
+              </p>) : settingsQuery.error ? (<p className="mt-4 text-sm font-semibold text-red-700">
+                {t("Payment methods are unavailable right now.")}
+              </p>) : availablePaymentMethods.length === 0 ? (<p className="mt-4 text-sm font-semibold text-red-700">
+                {t("No payment methods are currently available.")}
               </p>) : (<div className="mt-6 border-y border-darb-gold/25">
                 {availablePaymentMethods.map((method) => (<label key={method.key} className={`block cursor-pointer border-b border-darb-gold/15 px-1 py-4 transition last:border-0 ${selectedPaymentMethodKey ===
                     method.key
@@ -1155,16 +1153,18 @@ function Checkout() {
               </span>
 
               <span className="font-semibold text-darb-black">
-                {calculatedDeliveryFee >
-            0
-            ? formatCurrency(calculatedDeliveryFee)
-            : t("Free")}
+                {calculatedDeliveryFee === null
+            ? t("Confirming...")
+            : calculatedDeliveryFee > 0
+              ? formatCurrency(calculatedDeliveryFee)
+              : t("Free")}
               </span>
             </div>
 
             {/* Free Delivery Progress */}
 
-            {Number(settings.delivery
+            {hasConfirmedPricing &&
+            Number(settings.delivery
             ?.freeDeliveryThreshold) >
             0 &&
             subtotal <
@@ -1198,7 +1198,9 @@ function Checkout() {
             </span>
 
             <span className="font-display text-3xl text-darb-green">
-              {formatCurrency(calculatedTotal)}
+              {calculatedTotal === null
+                ? t("Confirming...")
+                : formatCurrency(calculatedTotal)}
             </span>
           </div>
 
@@ -1207,8 +1209,7 @@ function Checkout() {
         ========================== */}
 
           <button type="submit" disabled={orderMutation.isPending || isPaymentProofReading ||
-            settingsQuery.isLoading ||
-            previewQuery.isFetching} className="mt-6 flex w-full justify-center rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60">
+            checkoutBlocked} className="mt-6 flex w-full justify-center rounded-full bg-darb-green px-6 py-3 text-sm font-semibold text-darb-beige transition hover:bg-darb-black disabled:cursor-not-allowed disabled:opacity-60">
             {orderMutation.isPending
             ? t("Creating Order...")
             : t("Place Order")}

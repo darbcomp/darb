@@ -811,15 +811,9 @@ const getAdminCoupons = async (
 ) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 0,
-          pages: 0,
-        },
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
@@ -886,6 +880,13 @@ const getAdminCouponById = async (
   res
 ) => {
   try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
+      });
+    }
+
     const coupon =
       await populateCoupon(
         Coupon.findById(

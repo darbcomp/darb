@@ -44,10 +44,9 @@ const emptyDashboardData = {
 const getAdminDashboard = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.status(200).json({
-        success: true,
-        message: "Database not connected. Returning empty dashboard analytics.",
-        data: emptyDashboardData,
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable.",
       });
     }
 
