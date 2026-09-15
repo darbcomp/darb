@@ -1,5 +1,6 @@
 const Entitlement = require("../models/Entitlement");
 const Order = require("../models/Order");
+const SpinGrant = require("../models/SpinGrant");
 const { getRewardDisplayLabel } = require("./rewardPresentation.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
 
@@ -53,6 +54,23 @@ const getDeferredEntitlementOwnerPhone = async (entitlement, session = null) => 
   if (session) query.session(session);
   const entitlementWithPhone = await query;
   return normalizeEgyptPhone(entitlementWithPhone?.ownerPhone || "");
+};
+
+const assertOrderSpinSourceDelivered = async (entitlement, session = null) => {
+  if (entitlement?.origin !== "spin" || !entitlement?.sourceGrant) return;
+  const grantQuery = SpinGrant.findById(entitlement.sourceGrant).select("source sourceOrder");
+  if (session) grantQuery.session(session);
+  const grant = await grantQuery;
+  if (!grant || grant.source !== "order") return;
+  if (!grant.sourceOrder) {
+    throw new Error("This order reward is no longer linked to a valid delivered order.");
+  }
+  const orderQuery = Order.findById(grant.sourceOrder).select("orderStatus");
+  if (session) orderQuery.session(session);
+  const sourceOrder = await orderQuery;
+  if (!sourceOrder || sourceOrder.orderStatus !== "delivered") {
+    throw new Error("This order reward becomes available after the source order is delivered.");
+  }
 };
 
 const getEntitlementUnlockState = async ({ entitlement, guestPhone = "", session = null } = {}) => {
@@ -166,6 +184,7 @@ const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId,
   if (session) query.session(session);
   const entitlement = await query;
   if (!entitlement) throw new Error("This reward is unavailable, expired, already used, or belongs to a different phone number or account.");
+  await assertOrderSpinSourceDelivered(entitlement, session);
   const { locked } = await getEntitlementUnlockState({ entitlement, guestPhone, session });
   if (locked) throw new Error(DEFERRED_REWARD_LOCKED_MESSAGE);
   const discount = priceEntitlement(entitlement, items, pricing.subtotal, pricing.baseDeliveryFee);
@@ -219,4 +238,5 @@ module.exports = {
   applySelectedEntitlement,
   consumeEntitlement,
   restoreEntitlement,
+  assertOrderSpinSourceDelivered,
 };

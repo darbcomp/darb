@@ -95,7 +95,7 @@ const getAdminDashboard = async (req, res) => {
       Bundle.countDocuments({ isActive: true }),
 
       User.countDocuments({ role: "customer" }),
-      Order.countDocuments({ "paymentProof.status": "submitted" }),
+      Order.countDocuments({ "paymentProof.status": "submitted", orderStatus: { $ne: "cancelled" } }),
       Product.aggregate([
         { $match: { isActive: true, isPlaceholder: { $ne: true } } },
         { $project: {
@@ -129,6 +129,7 @@ const getAdminDashboard = async (req, res) => {
         {
           $match: {
             orderStatus: { $ne: "cancelled" },
+            paymentStatus: "paid",
           },
         },
         {
@@ -152,7 +153,15 @@ const getAdminDashboard = async (req, res) => {
           $group: {
             _id: "$orderStatus",
             count: { $sum: 1 },
-            revenue: { $sum: "$total" },
+            revenue: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ["$paymentStatus", "paid"] }, { $ne: ["$orderStatus", "cancelled"] }] },
+                  "$total",
+                  0,
+                ],
+              },
+            },
           },
         },
         {
@@ -165,7 +174,15 @@ const getAdminDashboard = async (req, res) => {
           $group: {
             _id: "$paymentStatus",
             count: { $sum: 1 },
-            revenue: { $sum: "$total" },
+            revenue: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ["$paymentStatus", "paid"] }, { $ne: ["$orderStatus", "cancelled"] }] },
+                  "$total",
+                  0,
+                ],
+              },
+            },
           },
         },
         {
@@ -177,6 +194,7 @@ const getAdminDashboard = async (req, res) => {
         {
           $match: {
             orderStatus: { $ne: "cancelled" },
+            paymentStatus: "paid",
           },
         },
         {
@@ -207,6 +225,7 @@ const getAdminDashboard = async (req, res) => {
         {
           $match: {
             orderStatus: { $ne: "cancelled" },
+            paymentStatus: "paid",
           },
         },
         {
@@ -252,6 +271,8 @@ const getAdminDashboard = async (req, res) => {
         {
           $match: {
             couponCode: { $exists: true, $ne: "" },
+            orderStatus: { $ne: "cancelled" },
+            paymentStatus: "paid",
           },
         },
         {

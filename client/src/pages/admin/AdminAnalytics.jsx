@@ -82,7 +82,7 @@ function AdminAnalytics() {
         <>
           <div className="grid gap-0 border-y border-darb-gold/25 md:grid-cols-2 xl:grid-cols-4">
             <SmallStat
-              title="Revenue"
+              title="Paid Revenue"
               value={formatCurrency(summary.totalRevenue)}
               icon={Wallet}
             />
@@ -127,7 +127,7 @@ function AdminAnalytics() {
                       </div>
 
                       <p className="mt-1 text-sm text-darb-muted">
-                        Revenue: {formatCurrency(item.revenue)}
+                        Paid revenue: {formatCurrency(item.revenue)}
                       </p>
                     </div>
                   ))}
@@ -158,7 +158,7 @@ function AdminAnalytics() {
                       </div>
 
                       <p className="mt-1 text-sm text-darb-muted">
-                        Revenue: {formatCurrency(item.revenue)}
+                        Paid revenue: {formatCurrency(item.revenue)}
                       </p>
                     </div>
                   ))}
@@ -223,7 +223,7 @@ function AdminAnalytics() {
                       </div>
 
                       <p className="mt-1 text-sm text-darb-muted">
-                        Revenue: {formatCurrency(item.revenue)} • Discount:{" "}
+                        Paid revenue: {formatCurrency(item.revenue)} • Discount:{" "}
                         {formatCurrency(item.discountGiven)}
                       </p>
                     </div>

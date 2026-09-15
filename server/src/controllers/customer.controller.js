@@ -110,7 +110,7 @@ const buildCustomerPipeline = ({ query = {}, customerKey = "", includeOrders = f
         totalSpent: {
           $reduce: {
             input: "$orders", initialValue: 0,
-            in: { $add: ["$$value", { $cond: [{ $ne: ["$$this.orderStatus", "cancelled"] }, "$$this.total", 0] }] },
+            in: { $add: ["$$value", { $cond: [{ $and: [{ $ne: ["$$this.orderStatus", "cancelled"] }, { $eq: ["$$this.paymentStatus", "paid"] }] }, "$$this.total", 0] }] },
           },
         },
         firstOrder: { $min: "$orders.createdAt" },

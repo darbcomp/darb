@@ -4,7 +4,7 @@ const rateLimit = require("express-rate-limit");
 const cookieSameSite = () => {
   const configured = String(process.env.COOKIE_SAME_SITE || "").toLowerCase();
   if (["lax", "strict", "none"].includes(configured)) return configured;
-  return process.env.NODE_ENV === "production" ? "none" : "lax";
+  return "lax";
 };
 
 const csrfCookieOptions = () => ({

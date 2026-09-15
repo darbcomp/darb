@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { randomInt, randomBytes } = require("crypto");
 const SpinGrant = require("../models/SpinGrant");
 const Entitlement = require("../models/Entitlement");
+const Order = require("../models/Order");
 const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
 const SPIN_REWARDS = [
@@ -26,7 +27,7 @@ const ensureSignupSpinGrant = async (userId, session = null) => {
 };
 
 const ensureOrderSpinGrant = async (order, session = null) => {
-  if (!order?._id || order.orderStatus !== "confirmed") return null;
+  if (!order?._id || order.orderStatus !== "delivered") return null;
   const phone = normalizeEgyptPhone(order.customerSnapshot?.phone || "");
   const options = { upsert: true, returnDocument: "after", setDefaultsOnInsert: true };
   if (session) options.session = session;
@@ -86,7 +87,7 @@ const makeUniqueRewardCode = async (session = null) => {
   );
 };
 
-const claimGrant = async ({ grantId = null, userId = null, phone = "" } = {}) => {
+const claimGrant = async ({ grantId = null, userId = null, phone = "", sourceOrderId = null } = {}) => {
   const normalizedPhone = normalizeEgyptPhone(phone);
   const session = await mongoose.startSession();
   let entitlement = null;
@@ -100,12 +101,22 @@ const claimGrant = async ({ grantId = null, userId = null, phone = "" } = {}) =>
         filter.ownerUser = null;
         filter.ownerPhone = normalizedPhone;
         filter.source = "order";
+        if (sourceOrderId) filter.sourceOrder = sourceOrderId;
       } else {
         throw new Error("A signed-in account or eligible guest-order phone number is required.");
       }
 
       grant = await SpinGrant.findOne(filter).sort({ createdAt: 1 }).select("+ownerPhone").session(session);
       if (!grant) throw new Error("No unclaimed Darb spin was found.");
+
+      if (grant.source === "order") {
+        const sourceOrder = grant.sourceOrder
+          ? await Order.findById(grant.sourceOrder).select("orderStatus").session(session)
+          : null;
+        if (!sourceOrder || sourceOrder.orderStatus !== "delivered") {
+          throw new Error("This order spin becomes available after the source order is delivered.");
+        }
+      }
 
       const reward = buildReward();
       // Guest rewards always receive a code so the reward remains portable into

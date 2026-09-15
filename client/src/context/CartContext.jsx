@@ -224,14 +224,20 @@ const clampQuantity = (
       1
     );
 
-  if (stock > 0) {
-    return Math.min(
-      cleanQuantity,
-      stock
+  const cleanStock =
+    Math.max(
+      Number(stock) || 0,
+      0
     );
+
+  if (cleanStock <= 0) {
+    return 1;
   }
 
-  return cleanQuantity;
+  return Math.min(
+    cleanQuantity,
+    cleanStock
+  );
 };
 
 /* =========================

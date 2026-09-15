@@ -1229,7 +1229,7 @@ const reviewAdminPaymentProof = async (req, res) => {
       }
 
       await order.save({ session });
-      if (order.orderStatus === "confirmed") {
+      if (order.orderStatus === "delivered") {
         await ensureOrderSpinGrant(order, session);
       }
       updatedOrder = order;
@@ -1364,7 +1364,7 @@ const updateAdminOrderStatus = async (req, res) => {
       }
 
       await order.save({ session });
-      if (order.orderStatus === "confirmed") {
+      if (order.orderStatus === "delivered") {
         await ensureOrderSpinGrant(order, session);
       }
       updatedOrder = order;

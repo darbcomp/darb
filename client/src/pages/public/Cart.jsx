@@ -50,6 +50,9 @@ function Cart() {
   });
   const previewPricing = pricingPreview.data?.data?.pricing;
   const automaticDiscounts = previewPricing?.discounts || [];
+  const availabilityVerificationFailed = pricingPreview.isError;
+  const hasLocallyUnavailableItem = items.some((item) => Number(item.stock) <= 0);
+  const checkoutBlocked = pricingPreview.isFetching || availabilityVerificationFailed || hasLocallyUnavailableItem;
   const estimatedBeforeDelivery = previewPricing?.deliveryConfirmed === false
     ? previewPricing.totalBeforeDelivery
     : subtotal;
@@ -171,8 +174,11 @@ function Cart() {
                     item.price *
                     item.quantity;
 
+                  const unavailable =
+                    Number(item.stock) <= 0;
+
                   const atMaxStock =
-                    item.stock > 0 &&
+                    unavailable ||
                     item.quantity >=
                       item.stock;
 
@@ -279,7 +285,8 @@ function Cart() {
                                 1
                               }
                               canIncrease={
-                                !atMaxStock
+                                !atMaxStock &&
+                                !availabilityVerificationFailed
                               }
                               onDecrease={() =>
                                 decrementItem(
@@ -310,6 +317,12 @@ function Cart() {
                           </div>
 
                           {/* Stock Feedback */}
+
+                          {unavailable && (
+                            <p className="mt-3 text-[10px] font-semibold text-red-700">
+                              {t("Out of stock — remove this item before checkout.")}
+                            </p>
+                          )}
 
                           {lowStock && (
                             <p className="mt-3 text-[10px] font-semibold text-darb-gold">
@@ -351,7 +364,8 @@ function Cart() {
                                 1
                               }
                               canIncrease={
-                                !atMaxStock
+                                !atMaxStock &&
+                                !availabilityVerificationFailed
                               }
                               onDecrease={() =>
                                 decrementItem(
@@ -503,25 +517,33 @@ function Cart() {
               </div>
 
               {(pricingPreview.isFetching || pricingPreview.isError) && (
-                <p className="mt-3 text-[10px] leading-5 text-darb-muted" aria-live="polite">
+                <p className={`mt-3 text-[10px] leading-5 ${pricingPreview.isError ? "font-semibold text-red-700" : "text-darb-muted"}`} aria-live="polite">
                   {t(pricingPreview.isError
-                    ? "Promotional pricing will be confirmed at checkout."
+                    ? "We couldn’t verify current availability. Refresh or adjust your cart before checkout."
                     : "Checking current promotions...")}
                 </p>
               )}
 
               {/* Checkout CTA */}
 
-              <Link
-                to="/checkout"
-                className="mt-7 flex min-h-[54px] w-full items-center justify-center gap-3 rounded-full bg-darb-green px-6 text-sm font-bold uppercase tracking-[0.12em] text-darb-beige transition hover:bg-darb-black"
-              >
-                {t("Checkout")}
-
-                <ArrowRight
-                  size={17}
-                />
-              </Link>
+              {checkoutBlocked ? (
+                <button
+                  type="button"
+                  disabled
+                  className="mt-7 flex min-h-[54px] w-full cursor-not-allowed items-center justify-center gap-3 rounded-full bg-darb-green/55 px-6 text-sm font-bold uppercase tracking-[0.12em] text-darb-beige/90"
+                >
+                  {t("Checkout")}
+                  <ArrowRight size={17} />
+                </button>
+              ) : (
+                <Link
+                  to="/checkout"
+                  className="mt-7 flex min-h-[54px] w-full items-center justify-center gap-3 rounded-full bg-darb-green px-6 text-sm font-bold uppercase tracking-[0.12em] text-darb-beige transition hover:bg-darb-black"
+                >
+                  {t("Checkout")}
+                  <ArrowRight size={17} />
+                </Link>
+              )}
 
               {/* Trust line */}
 

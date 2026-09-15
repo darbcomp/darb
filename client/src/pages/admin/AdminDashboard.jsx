@@ -16,7 +16,7 @@ function AdminDashboard() {
   const categoryPerformance = dashboard.categoryPerformance || [];
   const waitlistDemand = dashboard.waitlistDemand || [];
   const metrics = [
-    ["Revenue", formatCurrency(summary.totalRevenue || 0)],
+    ["Paid Revenue", formatCurrency(summary.totalRevenue || 0)],
     ["Orders", summary.totalOrders || 0],
     ["Pending", summary.pendingOrders || 0],
     ["Delivered", summary.deliveredOrders || 0],

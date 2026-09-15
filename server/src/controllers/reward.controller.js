@@ -9,7 +9,7 @@ const {
   claimGrant,
   serializeGrant,
 } = require("../services/spinGrant.service");
-const { normalizeEgyptPhone } = require("../utils/normalizePhone");
+const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
 
 const serialize = async (item, { guestPhone = "" } = {}) => ({
   _id: item._id,
@@ -65,14 +65,27 @@ const spin = async (req, res) => {
 const claimGuestOrderSpin = async (req, res) => {
   try {
     const phone = normalizeEgyptPhone(req.body?.phone || "");
+    const orderNumber = String(req.body?.orderNumber || "").trim().toUpperCase();
     if (!/^20(1\d{9})$/.test(phone)) {
       return res.status(400).json({ success: false, message: "Enter the Egyptian phone number used for the order." });
     }
-    const { entitlement, grant } = await claimGrant({ phone });
+    if (!/^DARB-\d+$/.test(orderNumber)) {
+      return res.status(400).json({ success: false, message: "Enter a valid Darb order number." });
+    }
+
+    const phoneVariants = getEgyptPhoneIdentityVariants(phone);
+    const sourceOrder = await Order.findOne({
+      orderNumber,
+      orderStatus: "delivered",
+      "customerSnapshot.phone": { $in: phoneVariants },
+    }).select("_id customer customerSnapshot.email").lean();
+    if (!sourceOrder) throw new Error("Guest order verification failed.");
+
+    const { entitlement } = await claimGrant({
+      phone,
+      sourceOrderId: sourceOrder._id,
+    });
     try {
-      const sourceOrder = grant?.sourceOrder
-        ? await Order.findById(grant.sourceOrder).select("customerSnapshot.email").lean()
-        : null;
       await sendRewardClaimEmail(entitlement, {
         customerEmail: getPersistedGuestRewardEmail(sourceOrder),
         isGuest: true,
@@ -82,12 +95,12 @@ const claimGuestOrderSpin = async (req, res) => {
     }
     return res.json({
       success: true,
-      message: "A verified-order spin was claimed.",
+      message: "A verified delivered-order spin was claimed.",
       data: await serialize(entitlement, { guestPhone: phone }),
     });
   } catch (error) {
     // Deliberately do not reveal whether a specific phone/order exists.
-    return res.status(409).json({ success: false, message: "No unclaimed confirmed-order spin is available for those details." });
+    return res.status(409).json({ success: false, message: "No unclaimed delivered-order spin is available for those details." });
   }
 };
 
