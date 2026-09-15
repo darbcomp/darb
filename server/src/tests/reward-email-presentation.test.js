@@ -54,6 +54,30 @@ test("guest coded reward instructions remain code-based", () => {
   assert.doesNotMatch(message.intro, /saved to your Darb account/i);
 });
 
+test("signed-in deferred reward email explains the intervening order", () => {
+  const message = buildRewardClaimMessage(reward({
+    key: "spin-next-10",
+    label: "10% off your next order",
+    code: "",
+  }));
+  assert.match(message.intro, /saved to your Darb account/i);
+  assert.match(message.intro, /Place one order first/i);
+  assert.match(message.intro, /following order/i);
+  assert.equal(message.details.find((detail) => detail.label === "Reward").value, "10% off after your next order");
+});
+
+test("guest deferred reward email keeps the code and does not imply immediate use", () => {
+  const message = buildRewardClaimMessage(reward({
+    key: "spin-next-10",
+    label: "10% off your next order",
+    code: "DARB-DEFERRED",
+  }), { isGuest: true });
+  assert.equal(message.highlight.value, "DARB-DEFERRED");
+  assert.match(message.intro, /Place one order first/i);
+  assert.match(message.intro, /following order/i);
+  assert.doesNotMatch(message.intro, /eligible checkout/i);
+});
+
 test("phone-only account skips reward email safely", () => {
   assert.deepEqual(getRewardClaimEmailPlan({ email: "", entitlement: reward() }), []);
 });

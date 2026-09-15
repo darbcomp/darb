@@ -26,6 +26,9 @@ export const copyRewardCode = async (value) => {
 };
 
 export const getRewardUsageText = (reward, t) => {
+  if (reward?.key === "spin-next-10") {
+    return t("Place one order first. Your 10% reward unlocks for the following order.");
+  }
   const hasCode = Boolean(String(reward?.code || "").trim());
   if (hasCode) {
     if (reward?.type === "category_percentage" && reward.categorySlug === "musk") {

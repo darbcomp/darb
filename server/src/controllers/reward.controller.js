@@ -2,27 +2,28 @@ const { randomBytes } = require("crypto");
 const Entitlement = require("../models/Entitlement");
 const SpinGrant = require("../models/SpinGrant");
 const Order = require("../models/Order");
-const { getAvailableEntitlements } = require("../services/entitlement.service");
+const { getAvailableEntitlements, getEntitlementUnlockState } = require("../services/entitlement.service");
 const { sendRewardClaimEmail } = require("../services/transactionalEmail.service");
-const { getPersistedGuestRewardEmail } = require("../services/rewardPresentation.service");
+const { getPersistedGuestRewardEmail, getRewardDisplayLabel } = require("../services/rewardPresentation.service");
 const {
   claimGrant,
   serializeGrant,
 } = require("../services/spinGrant.service");
 const { normalizeEgyptPhone } = require("../utils/normalizePhone");
 
-const serialize = (item) => ({
+const serialize = async (item, { guestPhone = "" } = {}) => ({
   _id: item._id,
   key: item.key,
   type: item.type,
   origin: item.origin,
-  label: item.label,
+  label: getRewardDisplayLabel(item),
   code: item.code || "",
   value: item.value,
   categorySlug: item.categorySlug || "",
   minSubtotal: item.minSubtotal,
   status: item.status,
   expiresAt: item.expiresAt,
+  locked: (await getEntitlementUnlockState({ entitlement: item, guestPhone })).locked,
 });
 
 const getMyRewards = async (req, res) => {
@@ -32,14 +33,18 @@ const getMyRewards = async (req, res) => {
     Entitlement.find({ user: req.user._id }).sort({ createdAt: -1 }).lean(),
   ]);
   const availableGrants = grants.filter((grant) => grant.status === "available");
+  const [serializedAvailable, serializedHistory] = await Promise.all([
+    Promise.all(entitlements.map((item) => serialize(item))),
+    Promise.all(all.map((item) => serialize(item))),
+  ]);
   res.json({
     success: true,
     data: {
       spinAvailable: availableGrants.length > 0,
       spinAvailableCount: availableGrants.length,
       spins: grants.map(serializeGrant),
-      available: entitlements.map(serialize),
-      history: all.map(serialize),
+      available: serializedAvailable,
+      history: serializedHistory,
     },
   });
 };
@@ -51,7 +56,7 @@ const spin = async (req, res) => {
       userId: req.user._id,
     });
     await sendRewardClaimEmail(entitlement, { customerEmail: req.user.email || "", isGuest: false });
-    return res.json({ success: true, message: "Your reward is ready.", data: serialize(entitlement) });
+    return res.json({ success: true, message: "Your reward is ready.", data: await serialize(entitlement) });
   } catch (error) {
     return res.status(409).json({ success: false, message: error.message });
   }
@@ -78,7 +83,7 @@ const claimGuestOrderSpin = async (req, res) => {
     return res.json({
       success: true,
       message: "A verified-order spin was claimed.",
-      data: serialize(entitlement),
+      data: await serialize(entitlement, { guestPhone: phone }),
     });
   } catch (error) {
     // Deliberately do not reveal whether a specific phone/order exists.
@@ -108,7 +113,7 @@ const claimPolicyReward = async (req, res) => {
     return res.json({
       success: true,
       message: "You found a hidden Darb path. Your reward is valid for 7 days.",
-      data: serialize(item),
+      data: await serialize(item),
     });
   } catch (error) {
     return res.status(409).json({ success: false, message: error.message });

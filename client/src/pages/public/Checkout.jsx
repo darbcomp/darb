@@ -676,9 +676,7 @@ function Checkout() {
         ========================== */}
 
       {previewQuery.isError && (<div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          {previewQuery.error
-                ?.friendlyMessage ||
-                t("Checkout preview could not be calculated. The final order will still be checked before creation.")}
+          {t(previewQuery.error?.friendlyMessage || "Checkout preview could not be calculated. The final order will still be checked before creation.")}
         </div>)}
 
       {/* =========================
@@ -848,7 +846,7 @@ function Checkout() {
               <p className="mt-2 text-sm text-darb-beige/75">{t("Darb promotions do not stack. Selecting a reward replaces coupons, offers, or bundle promotional pricing for this order.")}</p>
               <div className="mt-5 space-y-2">
                 <label className="flex cursor-pointer gap-3 rounded-2xl border border-darb-gold/25 bg-white/10 p-4 text-sm text-darb-beige transition hover:bg-white/15"><input type="radio" name="entitlementId" value="" checked={!formData.entitlementId} onChange={handleChange} className="mt-0.5 accent-darb-gold"/> {t("Use the best available store promotion")}</label>
-                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className="flex cursor-pointer gap-3 rounded-2xl border border-darb-gold/25 bg-white/10 p-4 text-sm text-darb-beige transition hover:bg-white/15"><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }} className="mt-0.5 accent-darb-gold"/> <span><strong>{t(reward.label)}</strong>{reward.minSubtotal > 0 && <small className="block text-darb-gold">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
+                {rewardsQuery.data.data.available.map((reward) => <label key={reward._id} className={`flex gap-3 rounded-2xl border border-darb-gold/25 bg-white/10 p-4 text-sm text-darb-beige transition ${reward.locked ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-white/15"}`}><input type="radio" name="entitlementId" value={reward._id} checked={formData.entitlementId === reward._id} disabled={reward.locked} onChange={(event) => { handleChange(event); setAppliedCouponCode(""); }} className="mt-0.5 accent-darb-gold"/> <span><strong>{t(reward.label)}</strong>{reward.locked && <small className="block text-darb-gold">{t("Unlocks after your next order")}</small>}{reward.minSubtotal > 0 && <small className="block text-darb-gold">{t("Minimum")} {formatCurrency(reward.minSubtotal)}</small>}</span></label>)}
               </div>
             </div>
           )}

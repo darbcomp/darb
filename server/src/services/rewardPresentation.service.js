@@ -5,8 +5,18 @@ const formatRewardMoney = (value) => `EGP ${Number(value || 0).toLocaleString("e
   maximumFractionDigits: 2,
 })}`;
 
+const getRewardDisplayLabel = (entitlement) => entitlement?.key === "spin-next-10"
+  ? "10% off after your next order"
+  : entitlement?.label;
+
 const getRewardUsageDescription = (entitlement, { isGuest = false } = {}) => {
   const hasCode = Boolean(String(entitlement?.code || "").trim());
+  if (entitlement?.key === "spin-next-10") {
+    if (isGuest || hasCode) {
+      return "Place one order first. This reward unlocks for the following order. Keep this code for checkout.";
+    }
+    return "This reward is saved to your Darb account. Place one order first. This reward unlocks for the following order.";
+  }
   let condition = "at an eligible checkout";
   if (entitlement?.type === "category_percentage" && entitlement.categorySlug) {
     const category = entitlement.categorySlug === "musk"
@@ -37,6 +47,7 @@ const getPersistedGuestRewardEmail = (sourceOrder) =>
 
 module.exports = {
   formatRewardMoney,
+  getRewardDisplayLabel,
   getPersistedGuestRewardEmail,
   getRewardUsageDescription,
 };

@@ -1,6 +1,10 @@
 const Entitlement = require("../models/Entitlement");
 const Order = require("../models/Order");
-const { normalizeEgyptPhone } = require("../utils/normalizePhone");
+const { getRewardDisplayLabel } = require("./rewardPresentation.service");
+const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants } = require("../utils/normalizePhone");
+
+const DEFERRED_SPIN_REWARD_KEY = "spin-next-10";
+const DEFERRED_REWARD_LOCKED_MESSAGE = "This reward unlocks after you place one order. Use it on the following order.";
 
 const createFirstOrderEntitlement = (userId, session = null) => {
   const options = { upsert: true, returnDocument: "after", setDefaultsOnInsert: true };
@@ -38,6 +42,45 @@ const ownerFilter = (userId, guestPhone) => {
   if (phone) owners.push({ user: null, ownerPhone: phone });
   if (!owners.length) return null;
   return owners.length === 1 ? owners[0] : { $or: owners };
+};
+
+const getDeferredEntitlementOwnerPhone = async (entitlement, session = null) => {
+  const includedPhone = normalizeEgyptPhone(entitlement?.ownerPhone || "");
+  if (includedPhone) return includedPhone;
+  if (!entitlement?._id) return "";
+
+  const query = Entitlement.findById(entitlement._id).select("+ownerPhone");
+  if (session) query.session(session);
+  const entitlementWithPhone = await query;
+  return normalizeEgyptPhone(entitlementWithPhone?.ownerPhone || "");
+};
+
+const getEntitlementUnlockState = async ({ entitlement, guestPhone = "", session = null } = {}) => {
+  if (entitlement?.key !== DEFERRED_SPIN_REWARD_KEY) return { locked: false };
+
+  const createdAt = new Date(entitlement.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return { locked: true };
+
+  let ownershipFilter = null;
+  if (entitlement.user) {
+    ownershipFilter = { customer: entitlement.user };
+  } else {
+    const verifiedPhone = normalizeEgyptPhone(guestPhone);
+    const ownerPhone = verifiedPhone || await getDeferredEntitlementOwnerPhone(entitlement, session);
+    const phoneVariants = getEgyptPhoneIdentityVariants(ownerPhone);
+    if (phoneVariants.length) {
+      ownershipFilter = { "customerSnapshot.phone": { $in: phoneVariants } };
+    }
+  }
+
+  if (!ownershipFilter) return { locked: true };
+  const query = Order.exists({
+    ...ownershipFilter,
+    createdAt: { $gt: createdAt },
+    orderStatus: { $ne: "cancelled" },
+  });
+  if (session) query.session(session);
+  return { locked: !(await query) };
 };
 
 const resolveEntitlementCodeForCheckout = async ({
@@ -83,6 +126,7 @@ const categorySlugsForItem = (item) => [
 
 const priceEntitlement = (entitlement, items, subtotal, baseDeliveryFee) => {
   if (!entitlement || Number(entitlement.minSubtotal) > subtotal) return null;
+  const displayLabel = getRewardDisplayLabel(entitlement);
   let amount = 0;
   let freeShipping = false;
   let freeTester = false;
@@ -97,8 +141,8 @@ const priceEntitlement = (entitlement, items, subtotal, baseDeliveryFee) => {
   return {
     sourceType: "entitlement",
     sourceId: entitlement._id,
-    name: entitlement.label,
-    title: entitlement.label,
+    name: displayLabel,
+    title: displayLabel,
     code: entitlement.code || "",
     discountType: entitlement.type,
     amount: Math.min(Math.max(amount, 0), subtotal),
@@ -122,6 +166,8 @@ const applySelectedEntitlement = async ({ pricing, items, entitlementId, userId,
   if (session) query.session(session);
   const entitlement = await query;
   if (!entitlement) throw new Error("This reward is unavailable, expired, already used, or belongs to a different phone number or account.");
+  const { locked } = await getEntitlementUnlockState({ entitlement, guestPhone, session });
+  if (locked) throw new Error(DEFERRED_REWARD_LOCKED_MESSAGE);
   const discount = priceEntitlement(entitlement, items, pricing.subtotal, pricing.baseDeliveryFee);
   if (!discount) throw new Error("This reward is not eligible for the current cart.");
   const deliveryFee = discount.freeShipping ? 0 : pricing.baseDeliveryFee;
@@ -164,8 +210,10 @@ const restoreEntitlement = (order, session) => {
 };
 
 module.exports = {
+  DEFERRED_REWARD_LOCKED_MESSAGE,
   buildEntitlementOwnerFilter: ownerFilter,
   createFirstOrderEntitlement,
+  getEntitlementUnlockState,
   getAvailableEntitlements,
   resolveEntitlementCodeForCheckout,
   applySelectedEntitlement,

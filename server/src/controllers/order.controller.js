@@ -33,6 +33,7 @@ const { sanitizePaymentProofForClient } = require("../utils/paymentProofResponse
 const { getGovernorateDeliveryFee } = require("../utils/shipping");
 const { buildReserveStockOperation, buildRestoreStockOperation } = require("../utils/inventory");
 const { applySelectedEntitlement, consumeEntitlement, restoreEntitlement, resolveEntitlementCodeForCheckout } = require("../services/entitlement.service");
+const { getRewardDisplayLabel } = require("../services/rewardPresentation.service");
 const { ensureOrderSpinGrant } = require("../services/spinGrant.service");
 const { buildOrderUserData, buildPurchaseCustomData, extractMetaContext, sendMetaEvent } = require("../services/metaCapi.service");
 const { normalizeEgyptPhone, getEgyptPhoneIdentityVariants, formatEgyptPhoneForDisplay } = require("../utils/normalizePhone");
@@ -813,7 +814,7 @@ const createOrder = async (req, res) => {
         promotion: entitlement ? {
           entitlement: entitlement._id,
           key: entitlement.key,
-          label: entitlement.label,
+          label: getRewardDisplayLabel(entitlement),
           origin: entitlement.origin,
           freeTester,
         } : {

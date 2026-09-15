@@ -8,7 +8,7 @@ const {
   getReviewApprovalPlan,
   getReviewSubmissionPlan,
 } = require("./transactionalEmailEvents.service");
-const { getRewardUsageDescription } = require("./rewardPresentation.service");
+const { getRewardDisplayLabel, getRewardUsageDescription } = require("./rewardPresentation.service");
 
 const DEFAULT_BRAND = {
   darkGreen: "#0F3D2E",
@@ -295,7 +295,7 @@ const buildRewardClaimMessage = (entitlement, { isGuest = false } = {}) => ({
   intro: getRewardUsageDescription(entitlement, { isGuest }),
   highlight: entitlement?.code ? { label: "Reward code", value: entitlement.code } : null,
   details: [
-    { label: "Reward", value: entitlement?.label || "Darb reward" },
+    { label: "Reward", value: getRewardDisplayLabel(entitlement) || "Darb reward" },
     { label: "Expires", value: formatRewardExpiry(entitlement?.expiresAt) },
   ],
   cta: {

@@ -9,7 +9,7 @@ const SPIN_REWARDS = [
   { key: "spin-musk-20", type: "category_percentage", label: "20% off Musk", value: 20, categorySlug: "musk" },
   { key: "spin-free-shipping-1800", type: "free_shipping", label: "Free shipping over 1,800 EGP", minSubtotal: 1800 },
   { key: "spin-extra-tester", type: "free_tester", label: "A free extra tester", value: 0 },
-  { key: "spin-next-10", type: "percentage", label: "10% off your next order", value: 10 },
+  { key: "spin-next-10", type: "percentage", label: "10% off after your next order", value: 10 },
 ];
 
 const last4 = (phone) => String(phone || "").slice(-4);
