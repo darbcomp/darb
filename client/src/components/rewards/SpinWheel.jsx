@@ -147,7 +147,7 @@ export default function SpinWheel({ onClose }) {
   };
 
   return <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto overscroll-contain bg-darb-black/75 p-4" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <section ref={dialogRef} tabIndex={-1} className="relative my-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-darb-gold/35 bg-darb-cream p-6 text-center shadow-2xl outline-none sm:p-9" role="dialog" aria-modal="true" aria-labelledby="reward-wheel-title">
+    <section ref={dialogRef} tabIndex={-1} className="spin-wheel-dialog relative my-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-darb-gold/35 bg-darb-cream p-6 text-center shadow-2xl outline-none sm:p-9" role="dialog" aria-modal="true" aria-labelledby="reward-wheel-title">
       <button type="button" onClick={onClose} className="absolute end-5 top-5 rounded-full border border-darb-gold/30 p-2 text-darb-green transition hover:bg-darb-gold/10 motion-reduce:transition-none" aria-label={t("Close reward wheel")}><X size={17}/></button>
       <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-darb-gold">{t("Darb rewards")}</p>
       <h2 id="reward-wheel-title" className="mt-2 font-display text-4xl text-darb-green">{t("A turn along the path.")}</h2>

@@ -861,27 +861,6 @@ const renderEmailLayout = ({
                     footerMessage
                   )}
                 </div>
-
-                ${
-                  settings.contact
-                    ?.email
-                    ? `
-                      <div
-                        style="
-                          margin-top:12px;
-                          color:${
-                            settings.brand.softGold
-                          };
-                          font-size:12px;
-                        "
-                      >
-                        ${escapeHtml(
-                          settings.contact.email
-                        )}
-                      </div>
-                    `
-                    : ""
-                }
               </td>
             </tr>
           </table>
@@ -1181,6 +1160,8 @@ const sendOrderStatusEmail =
   };
 
 module.exports = {
+  buildPlainText,
+  renderEmailLayout,
   sendOrderPlacedEmails,
   sendOrderStatusEmail,
 };

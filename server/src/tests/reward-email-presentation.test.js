@@ -112,12 +112,13 @@ test("code-less rewards remain valid account entitlements", async () => {
 test("HTML-special reward labels and codes are escaped by the shared template", () => {
   const message = buildRewardClaimMessage(reward({ label: "<script>reward</script>", code: "DARB-<CODE>" }));
   const html = renderTransactionalEmail({
-    settings: { tagline: "A scent for every path.", brand: { darkGreen: "#0F3D2E", beige: "#E7DCC9", softGold: "#C8A97E", black: "#1C1C1C", cream: "#F7F1E6" } },
+    settings: { tagline: "A scent for every path.", contact: { email: "darbcomp@gmail.com" }, brand: { darkGreen: "#0F3D2E", beige: "#E7DCC9", softGold: "#C8A97E", black: "#1C1C1C", cream: "#F7F1E6" } },
     ...message,
   });
   assert.doesNotMatch(html, /<script>reward<\/script>/);
   assert.match(html, /&lt;script&gt;reward&lt;\/script&gt;/);
   assert.match(html, /DARB-&lt;CODE&gt;/);
+  assert.doesNotMatch(html, /darbcomp@gmail\.com/i);
 });
 
 test("new unsubscribe tokens are signed without a fixed expiry and legacy valid tokens still verify", () => {

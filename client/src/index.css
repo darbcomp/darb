@@ -36,6 +36,11 @@ select {
   outline-offset: 3px;
 }
 
+.spin-wheel-dialog:focus,
+.spin-wheel-dialog:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
